@@ -308,7 +308,7 @@ const ArticlePage = () => {
       </div>
 
       {/* Content */}
-      <main className="px-6 pb-32 -mt-4 relative z-10">
+      <main className="px-6 pb-32 -mt-4 relative">
         <article className="max-w-3xl mx-auto">
           {/* Title */}
           <motion.h1 
@@ -423,7 +423,7 @@ const ArticlePage = () => {
       </main>
 
       {/* Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4">
+      <div className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 z-50">
         <div className="max-w-3xl mx-auto flex items-center justify-around">
           <button 
             onClick={() => setShowComments(true)}
