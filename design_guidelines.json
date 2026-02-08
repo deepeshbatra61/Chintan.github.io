@@ -1,0 +1,161 @@
+{
+  "identity": {
+    "name": "Chintan",
+    "motto": "Don't just consume. Contemplate.",
+    "metaphor": "Surya (The Sun) - Illumination & Truth",
+    "aesthetic": "Dark Premium Editorial",
+    "vibe": "Intellectual, Urgent, Deep, Sophisticated"
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Playfair Display, serif",
+        "weights": ["400", "600", "700"],
+        "usage": "Headlines, Hero Sections, Brief Titles"
+      },
+      "body": {
+        "family": "Manrope, sans-serif",
+        "weights": ["300", "400", "500", "600"],
+        "usage": "Article Text, UI Elements, Navigation"
+      },
+      "mono": {
+        "family": "JetBrains Mono, monospace",
+        "weights": ["400"],
+        "usage": "Timestamps, Tags, AI Data Points"
+      }
+    },
+    "scale": {
+      "h1": "text-4xl md:text-6xl font-serif tracking-tight leading-[1.1]",
+      "h2": "text-3xl md:text-4xl font-serif tracking-tight leading-tight",
+      "h3": "text-2xl font-serif tracking-normal",
+      "body-lg": "text-lg md:text-xl font-sans leading-relaxed text-gray-300",
+      "body-base": "text-base font-sans leading-relaxed text-gray-400",
+      "caption": "text-xs font-mono uppercase tracking-widest text-gray-500"
+    }
+  },
+  "colors": {
+    "palette": {
+      "obsidian": {
+        "DEFAULT": "#0A0A0A",
+        "light": "#171717",
+        "lighter": "#262626"
+      },
+      "surya": {
+        "red": "#DC2626",
+        "amber": "#F59E0B",
+        "glow": "rgba(220, 38, 38, 0.5)"
+      },
+      "glass": {
+        "surface": "rgba(255, 255, 255, 0.03)",
+        "border": "rgba(255, 255, 255, 0.08)",
+        "highlight": "rgba(255, 255, 255, 0.15)"
+      },
+      "text": {
+        "primary": "#EDEDED",
+        "secondary": "#A1A1AA",
+        "muted": "#525252"
+      }
+    },
+    "themes": {
+      "morning": {
+        "bg": "#F5F5F4",
+        "text": "#1C1917",
+        "accent": "#D97706"
+      },
+      "midday": {
+        "bg": "#1C1917",
+        "text": "#E7E5E4",
+        "accent": "#DC2626"
+      },
+      "night": {
+        "bg": "#0A0A0A",
+        "text": "#EDEDED",
+        "accent": "#7F1D1D"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "card": "bg-white/5 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.2)]",
+      "modal": "bg-black/60 backdrop-blur-2xl border border-white/10",
+      "nav": "bg-black/40 backdrop-blur-lg border-b border-white/5"
+    },
+    "gradients": {
+      "surya_glow": "radial-gradient(circle at center, rgba(220,38,38,0.15) 0%, rgba(10,10,10,0) 70%)",
+      "reading_mask": "linear-gradient(to bottom, transparent 0%, #0A0A0A 100%)"
+    },
+    "borders": {
+      "subtle": "border border-white/5",
+      "active": "border border-red-600/50"
+    }
+  },
+  "layout_strategies": {
+    "bento_grid": "grid grid-cols-1 md:grid-cols-4 gap-4 p-4",
+    "news_deck": "relative w-full h-[80vh] overflow-hidden touch-pan-y",
+    "article_container": "max-w-2xl mx-auto px-6 py-12"
+  },
+  "components": {
+    "NewsCard": {
+      "path": "src/components/NewsCard.js",
+      "style": "relative overflow-hidden rounded-2xl bg-neutral-900/50 border border-white/10 group hover:border-red-500/30 transition-all duration-500"
+    },
+    "BriefHeader": {
+      "path": "src/components/BriefHeader.js",
+      "style": "sticky top-0 z-50 flex items-center justify-between px-6 py-4 backdrop-blur-md"
+    },
+    "AskAIInterface": {
+      "path": "src/components/AskAI.js",
+      "style": "fixed inset-0 z-50 bg-black/95 backdrop-blur-3xl flex flex-col"
+    }
+  },
+  "image_urls": {
+    "logo_concepts": [
+      {
+        "url": "https://images.unsplash.com/photo-1631119461658-285f6d414744?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMHN1biUyMHJheXMlMjBsaWdodCUyMGRhcmslMjBiYWNrZ3JvdW5kJTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzA1NjQ3MDB8MA&ixlib=rb-4.1.0&q=85",
+        "desc": "Abstract light bulb/sun concept for logo inspiration"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1769441439052-5a0000717349?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHw0fHxhYnN0cmFjdCUyMHN1biUyMHJheXMlMjBsaWdodCUyMGRhcmslMjBiYWNrZ3JvdW5kJTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzA1NjQ3MDB8MA&ixlib=rb-4.1.0&q=85",
+        "desc": "Diagonal light rays texture"
+      }
+    ],
+    "categories": {
+      "politics": "https://images.unsplash.com/photo-1760872645959-98d5fdb49287?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBwYXJsaWFtZW50JTIwYnVpbGRpbmclMjBuZXclMjBkZWxoaSUyMGFyY2hpdGVjdHVyZXxlbnwwfHx8fDE3NzA1NjQ3MDV8MA&ixlib=rb-4.1.0&q=85",
+      "tech": "https://images.unsplash.com/photo-1665602878676-219e01293b51?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxmdXR1cmlzdGljJTIwYXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGJyYWluJTIwY2lyY3VpdCUyMGJsdWUlMjByZWR8ZW58MHx8fHwxNzcwNTY0NzExfDA&ixlib=rb-4.1.0&q=85",
+      "sports": "https://images.unsplash.com/photo-1750716413756-b66624b64ce4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwzfHxjcmlja2V0JTIwc3RhZGl1bSUyMG5pZ2h0JTIwbGlnaHRzJTIwaW5kaWF8ZW58MHx8fHwxNzcwNTY0NzE0fDA&ixlib=rb-4.1.0&q=85"
+    },
+    "avatars": [
+      "https://images.unsplash.com/photo-1761125050322-bbfc155571bd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGRpdmVyc2V8ZW58MHx8fHwxNzcwNTY0NzE5fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1531339413195-cc6c17163974?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwzfHxpbmRpYW4lMjBwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGRpdmVyc2V8ZW58MHx8fHwxNzcwNTY0NzE5fDA&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS: Add '@import url(\"https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&family=Manrope:wght@300;400;500;600&family=Playfair+Display:wght@400;600;700&display=swap\");' to index.css",
+    "THEME LOGIC: Implement a 'ThemeContext' that switches between Morning (Light), Midday (Dark Slate), and Night (Obsidian) modes based on user time or selection.",
+    "GLASSMORPHISM: Do not use simple opacity. Use 'backdrop-filter: blur(16px)' combined with a very subtle white border (border-white/10) to create the 'cut glass' look.",
+    "ACCENT USAGE: Use the Red (#DC2626) sparingly. Only for 'Live', 'Breaking', active states, and primary CTAs. Do not overuse it.",
+    "TYPOGRAPHY: Use Playfair Display ONLY for headings. Use Manrope for all body text. Use JetBrains Mono for metadata (time, author, tags).",
+    "ANIMATION: Use 'framer-motion' for page transitions. The news feed should feel like a deck of cards being shuffled or swiped.",
+    "AI FEATURES: The 'Ask AI' button should be prominent but not intrusive. Use a floating action button (FAB) or a dedicated bottom bar icon with a subtle glow."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in '/app/src/components/ui/sonner.tsx'"
+  ]
+}
