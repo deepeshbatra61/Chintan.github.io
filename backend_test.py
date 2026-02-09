@@ -305,6 +305,42 @@ class ChintanAPITester:
             self.log_test("Article Detail Endpoint", False, f"Error: {str(e)}")
             return False
 
+    def test_comment_reactions_without_auth(self):
+        """Test comment reaction endpoints without authentication"""
+        test_comment_id = "comment_test123"
+        
+        endpoints = [
+            f"/comments/{test_comment_id}/agree",
+            f"/comments/{test_comment_id}/disagree"
+        ]
+        
+        all_success = True
+        for endpoint in endpoints:
+            try:
+                response = requests.post(f"{self.api_url}{endpoint}", timeout=10)
+                success = response.status_code == 401
+                if not success:
+                    all_success = False
+                details = f"Returns {response.status_code} for {endpoint}"
+                self.log_test(f"Comment Reaction {endpoint} (No Auth)", success, details, 401, response.status_code)
+            except Exception as e:
+                self.log_test(f"Comment Reaction {endpoint} (No Auth)", False, f"Error: {str(e)}")
+                all_success = False
+        
+        return all_success
+
+    def test_weekly_report_without_auth(self):
+        """Test weekly report endpoint without authentication"""
+        try:
+            response = requests.get(f"{self.api_url}/users/weekly-report", timeout=10)
+            success = response.status_code == 401
+            details = "Correctly returns 401 for unauthenticated request"
+            self.log_test("Weekly Report (No Auth)", success, details, 401, response.status_code)
+            return success
+        except Exception as e:
+            self.log_test("Weekly Report (No Auth)", False, f"Error: {str(e)}")
+            return False
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("🚀 Starting Chintan Backend API Tests")
