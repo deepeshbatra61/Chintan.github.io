@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { 
   Search, Bell, User, Menu, Sun, CloudSun, Moon, 
-  Bookmark, TrendingUp, ChevronRight, X, Clock, Eye
+  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
@@ -130,6 +130,28 @@ const FeedPage = () => {
                     </button>
 
                     <div className="h-px bg-white/10 my-4" />
+
+                    {/* Developing Stories in Sidebar */}
+                    {developingStories.length > 0 && (
+                      <>
+                        <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2 flex items-center gap-2">
+                          <Radio className="w-3 h-3 text-red-500 animate-pulse" />
+                          Developing
+                        </p>
+                        {developingStories.slice(0, 3).map((story) => (
+                          <button
+                            key={story.article_id}
+                            onClick={() => { navigate(`/article/${story.article_id}`); setSidebarOpen(false); }}
+                            className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
+                            data-testid={`sidebar-developing-${story.article_id}`}
+                          >
+                            <p className="text-gray-300 text-sm line-clamp-2">{story.title}</p>
+                            <p className="text-gray-600 text-xs mt-1">{story.category}</p>
+                          </button>
+                        ))}
+                        <div className="h-px bg-white/10 my-4" />
+                      </>
+                    )}
 
                     <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Menu</p>
                     <button 
