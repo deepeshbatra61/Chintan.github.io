@@ -1134,6 +1134,52 @@ async def like_comment(comment_id: str, user: dict = Depends(require_auth)):
     )
     return {"success": True}
 
+@api_router.post("/comments/{comment_id}/agree")
+async def agree_comment(comment_id: str, user: dict = Depends(require_auth)):
+    """Agree with a comment"""
+    # Check if already reacted
+    existing = await db.comment_reactions.find_one({
+        "comment_id": comment_id,
+        "user_id": user["user_id"]
+    })
+    if existing:
+        return {"success": False, "message": "Already reacted"}
+    
+    await db.comments.update_one(
+        {"comment_id": comment_id},
+        {"$inc": {"agrees": 1}}
+    )
+    await db.comment_reactions.insert_one({
+        "comment_id": comment_id,
+        "user_id": user["user_id"],
+        "reaction": "agree",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return {"success": True}
+
+@api_router.post("/comments/{comment_id}/disagree")
+async def disagree_comment(comment_id: str, user: dict = Depends(require_auth)):
+    """Disagree with a comment"""
+    # Check if already reacted
+    existing = await db.comment_reactions.find_one({
+        "comment_id": comment_id,
+        "user_id": user["user_id"]
+    })
+    if existing:
+        return {"success": False, "message": "Already reacted"}
+    
+    await db.comments.update_one(
+        {"comment_id": comment_id},
+        {"$inc": {"disagrees": 1}}
+    )
+    await db.comment_reactions.insert_one({
+        "comment_id": comment_id,
+        "user_id": user["user_id"],
+        "reaction": "disagree",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return {"success": True}
+
 # ===================== BOOKMARKS ROUTES =====================
 
 @api_router.get("/bookmarks")
