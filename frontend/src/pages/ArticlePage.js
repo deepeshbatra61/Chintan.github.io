@@ -753,20 +753,18 @@ const ArticlePage = () => {
                 <SuryaLogo className="w-12 h-12 animate-spin-slow" />
               </div>
             ) : otherSideAnalysis ? (
-              <div className="space-y-6">
-                {formatOtherSide(otherSideAnalysis).map((section, idx) => (
-                  <div key={idx} className="glass-card rounded-xl p-5">
-                    {section.title && (
-                      <h3 className="text-red-500 font-mono text-xs uppercase tracking-wider mb-3">
-                        {section.title.replace(/[:\-]/g, '').trim()}
-                      </h3>
-                    )}
-                    <p className="text-gray-300 leading-relaxed text-sm">
-                      {section.content.trim()}
-                    </p>
+              <div className="py-4">
+                <div className="glass-card rounded-xl p-6">
+                  <p className="text-red-500 font-mono text-xs uppercase tracking-wider mb-4">
+                    Alternative Perspective
+                  </p>
+                  <div className="text-gray-300 leading-relaxed text-sm space-y-4">
+                    {formatOtherSide(otherSideAnalysis).split('\n\n').map((paragraph, idx) => (
+                      <p key={idx}>{paragraph}</p>
+                    ))}
                   </div>
-                ))}
-                <p className="text-gray-600 text-xs text-center italic">
+                </div>
+                <p className="text-gray-600 text-xs text-center italic mt-6">
                   Consider multiple perspectives before forming your opinion
                 </p>
               </div>
