@@ -248,7 +248,7 @@ class ChintanAPITester:
             return False
 
     def test_ai_questions_endpoint(self, article_id=None):
-        """Test AI questions endpoint"""
+        """Test AI questions endpoint - should return max 3 questions"""
         if not article_id:
             article_id = "article_india001"
         
@@ -260,15 +260,22 @@ class ChintanAPITester:
                 data = response.json()
                 questions = data.get('questions', [])
                 details = f"Generated {len(questions)} AI questions"
-                if len(questions) == 0:
+                
+                # Check if questions are limited to 3 max
+                if len(questions) > 3:
+                    success = False
+                    details += f" (ERROR: Should be max 3 questions, got {len(questions)})"
+                elif len(questions) == 0:
                     details += " (Warning: No questions generated)"
+                else:
+                    details += " (Correctly limited to max 3)"
             else:
                 details = "Failed to fetch AI questions"
             
-            self.log_test("AI Questions Endpoint", success, details, 200, response.status_code)
+            self.log_test("AI Questions Endpoint (Max 3)", success, details, 200, response.status_code)
             return success
         except Exception as e:
-            self.log_test("AI Questions Endpoint", False, f"Error: {str(e)}")
+            self.log_test("AI Questions Endpoint (Max 3)", False, f"Error: {str(e)}")
             return False
 
     def test_article_detail(self, article_id=None):
