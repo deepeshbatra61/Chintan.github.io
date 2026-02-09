@@ -983,9 +983,7 @@ async def get_ai_questions(article_id: str):
     if not emergent_key:
         # Return default questions
         return {"questions": [
-            f"What are the immediate implications of {article['title'][:50]}...?",
-            "How might this affect ordinary citizens?",
-            "What historical parallels can you draw?",
+            f"What are the immediate implications of this?",
             "Who benefits and who loses from this development?",
             "What should we watch for in the coming weeks?"
         ]}
@@ -994,21 +992,21 @@ async def get_ai_questions(article_id: str):
         chat = LlmChat(
             api_key=emergent_key,
             session_id=f"questions_{article_id}",
-            system_message="Generate 5 thought-provoking questions that encourage critical thinking about news articles. Questions should be concise and engaging."
+            system_message="Generate 3 thought-provoking questions that encourage critical thinking about news articles. Questions should be concise and engaging. No numbering or bullet points."
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
         
-        prompt = f"""Generate 5 smart questions for this article that encourage deep thinking:
+        prompt = f"""Generate exactly 3 smart questions for this article that encourage deep thinking:
 
 Title: {article['title']}
 Summary: {article['description']}
 Impact: {article['impact']}
 
-Return only the 5 questions, one per line, no numbering."""
+Return only 3 questions, one per line, no numbering or bullet points."""
 
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
         
-        questions = [q.strip() for q in response.strip().split('\n') if q.strip()][:5]
+        questions = [q.strip().lstrip('0123456789.-) ') for q in response.strip().split('\n') if q.strip()][:3]
         
         # Cache result
         cache_doc = {
@@ -1023,10 +1021,8 @@ Return only the 5 questions, one per line, no numbering."""
     except Exception as e:
         logger.error(f"AI error: {e}")
         return {"questions": [
-            "What are the key takeaways from this news?",
+            "What are the key takeaways from this?",
             "How might this affect you personally?",
-            "What questions does this raise?",
-            "What's the broader context?",
             "What happens next?"
         ]}
 
