@@ -352,43 +352,16 @@ const ArticlePage = () => {
     return Math.round((poll.votes[option] || 0) / total * 100);
   };
 
-  // Parse and format "Other Side" analysis
+  // Parse and format "Other Side" analysis - simplified for natural text
   const formatOtherSide = (text) => {
-    if (!text) return [];
-    // Remove markdown asterisks and clean up
-    const cleaned = text
+    if (!text) return null;
+    // Clean up any remaining markdown
+    return text
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
       .replace(/#{1,3}\s/g, '')
+      .replace(/^[\d\.\-\)]+\s/gm, '')
       .trim();
-    
-    // Split into sections
-    const sections = [];
-    const lines = cleaned.split('\n').filter(l => l.trim());
-    
-    let currentSection = { title: '', content: '' };
-    
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed.match(/^(Alternative|Counter|Missing|Questions|Different|Opposing)/i)) {
-        if (currentSection.content) {
-          sections.push({ ...currentSection });
-        }
-        currentSection = { title: trimmed.replace(/:$/, ''), content: '' };
-      } else if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
-        currentSection.content += trimmed.substring(1).trim() + '\n';
-      } else if (trimmed.match(/^\d\./)) {
-        currentSection.content += trimmed.substring(2).trim() + '\n';
-      } else {
-        currentSection.content += trimmed + ' ';
-      }
-    });
-    
-    if (currentSection.content || currentSection.title) {
-      sections.push(currentSection);
-    }
-    
-    return sections.length > 0 ? sections : [{ title: 'Alternative View', content: cleaned }];
   };
 
   if (loading) {
