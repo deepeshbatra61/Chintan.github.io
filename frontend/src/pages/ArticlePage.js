@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import axios from "axios";
 import { toast } from "sonner";
 import { 
   ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle, 
   BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Copy, Send, X, Check
+  ThumbsUp, ThumbsDown, Send, Heart, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { 
@@ -19,6 +19,63 @@ import { ScrollArea } from "../components/ui/scroll-area";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Haptic feedback utility
+const triggerHaptic = (type = 'light') => {
+  if ('vibrate' in navigator) {
+    const patterns = {
+      light: [10],
+      medium: [20],
+      heavy: [30],
+      success: [10, 50, 10],
+      swipe: [5, 30, 5]
+    };
+    navigator.vibrate(patterns[type] || patterns.light);
+  }
+};
+
+// Custom section labels based on content type
+const getSectionLabel = (key, category) => {
+  const labels = {
+    what: {
+      default: "The Story",
+      Science: "Discovery",
+      Politics: "Decision",
+      Sports: "Match Update",
+      Business: "Development",
+      Technology: "Innovation",
+      Entertainment: "Premiere"
+    },
+    why: {
+      default: "Significance",
+      Science: "Implications",
+      Politics: "Stakes",
+      Sports: "Impact",
+      Business: "Market Effect",
+      Technology: "Disruption",
+      Entertainment: "Cultural Shift"
+    },
+    context: {
+      default: "Background",
+      Science: "Research Trail",
+      Politics: "Political Landscape",
+      Sports: "Season Context",
+      Business: "Industry View",
+      Technology: "Tech Evolution",
+      Entertainment: "Industry Backdrop"
+    },
+    impact: {
+      default: "What's Next",
+      Science: "Future Path",
+      Politics: "Consequences",
+      Sports: "Season Outlook",
+      Business: "Market Forecast",
+      Technology: "Adoption Curve",
+      Entertainment: "Box Office Forecast"
+    }
+  };
+  return labels[key]?.[category] || labels[key]?.default || key;
+};
 
 const ArticlePage = () => {
   const { articleId } = useParams();
@@ -38,13 +95,18 @@ const ArticlePage = () => {
   const [loadingOtherSide, setLoadingOtherSide] = useState(false);
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [commentStance, setCommentStance] = useState("agree");
   const [expandedSections, setExpandedSections] = useState({
     what: true,
     why: false,
     context: false,
     impact: false
   });
+
+  // Swipe navigation state
+  const [allArticles, setAllArticles] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const y = useMotionValue(0);
+  const containerRef = useRef(null);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -62,6 +124,17 @@ const ArticlePage = () => {
       navigate("/feed");
     }
   }, [articleId, navigate]);
+
+  const fetchAllArticles = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/articles`, { withCredentials: true });
+      setAllArticles(response.data);
+      const idx = response.data.findIndex(a => a.article_id === articleId);
+      if (idx !== -1) setCurrentIndex(idx);
+    } catch (error) {
+      console.error("Error fetching articles:", error);
+    }
+  }, [articleId]);
 
   const checkBookmark = useCallback(async () => {
     try {
@@ -95,7 +168,8 @@ const ArticlePage = () => {
   const fetchAIQuestions = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true });
-      setAiQuestions(response.data.questions || []);
+      // Limit to 3 questions max
+      setAiQuestions((response.data.questions || []).slice(0, 3));
     } catch (error) {
       console.error("Error fetching AI questions:", error);
     }
@@ -105,14 +179,37 @@ const ArticlePage = () => {
     const loadData = async () => {
       setLoading(true);
       await fetchArticle();
-      await Promise.all([checkBookmark(), fetchPoll(), fetchComments(), fetchAIQuestions()]);
+      await Promise.all([checkBookmark(), fetchPoll(), fetchComments(), fetchAIQuestions(), fetchAllArticles()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchArticle, checkBookmark, fetchPoll, fetchComments, fetchAIQuestions]);
+  }, [fetchArticle, checkBookmark, fetchPoll, fetchComments, fetchAIQuestions, fetchAllArticles]);
+
+  // Swipe handlers for mobile navigation
+  const handleDragEnd = (event, info) => {
+    const threshold = 100;
+    const velocity = info.velocity.y;
+    
+    if (info.offset.y < -threshold || velocity < -500) {
+      // Swipe up - next article
+      if (currentIndex < allArticles.length - 1) {
+        triggerHaptic('swipe');
+        const nextArticle = allArticles[currentIndex + 1];
+        navigate(`/article/${nextArticle.article_id}`);
+      }
+    } else if (info.offset.y > threshold || velocity > 500) {
+      // Swipe down - previous article
+      if (currentIndex > 0) {
+        triggerHaptic('swipe');
+        const prevArticle = allArticles[currentIndex - 1];
+        navigate(`/article/${prevArticle.article_id}`);
+      }
+    }
+  };
 
   const toggleBookmark = async () => {
     try {
+      triggerHaptic('medium');
       if (isBookmarked) {
         await axios.delete(`${API}/bookmarks/${articleId}`, { withCredentials: true });
         toast.success("Removed from bookmarks");
@@ -128,6 +225,7 @@ const ArticlePage = () => {
 
   const handleLike = async () => {
     try {
+      triggerHaptic('success');
       await axios.post(`${API}/articles/${articleId}/interact`, 
         { action: "like" }, 
         { withCredentials: true }
@@ -141,6 +239,7 @@ const ArticlePage = () => {
 
   const handleDislike = async () => {
     try {
+      triggerHaptic('light');
       await axios.post(`${API}/articles/${articleId}/interact`, 
         { action: "dislike" }, 
         { withCredentials: true }
@@ -155,6 +254,7 @@ const ArticlePage = () => {
   const handleVote = async (option) => {
     if (userVoted || !poll) return;
     try {
+      triggerHaptic('success');
       const response = await axios.post(
         `${API}/polls/${poll.poll_id}/vote`,
         { option },
@@ -192,9 +292,10 @@ const ArticlePage = () => {
   const submitComment = async () => {
     if (!newComment.trim()) return;
     try {
+      triggerHaptic('medium');
       const response = await axios.post(
         `${API}/comments/${articleId}`,
-        { content: newComment, stance: commentStance },
+        { content: newComment, stance: "neutral" },
         { withCredentials: true }
       );
       setComments([response.data, ...comments]);
@@ -202,6 +303,22 @@ const ArticlePage = () => {
       toast.success("Comment posted!");
     } catch (error) {
       toast.error("Failed to post comment");
+    }
+  };
+
+  const handleCommentReaction = async (commentId, reaction) => {
+    try {
+      triggerHaptic('light');
+      await axios.post(`${API}/comments/${commentId}/${reaction}`, {}, { withCredentials: true });
+      // Update local state
+      setComments(prev => prev.map(c => {
+        if (c.comment_id === commentId) {
+          return { ...c, [reaction === 'agree' ? 'agrees' : 'disagrees']: (c[reaction === 'agree' ? 'agrees' : 'disagrees'] || 0) + 1 };
+        }
+        return c;
+      }));
+    } catch (error) {
+      console.error("Failed to react:", error);
     }
   };
 
@@ -235,6 +352,45 @@ const ArticlePage = () => {
     return Math.round((poll.votes[option] || 0) / total * 100);
   };
 
+  // Parse and format "Other Side" analysis
+  const formatOtherSide = (text) => {
+    if (!text) return [];
+    // Remove markdown asterisks and clean up
+    const cleaned = text
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/#{1,3}\s/g, '')
+      .trim();
+    
+    // Split into sections
+    const sections = [];
+    const lines = cleaned.split('\n').filter(l => l.trim());
+    
+    let currentSection = { title: '', content: '' };
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed.match(/^(Alternative|Counter|Missing|Questions|Different|Opposing)/i)) {
+        if (currentSection.content) {
+          sections.push({ ...currentSection });
+        }
+        currentSection = { title: trimmed.replace(/:$/, ''), content: '' };
+      } else if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
+        currentSection.content += trimmed.substring(1).trim() + '\n';
+      } else if (trimmed.match(/^\d\./)) {
+        currentSection.content += trimmed.substring(2).trim() + '\n';
+      } else {
+        currentSection.content += trimmed + ' ';
+      }
+    });
+    
+    if (currentSection.content || currentSection.title) {
+      sections.push(currentSection);
+    }
+    
+    return sections.length > 0 ? sections : [{ title: 'Alternative View', content: cleaned }];
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
@@ -246,7 +402,16 @@ const ArticlePage = () => {
   if (!article) return null;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]" data-testid="article-page">
+    <motion.div 
+      ref={containerRef}
+      className="min-h-screen bg-[#0A0A0A] touch-pan-y" 
+      data-testid="article-page"
+      drag="y"
+      dragConstraints={{ top: 0, bottom: 0 }}
+      dragElastic={0.2}
+      onDragEnd={handleDragEnd}
+      style={{ y }}
+    >
       {/* Header */}
       <header className="glass-nav fixed top-0 left-0 right-0 z-40 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
@@ -257,6 +422,18 @@ const ArticlePage = () => {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </button>
+          
+          {/* Progress indicator */}
+          <div className="flex items-center gap-1">
+            {allArticles.slice(Math.max(0, currentIndex - 2), currentIndex + 3).map((_, idx) => (
+              <div 
+                key={idx}
+                className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                  idx === Math.min(2, currentIndex) ? 'bg-red-500' : 'bg-gray-600'
+                }`}
+              />
+            ))}
+          </div>
           
           <div className="flex items-center gap-2">
             <button 
@@ -335,13 +512,13 @@ const ArticlePage = () => {
             {article.content}
           </div>
 
-          {/* Collapsible Sections */}
+          {/* Collapsible Sections - Custom Labels */}
           <div className="space-y-3 mb-8">
             {[
-              { key: "what", label: "What Happened", icon: "📰", content: article.what },
-              { key: "why", label: "Why It Matters", icon: "💡", content: article.why },
-              { key: "context", label: "Context", icon: "📚", content: article.context },
-              { key: "impact", label: "Impact", icon: "🎯", content: article.impact }
+              { key: "what", content: article.what },
+              { key: "why", content: article.why },
+              { key: "context", content: article.context },
+              { key: "impact", content: article.impact }
             ].map(section => (
               <Collapsible 
                 key={section.key}
@@ -354,8 +531,9 @@ const ArticlePage = () => {
                     data-testid={`section-${section.key}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span>{section.icon}</span>
-                      <span className="text-white font-medium">{section.label}</span>
+                      <span className="text-red-500 font-mono text-xs uppercase tracking-wider">
+                        {getSectionLabel(section.key, article.category)}
+                      </span>
                     </div>
                     {expandedSections[section.key] ? (
                       <ChevronUp className="w-5 h-5 text-gray-500" />
@@ -377,12 +555,11 @@ const ArticlePage = () => {
             ))}
           </div>
 
-          {/* AI Questions */}
+          {/* AI Questions - Limited to 3 */}
           {aiQuestions.length > 0 && (
             <div className="glass-card rounded-xl p-6 mb-8">
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-5 h-5 text-red-500" />
-                <span className="text-white font-medium">Questions to Consider</span>
+                <span className="text-red-500 font-mono text-xs uppercase tracking-wider">Think Deeper</span>
               </div>
               <div className="space-y-3">
                 {aiQuestions.map((question, idx) => (
@@ -418,6 +595,11 @@ const ArticlePage = () => {
               <ThumbsDown className="w-4 h-4" />
               <span className="text-sm">{article.dislikes || 0}</span>
             </button>
+          </div>
+
+          {/* Swipe hint for mobile */}
+          <div className="text-center py-4 md:hidden">
+            <p className="text-gray-600 text-xs">Swipe up for next story</p>
           </div>
         </article>
       </main>
@@ -465,7 +647,7 @@ const ArticlePage = () => {
         </div>
       </div>
 
-      {/* Comments Dialog */}
+      {/* Comments Dialog - Fixed Agree/Disagree */}
       <Dialog open={showComments} onOpenChange={setShowComments}>
         <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg max-h-[80vh]">
           <DialogHeader>
@@ -473,46 +655,22 @@ const ArticlePage = () => {
           </DialogHeader>
           
           {/* New Comment */}
-          <div className="space-y-3 mb-4">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCommentStance("agree")}
-                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                  commentStance === "agree" 
-                    ? "bg-green-500/20 text-green-400 border border-green-500/50" 
-                    : "bg-white/5 text-gray-400"
-                }`}
-              >
-                Agree
-              </button>
-              <button
-                onClick={() => setCommentStance("disagree")}
-                className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                  commentStance === "disagree" 
-                    ? "bg-red-500/20 text-red-400 border border-red-500/50" 
-                    : "bg-white/5 text-gray-400"
-                }`}
-              >
-                Disagree
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Share your thoughts..."
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-red-500"
-                data-testid="comment-input"
-              />
-              <button 
-                onClick={submitComment}
-                className="p-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-                data-testid="submit-comment-btn"
-              >
-                <Send className="w-5 h-5 text-white" />
-              </button>
-            </div>
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Share your thoughts..."
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-red-500"
+              data-testid="comment-input"
+            />
+            <button 
+              onClick={submitComment}
+              className="p-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              data-testid="submit-comment-btn"
+            >
+              <Send className="w-5 h-5 text-white" />
+            </button>
           </div>
 
           <ScrollArea className="h-[400px]">
@@ -529,16 +687,29 @@ const ArticlePage = () => {
                         </div>
                       )}
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="text-white text-sm font-medium">{comment.user_name}</p>
-                      <span className={`text-xs ${
-                        comment.stance === "agree" ? "text-green-400" : "text-red-400"
-                      }`}>
-                        {comment.stance === "agree" ? "Agrees" : "Disagrees"}
-                      </span>
                     </div>
                   </div>
-                  <p className="text-gray-400 text-sm">{comment.content}</p>
+                  <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
+                  
+                  {/* Agree/Disagree reactions for OTHER users' comments */}
+                  <div className="flex items-center gap-3 pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors"
+                    >
+                      <ThumbsUp className="w-3 h-3" />
+                      Agree {comment.agrees > 0 && <span className="text-gray-500">({comment.agrees})</span>}
+                    </button>
+                    <button
+                      onClick={() => handleCommentReaction(comment.comment_id, 'disagree')}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <ThumbsDown className="w-3 h-3" />
+                      Disagree {comment.disagrees > 0 && <span className="text-gray-500">({comment.disagrees})</span>}
+                    </button>
+                  </div>
                 </div>
               ))}
               {comments.length === 0 && (
@@ -593,7 +764,7 @@ const ArticlePage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Other Side Dialog */}
+      {/* Other Side Dialog - Redesigned */}
       <Dialog open={showOtherSide} onOpenChange={setShowOtherSide}>
         <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-2xl max-h-[80vh]">
           <DialogHeader>
@@ -609,10 +780,22 @@ const ArticlePage = () => {
                 <SuryaLogo className="w-12 h-12 animate-spin-slow" />
               </div>
             ) : otherSideAnalysis ? (
-              <div className="prose prose-invert prose-sm max-w-none">
-                <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
-                  {otherSideAnalysis}
-                </div>
+              <div className="space-y-6">
+                {formatOtherSide(otherSideAnalysis).map((section, idx) => (
+                  <div key={idx} className="glass-card rounded-xl p-5">
+                    {section.title && (
+                      <h3 className="text-red-500 font-mono text-xs uppercase tracking-wider mb-3">
+                        {section.title.replace(/[:\-]/g, '').trim()}
+                      </h3>
+                    )}
+                    <p className="text-gray-300 leading-relaxed text-sm">
+                      {section.content.trim()}
+                    </p>
+                  </div>
+                ))}
+                <p className="text-gray-600 text-xs text-center italic">
+                  Consider multiple perspectives before forming your opinion
+                </p>
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">Failed to load analysis</p>
@@ -620,7 +803,7 @@ const ArticlePage = () => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 };
 
