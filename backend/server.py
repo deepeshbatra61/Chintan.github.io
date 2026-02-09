@@ -595,6 +595,66 @@ async def get_user_stats(user: dict = Depends(require_auth)):
         "category_breakdown": category_counts
     }
 
+@api_router.get("/users/weekly-report")
+async def get_weekly_report(user: dict = Depends(require_auth)):
+    """Generate weekly reading report"""
+    # Get reading history
+    history = await db.reading_history.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    total_time = sum(h.get("time_spent", 0) for h in history)
+    articles_read = len(history)
+    completed = sum(1 for h in history if h.get("completed", False))
+    
+    # Get bookmarks count
+    bookmarks_count = await db.bookmarks.count_documents({"user_id": user["user_id"]})
+    
+    # Get category breakdown
+    category_counts = {}
+    for h in history:
+        article = await db.articles.find_one({"article_id": h["article_id"]}, {"_id": 0})
+        if article:
+            cat = article.get("category", "Other")
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+    
+    top_category = max(category_counts.items(), key=lambda x: x[1])[0] if category_counts else None
+    total_minutes = total_time // 60
+    completion_rate = round((completed / articles_read) * 100) if articles_read > 0 else 0
+    
+    # Generate personalized summary
+    insights = []
+    
+    if articles_read > 0:
+        insights.append(f"You've engaged with {articles_read} articles this week, showing a healthy appetite for staying informed.")
+    
+    if total_minutes > 30:
+        insights.append(f"With {total_minutes} minutes of reading, you're investing quality time in understanding the world around you.")
+    elif total_minutes > 0:
+        insights.append(f"You've spent {total_minutes} minutes reading. Consider setting aside a few more minutes each day for deeper engagement.")
+    
+    if top_category:
+        insights.append(f"{top_category} has captured most of your attention. This focus helps you build expertise in areas that matter to you.")
+    
+    if completion_rate > 70:
+        insights.append(f"With a {completion_rate}% completion rate, you're reading articles thoroughly rather than just skimming headlines.")
+    elif articles_read > 0:
+        insights.append(f"Your {completion_rate}% completion rate suggests room for deeper engagement. Try the collapsible sections for better understanding.")
+    
+    if bookmarks_count > 0:
+        insights.append(f"You've saved {bookmarks_count} articles for later, building a personal knowledge library.")
+    
+    return {
+        "summary": "\n\n".join(insights) if insights else "Start reading articles to generate your personalized weekly insights.",
+        "stats": {
+            "articlesRead": articles_read,
+            "minutesSpent": total_minutes,
+            "topCategory": top_category or "Not enough data",
+            "completionRate": completion_rate
+        }
+    }
+
 @api_router.get("/interests/categories")
 async def get_interest_categories():
     """Get all interest categories with subcategories"""
