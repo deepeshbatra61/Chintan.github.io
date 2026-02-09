@@ -370,6 +370,8 @@ class ChintanAPITester:
         print("\n🔐 Authentication Tests")
         self.test_auth_me_without_token()
         self.test_protected_routes_without_auth()
+        self.test_comment_reactions_without_auth()
+        self.test_weekly_report_without_auth()
         
         # Create test session for protected route testing
         print("\n🔧 Test Session Creation")
