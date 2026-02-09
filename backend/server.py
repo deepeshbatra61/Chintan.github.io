@@ -935,21 +935,20 @@ async def get_other_side(article_id: str, user: dict = Depends(require_auth)):
         chat = LlmChat(
             api_key=emergent_key,
             session_id=f"otherside_{article_id}",
-            system_message="You are an expert analyst providing alternative perspectives on news. Present counterarguments and different viewpoints in a balanced, thoughtful manner. Structure your response with clear sections."
+            system_message="""You are a thoughtful analyst helping readers see different angles of news stories. Write in a natural, conversational tone as if explaining to a friend. Never use markdown formatting like asterisks, bullet points, or headers. Write in flowing paragraphs. Avoid phrases like 'It's important to note' or 'One must consider'. Just share the insights directly and naturally."""
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
         
-        prompt = f"""Analyze this news article and provide "The Other Side" - alternative perspectives that readers should consider:
+        prompt = f"""Here's a news story. Share a different perspective on it in a natural, conversational way. Write 3-4 short paragraphs covering:
+
+First paragraph - A different way to look at this story that most people might not consider.
+Second paragraph - What critics or skeptics might say about this.
+Third paragraph - Important context that the article might be missing.
+Fourth paragraph - One or two questions worth thinking about.
 
 Title: {article['title']}
-Content: {article['content']}
+Story: {article['content']}
 
-Provide:
-1. **Alternative Viewpoint**: A different way to interpret this news
-2. **Counterarguments**: Valid opposing perspectives
-3. **What's Missing**: Important context that might be overlooked
-4. **Questions to Consider**: Thought-provoking questions for critical thinking
-
-Keep it balanced, factual, and encourage independent thinking."""
+Remember: No bullet points, no asterisks, no headers. Just natural paragraphs like you're having a coffee conversation. Keep each paragraph to 2-3 sentences max."""
 
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
