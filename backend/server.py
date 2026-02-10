@@ -1259,6 +1259,100 @@ async def submit_relevance_feedback(
     await db.relevance_feedback.insert_one(feedback_doc)
     return {"success": True}
 
+# ===================== NOTIFICATIONS ROUTES =====================
+
+@api_router.get("/notifications")
+async def get_notifications(user: dict = Depends(require_auth)):
+    """Get user notifications (reactions to their comments)"""
+    # Get user's comments
+    user_comments = await db.comments.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0, "comment_id": 1, "content": 1}
+    ).to_list(100)
+    
+    comment_ids = [c["comment_id"] for c in user_comments]
+    comment_map = {c["comment_id"]: c["content"] for c in user_comments}
+    
+    # Get reactions to user's comments (excluding user's own reactions)
+    reactions = await db.comment_reactions.find(
+        {
+            "comment_id": {"$in": comment_ids},
+            "user_id": {"$ne": user["user_id"]}
+        },
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    notifications = []
+    for r in reactions:
+        # Get reactor info
+        reactor = await db.users.find_one({"user_id": r["user_id"]}, {"_id": 0, "name": 1})
+        if reactor:
+            created = datetime.fromisoformat(r["created_at"].replace('Z', '+00:00')) if isinstance(r["created_at"], str) else r["created_at"]
+            now = datetime.now(timezone.utc)
+            diff = now - created.replace(tzinfo=timezone.utc) if created.tzinfo is None else now - created
+            
+            if diff.days > 0:
+                time_ago = f"{diff.days}d ago"
+            elif diff.seconds > 3600:
+                time_ago = f"{diff.seconds // 3600}h ago"
+            else:
+                time_ago = f"{diff.seconds // 60}m ago"
+            
+            notifications.append({
+                "type": r["reaction"],
+                "from_user": reactor["name"],
+                "comment_preview": comment_map.get(r["comment_id"], "")[:50] + "...",
+                "time_ago": time_ago,
+                "read": r.get("read", False)
+            })
+    
+    unread = sum(1 for n in notifications if not n["read"])
+    
+    return {
+        "notifications": notifications,
+        "unread_count": unread
+    }
+
+@api_router.post("/notifications/read")
+async def mark_notifications_read(user: dict = Depends(require_auth)):
+    """Mark all notifications as read"""
+    # Get user's comments
+    user_comments = await db.comments.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0, "comment_id": 1}
+    ).to_list(100)
+    
+    comment_ids = [c["comment_id"] for c in user_comments]
+    
+    await db.comment_reactions.update_many(
+        {"comment_id": {"$in": comment_ids}},
+        {"$set": {"read": True}}
+    )
+    
+    return {"success": True}
+
+# ===================== POLL HISTORY ROUTES =====================
+
+@api_router.get("/users/voted-polls")
+async def get_voted_polls(user: dict = Depends(require_auth)):
+    """Get polls the user has voted in (last 7 days)"""
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    
+    # Get user's votes
+    votes = await db.poll_votes.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    voted_polls = []
+    for vote in votes:
+        poll = await db.polls.find_one({"poll_id": vote["poll_id"]}, {"_id": 0})
+        if poll:
+            poll["user_vote"] = vote["option"]
+            voted_polls.append(poll)
+    
+    return voted_polls
+
 # ===================== BASIC ROUTES =====================
 
 @api_router.get("/")
