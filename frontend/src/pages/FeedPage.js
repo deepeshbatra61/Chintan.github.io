@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { 
   Search, Bell, User, Menu, Sun, CloudSun, Moon, 
-  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio
+  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { ScrollArea } from "../components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -21,6 +22,9 @@ const FeedPage = () => {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const categories = ["All", "Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
 
@@ -43,14 +47,24 @@ const FeedPage = () => {
     }
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/notifications`, { withCredentials: true });
+      setNotifications(response.data.notifications || []);
+      setUnreadCount(response.data.unread_count || 0);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchArticles(), fetchDevelopingStories()]);
+      await Promise.all([fetchArticles(), fetchDevelopingStories(), fetchNotifications()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchArticles, fetchDevelopingStories]);
+  }, [fetchArticles, fetchDevelopingStories, fetchNotifications]);
 
   const handleCategoryChange = (category) => {
     setActiveCategory(category === "All" ? null : category);
@@ -69,6 +83,22 @@ const FeedPage = () => {
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+  };
+
+  const markNotificationsRead = async () => {
+    try {
+      await axios.post(`${API}/notifications/read`, {}, { withCredentials: true });
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Error marking notifications read:", error);
+    }
+  };
+
+  const openNotifications = () => {
+    setShowNotifications(true);
+    if (unreadCount > 0) {
+      markNotificationsRead();
+    }
   };
 
   if (loading) {
@@ -131,27 +161,32 @@ const FeedPage = () => {
 
                     <div className="h-px bg-white/10 my-4" />
 
-                    {/* Developing Stories in Sidebar */}
+                    {/* Developing Stories - Single Breathing Button */}
                     {developingStories.length > 0 && (
-                      <>
-                        <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2 flex items-center gap-2">
-                          <Radio className="w-3 h-3 text-red-500 animate-pulse" />
-                          Developing
-                        </p>
-                        {developingStories.slice(0, 3).map((story) => (
-                          <button
-                            key={story.article_id}
-                            onClick={() => { navigate(`/article/${story.article_id}`); setSidebarOpen(false); }}
-                            className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-                            data-testid={`sidebar-developing-${story.article_id}`}
-                          >
-                            <p className="text-gray-300 text-sm line-clamp-2">{story.title}</p>
-                            <p className="text-gray-600 text-xs mt-1">{story.category}</p>
-                          </button>
-                        ))}
-                        <div className="h-px bg-white/10 my-4" />
-                      </>
+                      <button 
+                        onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
+                        className="w-full relative overflow-hidden"
+                        data-testid="developing-stories-nav"
+                      >
+                        <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
+                          <div className="relative">
+                            <Radio className="w-5 h-5 text-red-500" />
+                            {/* Breathing glow effect */}
+                            <div className="absolute inset-0 animate-pulse">
+                              <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-red-400 font-medium">Developing Stories</span>
+                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} live)</span>
+                          </div>
+                        </div>
+                        {/* Subtle breathing background glow */}
+                        <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
+                      </button>
                     )}
+
+                    <div className="h-px bg-white/10 my-4" />
 
                     <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Menu</p>
                     <button 
@@ -194,9 +229,15 @@ const FeedPage = () => {
             <button className="p-2 hover:bg-white/5 rounded-lg transition-colors">
               <Search className="w-5 h-5 text-gray-400" />
             </button>
-            <button className="p-2 hover:bg-white/5 rounded-lg transition-colors relative">
+            <button 
+              onClick={openNotifications}
+              className="p-2 hover:bg-white/5 rounded-lg transition-colors relative"
+              data-testid="notifications-btn"
+            >
               <Bell className="w-5 h-5 text-gray-400" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-600 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse" />
+              )}
             </button>
             <button 
               onClick={() => navigate("/profile")}
@@ -304,7 +345,6 @@ const FeedPage = () => {
                   transition={{ delay: index * 0.05 }}
                   data-testid={`article-card-${article.article_id}`}
                 >
-                  {/* Image */}
                   <div className="relative h-48 overflow-hidden">
                     <img 
                       src={article.image_url} 
@@ -313,7 +353,6 @@ const FeedPage = () => {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] to-transparent" />
                     
-                    {/* Badges */}
                     <div className="absolute top-3 left-3 flex gap-2">
                       {article.is_breaking && (
                         <span className="live-indicator bg-black/60 backdrop-blur-sm px-2 py-1 rounded">
@@ -335,7 +374,6 @@ const FeedPage = () => {
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="p-4">
                     <h3 className="font-serif text-lg text-white mb-2 line-clamp-2 leading-tight">
                       {article.title}
@@ -350,10 +388,6 @@ const FeedPage = () => {
                         <span className="flex items-center gap-1">
                           <Eye className="w-3 h-3" />
                           {article.view_count || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          5 min
                         </span>
                       </div>
                     </div>
@@ -401,6 +435,61 @@ const FeedPage = () => {
           </button>
         </div>
       </nav>
+
+      {/* Notifications Dialog */}
+      <Dialog open={showNotifications} onOpenChange={setShowNotifications}>
+        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-md max-h-[70vh]">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Bell className="w-5 h-5 text-red-500" />
+              Notifications
+            </DialogTitle>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[400px]">
+            {notifications.length > 0 ? (
+              <div className="space-y-3">
+                {notifications.map((notif, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`p-4 rounded-lg ${notif.read ? 'bg-white/5' : 'bg-red-950/30 border border-red-900/30'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        notif.type === 'agree' ? 'bg-green-500/20' : 'bg-red-500/20'
+                      }`}>
+                        {notif.type === 'agree' ? (
+                          <span className="text-green-400 text-lg">👍</span>
+                        ) : (
+                          <span className="text-red-400 text-lg">👎</span>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white text-sm">
+                          <span className="font-medium">{notif.from_user}</span>
+                          {notif.type === 'agree' ? ' agreed with' : ' disagreed with'} your comment
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1 line-clamp-2">
+                          "{notif.comment_preview}"
+                        </p>
+                        <p className="text-gray-600 text-xs mt-2">{notif.time_ago}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Bell className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No notifications yet</p>
+                <p className="text-gray-600 text-sm mt-1">
+                  You'll see reactions to your comments here
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
