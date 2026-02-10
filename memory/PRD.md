@@ -11,10 +11,12 @@ Build an AI-based news app named "Chintan" with the motto "Don't just consume. C
 ## Core Requirements
 - Google OAuth authentication
 - Personalized news feed based on interests
-- Time-based briefs (Morning, Midday, Night)
+- Time-based briefs (Morning, Midday, Night) - each with distinct theme
 - AI-powered "Ask AI" chat for article discussions
 - "The Other Side" - alternative perspectives on stories
-- Polls and comments/discussions
+- Polls with 7-day expiry and history tracking
+- Comments with agree/disagree reactions
+- Notifications for comment reactions
 - Bookmarks and reading stats
 - Dark premium aesthetic with red (#DC2626) accent
 
@@ -24,75 +26,63 @@ Build an AI-based news app named "Chintan" with the motto "Don't just consume. C
 - **AI**: Claude Sonnet 4.5 via Emergent Integrations
 - **Auth**: Emergent-managed Google OAuth
 
-## What's Been Implemented (Feb 8, 2026)
+## What's Been Implemented
 
-### Backend
-- [x] FastAPI server with all API routes prefixed with `/api`
-- [x] MongoDB models for users, sessions, articles, polls, comments, bookmarks
-- [x] Google OAuth via Emergent Auth (session-based)
-- [x] 12 realistic Indian news articles across categories (MOCK DATA)
-- [x] AI endpoints using Claude Sonnet 4.5
-  - `/api/ai/ask` - Ask AI about articles
-  - `/api/ai/other-side/{article_id}` - Alternative perspectives
-  - `/api/ai/questions/{article_id}` - AI-generated questions
-- [x] Poll voting system
-- [x] Comments with agree/disagree stance
-- [x] Bookmarks CRUD
-- [x] Reading history tracking
-- [x] User stats and interests management
-- [x] Time-based briefs (morning/midday/night)
+### Iteration 1 (Feb 8, 2026)
+- [x] Full MVP: Feed, Articles, Briefs, AI features, Polls, Comments, Bookmarks
 
-### Frontend
-- [x] Login page with Google sign-in and Surya logo
-- [x] Onboarding flow (3-step interest selection)
-- [x] Feed page with:
-  - Developing stories banner
-  - Current brief button
-  - Category filters
-  - News cards with images, badges, metadata
-- [x] Article page with:
-  - Hero image
-  - Collapsible sections (What, Why, Context, Impact)
-  - Like/dislike feedback
-  - Action bar (Discuss, Poll, Other Side, Ask AI)
-- [x] Ask AI full-screen chat interface
-- [x] Morning/Midday/Night brief pages with themed gradients
-- [x] Bookmarks page
-- [x] Profile page with reading stats
-- [x] Dark premium design with glassmorphism
-- [x] Responsive mobile layout
+### Iteration 2 (Feb 9, 2026)
+- [x] **Horizontal swipe navigation** - Swipe left/right for next/prev article with haptic feedback
+- [x] **Back button fix** - Now goes to /feed instead of previous article
+- [x] **Developing Stories** - Single breathing button in sidebar with red glow
+- [x] **Notifications system** - Shows when others agree/disagree with your comments
+- [x] **Professional onboarding** - No emojis, checkbox design, only 3 topics required
+- [x] **Poll history** - Track polls voted in with 7-day expiry status
+- [x] **Poll expiry** - 7-day voting window, results always visible
+- [x] **Simplified profile stats** - Removed reading time/completed, kept bookmarks/articles
+- [x] **Custom section labels** - Category-specific labels instead of emojis
+- [x] **Better "Other Side"** - Natural paragraphs, no markdown
+- [x] **Reduced AI questions** - Max 3 questions per article
+
+### Pages Implemented
+1. Login (Google OAuth)
+2. Onboarding (3-step interest selection - professional design)
+3. Feed (news cards, developing stories banner, category filters)
+4. Article (collapsible sections, action bar, horizontal swipe)
+5. Ask AI (full-screen chat)
+6. Brief (Morning/Midday/Night with distinct themes)
+7. Developing Stories (dedicated page with auto-refresh)
+8. Bookmarks
+9. Profile (stats, poll history, weekly report, edit interests)
 
 ## Mocked/Sample Data
-- **News articles**: 12 realistic Indian news articles (mock data, not live API)
+- **News articles**: 12 realistic Indian news articles (MOCK DATA, not live API)
 - Categories: Politics, Technology, Business, Sports, Entertainment, Science
 
 ## Prioritized Backlog
 
 ### P0 (Critical - Next Phase)
 - [ ] Integrate live NewsAPI when API key provided
-- [ ] Implement swipe navigation between articles
-- [ ] Add relevance feedback ("Is this relevant?") in early scrolls
+- [ ] Fix double-login issue (OAuth redirect handling)
 
 ### P1 (Important)
 - [ ] Breakout Rooms feature (1-on-1 debates)
 - [ ] Push notifications for briefs
-- [ ] Reading behavior tracking for algorithm refinement
 - [ ] Share to WhatsApp/Twitter/LinkedIn
 
 ### P2 (Nice to Have)
 - [ ] Offline reading support
-- [ ] Dark/Light theme toggle
 - [ ] Advanced search with filters
-- [ ] Interest subcategory selection in settings
 - [ ] Reading streak gamification
 
 ## Technical Notes
 - All MongoDB queries exclude `_id` with `{"_id": 0}` projection
 - Sessions expire after 7 days
+- Polls expire after 7 days (can't vote, but can see results)
 - AI responses are cached in MongoDB
-- CORS configured for all origins
-- Environment variables in `/app/backend/.env` and `/app/frontend/.env`
+- Horizontal swipe uses touch events, not drag
+- Haptic feedback via navigator.vibrate()
 
 ## API Keys Required
-- `EMERGENT_LLM_KEY`: For Claude Sonnet 4.5 (universal key)
+- `EMERGENT_LLM_KEY`: For Claude Sonnet 4.5 (universal key) - configured
 - `NEWS_API_KEY`: For live news (currently set to 'demo')
