@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { toast } from "sonner";
 import { 
   ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle, 
   BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Send, Heart, X
+  ThumbsUp, ThumbsDown, Send, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { 
@@ -28,7 +28,7 @@ const triggerHaptic = (type = 'light') => {
       medium: [20],
       heavy: [30],
       success: [10, 50, 10],
-      swipe: [5, 30, 5]
+      swipe: [15, 30, 15]
     };
     navigator.vibrate(patterns[type] || patterns.light);
   }
@@ -102,11 +102,11 @@ const ArticlePage = () => {
     impact: false
   });
 
-  // Swipe navigation state
+  // Swipe navigation state - HORIZONTAL
   const [allArticles, setAllArticles] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const y = useMotionValue(0);
-  const containerRef = useRef(null);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -168,7 +168,6 @@ const ArticlePage = () => {
   const fetchAIQuestions = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true });
-      // Limit to 3 questions max
       setAiQuestions((response.data.questions || []).slice(0, 3));
     } catch (error) {
       console.error("Error fetching AI questions:", error);
@@ -185,26 +184,57 @@ const ArticlePage = () => {
     loadData();
   }, [fetchArticle, checkBookmark, fetchPoll, fetchComments, fetchAIQuestions, fetchAllArticles]);
 
-  // Swipe handlers for mobile navigation
-  const handleDragEnd = (event, info) => {
-    const threshold = 100;
-    const velocity = info.velocity.y;
-    
-    if (info.offset.y < -threshold || velocity < -500) {
-      // Swipe up - next article
-      if (currentIndex < allArticles.length - 1) {
-        triggerHaptic('swipe');
-        const nextArticle = allArticles[currentIndex + 1];
-        navigate(`/article/${nextArticle.article_id}`);
-      }
-    } else if (info.offset.y > threshold || velocity > 500) {
-      // Swipe down - previous article
-      if (currentIndex > 0) {
-        triggerHaptic('swipe');
-        const prevArticle = allArticles[currentIndex - 1];
-        navigate(`/article/${prevArticle.article_id}`);
+  // HORIZONTAL swipe handlers for mobile navigation
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diffX = touchStartX.current - touchEndX.current;
+    const threshold = 80;
+
+    if (Math.abs(diffX) > threshold) {
+      if (diffX > 0) {
+        // Swipe LEFT - next article
+        if (currentIndex < allArticles.length - 1) {
+          triggerHaptic('swipe');
+          const nextArticle = allArticles[currentIndex + 1];
+          navigate(`/article/${nextArticle.article_id}`, { replace: true });
+        }
+      } else {
+        // Swipe RIGHT - previous article
+        if (currentIndex > 0) {
+          triggerHaptic('swipe');
+          const prevArticle = allArticles[currentIndex - 1];
+          navigate(`/article/${prevArticle.article_id}`, { replace: true });
+        }
       }
     }
+  };
+
+  const goToNextArticle = () => {
+    if (currentIndex < allArticles.length - 1) {
+      triggerHaptic('swipe');
+      const nextArticle = allArticles[currentIndex + 1];
+      navigate(`/article/${nextArticle.article_id}`, { replace: true });
+    }
+  };
+
+  const goToPrevArticle = () => {
+    if (currentIndex > 0) {
+      triggerHaptic('swipe');
+      const prevArticle = allArticles[currentIndex - 1];
+      navigate(`/article/${prevArticle.article_id}`, { replace: true });
+    }
+  };
+
+  // Back button goes to FEED, not previous article
+  const handleBack = () => {
+    navigate('/feed');
   };
 
   const toggleBookmark = async () => {
@@ -310,7 +340,6 @@ const ArticlePage = () => {
     try {
       triggerHaptic('light');
       await axios.post(`${API}/comments/${commentId}/${reaction}`, {}, { withCredentials: true });
-      // Update local state
       setComments(prev => prev.map(c => {
         if (c.comment_id === commentId) {
           return { ...c, [reaction === 'agree' ? 'agrees' : 'disagrees']: (c[reaction === 'agree' ? 'agrees' : 'disagrees'] || 0) + 1 };
@@ -352,10 +381,8 @@ const ArticlePage = () => {
     return Math.round((poll.votes[option] || 0) / total * 100);
   };
 
-  // Parse and format "Other Side" analysis - simplified for natural text
   const formatOtherSide = (text) => {
     if (!text) return null;
-    // Clean up any remaining markdown
     return text
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
@@ -375,21 +402,18 @@ const ArticlePage = () => {
   if (!article) return null;
 
   return (
-    <motion.div 
-      ref={containerRef}
-      className="min-h-screen bg-[#0A0A0A] touch-pan-y" 
+    <div 
+      className="min-h-screen bg-[#0A0A0A]" 
       data-testid="article-page"
-      drag="y"
-      dragConstraints={{ top: 0, bottom: 0 }}
-      dragElastic={0.2}
-      onDragEnd={handleDragEnd}
-      style={{ y }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Header */}
       <header className="glass-nav fixed top-0 left-0 right-0 z-40 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button 
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors"
             data-testid="back-btn"
           >
@@ -398,14 +422,11 @@ const ArticlePage = () => {
           
           {/* Progress indicator */}
           <div className="flex items-center gap-1">
-            {allArticles.slice(Math.max(0, currentIndex - 2), currentIndex + 3).map((_, idx) => (
-              <div 
-                key={idx}
-                className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                  idx === Math.min(2, currentIndex) ? 'bg-red-500' : 'bg-gray-600'
-                }`}
-              />
-            ))}
+            {allArticles.length > 0 && (
+              <span className="text-gray-500 text-xs font-mono">
+                {currentIndex + 1} / {allArticles.length}
+              </span>
+            )}
           </div>
           
           <div className="flex items-center gap-2">
@@ -440,7 +461,6 @@ const ArticlePage = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/50 to-transparent" />
         
-        {/* Category & Status */}
         <div className="absolute bottom-6 left-6 right-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="category-badge">{article.category}</span>
@@ -457,10 +477,9 @@ const ArticlePage = () => {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content - Normal scrolling works */}
       <main className="px-6 pb-32 -mt-4 relative">
         <article className="max-w-3xl mx-auto">
-          {/* Title */}
           <motion.h1 
             className="font-serif text-3xl md:text-4xl font-bold text-white mb-4 leading-tight"
             initial={{ opacity: 0, y: 20 }}
@@ -469,23 +488,20 @@ const ArticlePage = () => {
             {article.title}
           </motion.h1>
 
-          {/* Meta */}
           <div className="flex items-center gap-4 text-sm text-gray-500 mb-6">
             <span className="font-mono">{article.source}</span>
             {article.author && <span>• {article.author}</span>}
           </div>
 
-          {/* Description */}
           <p className="text-lg text-gray-300 mb-8 leading-relaxed">
             {article.description}
           </p>
 
-          {/* Content */}
           <div className="text-gray-400 leading-relaxed mb-8">
             {article.content}
           </div>
 
-          {/* Collapsible Sections - Custom Labels */}
+          {/* Collapsible Sections */}
           <div className="space-y-3 mb-8">
             {[
               { key: "what", content: article.what },
@@ -528,7 +544,7 @@ const ArticlePage = () => {
             ))}
           </div>
 
-          {/* AI Questions - Limited to 3 */}
+          {/* AI Questions */}
           {aiQuestions.length > 0 && (
             <div className="glass-card rounded-xl p-6 mb-8">
               <div className="flex items-center gap-2 mb-4">
@@ -570,9 +586,21 @@ const ArticlePage = () => {
             </button>
           </div>
 
-          {/* Swipe hint for mobile */}
+          {/* Swipe hint for mobile - HORIZONTAL */}
           <div className="text-center py-4 md:hidden">
-            <p className="text-gray-600 text-xs">Swipe up for next story</p>
+            <div className="flex items-center justify-center gap-4 text-gray-600 text-xs">
+              {currentIndex > 0 && (
+                <button onClick={goToPrevArticle} className="flex items-center gap-1 hover:text-gray-400">
+                  <ChevronLeft className="w-4 h-4" /> Previous
+                </button>
+              )}
+              <span>Swipe left/right</span>
+              {currentIndex < allArticles.length - 1 && (
+                <button onClick={goToNextArticle} className="flex items-center gap-1 hover:text-gray-400">
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </article>
       </main>
@@ -620,14 +648,13 @@ const ArticlePage = () => {
         </div>
       </div>
 
-      {/* Comments Dialog - Fixed Agree/Disagree */}
+      {/* Comments Dialog */}
       <Dialog open={showComments} onOpenChange={setShowComments}>
         <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="text-white">Discussion</DialogTitle>
           </DialogHeader>
           
-          {/* New Comment */}
           <div className="flex gap-2 mb-4">
             <input
               type="text"
@@ -666,7 +693,6 @@ const ArticlePage = () => {
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
                   
-                  {/* Agree/Disagree reactions for OTHER users' comments */}
                   <div className="flex items-center gap-3 pt-2 border-t border-white/5">
                     <button
                       onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
@@ -737,7 +763,7 @@ const ArticlePage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Other Side Dialog - Redesigned */}
+      {/* Other Side Dialog */}
       <Dialog open={showOtherSide} onOpenChange={setShowOtherSide}>
         <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-2xl max-h-[80vh]">
           <DialogHeader>
@@ -774,7 +800,7 @@ const ArticlePage = () => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </motion.div>
+    </div>
   );
 };
 
