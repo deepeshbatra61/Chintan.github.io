@@ -228,6 +228,11 @@ function AppRouter() {
           <ProfilePage />
         </ProtectedRoute>
       } />
+      <Route path="/developing" element={
+        <ProtectedRoute>
+          <DevelopingPage />
+        </ProtectedRoute>
+      } />
       <Route path="/ask-ai/:articleId" element={
         <ProtectedRoute>
           <AskAIPage />
