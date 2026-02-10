@@ -13,6 +13,7 @@ import BriefPage from "./pages/BriefPage";
 import BookmarksPage from "./pages/BookmarksPage";
 import ProfilePage from "./pages/ProfilePage";
 import AskAIPage from "./pages/AskAIPage";
+import DevelopingPage from "./pages/DevelopingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
