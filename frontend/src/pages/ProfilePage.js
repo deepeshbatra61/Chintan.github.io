@@ -4,9 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { toast } from "sonner";
 import { 
-  ArrowLeft, User, Clock, BookOpen, Bookmark, 
-  TrendingUp, LogOut, ChevronRight, Edit3, FileText,
-  X, Check, Loader2
+  ArrowLeft, User, Bookmark, BarChart2,
+  LogOut, ChevronRight, Edit3, FileText,
+  Check, Loader2, Clock
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -28,6 +28,10 @@ const ProfilePage = () => {
   const [showReport, setShowReport] = useState(false);
   const [report, setReport] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [showPolls, setShowPolls] = useState(false);
+  const [votedPolls, setVotedPolls] = useState([]);
+  const [loadingPolls, setLoadingPolls] = useState(false);
+  const [selectedPoll, setSelectedPoll] = useState(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -37,6 +41,18 @@ const ProfilePage = () => {
       console.error("Error fetching stats:", error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const fetchVotedPolls = useCallback(async () => {
+    setLoadingPolls(true);
+    try {
+      const response = await axios.get(`${API}/users/voted-polls`, { withCredentials: true });
+      setVotedPolls(response.data || []);
+    } catch (error) {
+      console.error("Error fetching voted polls:", error);
+    } finally {
+      setLoadingPolls(false);
     }
   }, []);
 
@@ -90,7 +106,6 @@ const ProfilePage = () => {
       const response = await axios.get(`${API}/users/weekly-report`, { withCredentials: true });
       setReport(response.data);
     } catch (error) {
-      // Generate a local report from stats
       const localReport = generateLocalReport();
       setReport(localReport);
     } finally {
@@ -101,7 +116,6 @@ const ProfilePage = () => {
   const generateLocalReport = () => {
     if (!stats) return null;
     
-    const totalMinutes = Math.round((stats.total_reading_time || 0) / 60);
     const topCategory = stats.category_breakdown 
       ? Object.entries(stats.category_breakdown).sort(([,a], [,b]) => b - a)[0]?.[0]
       : null;
@@ -112,23 +126,8 @@ const ProfilePage = () => {
       insights.push(`You've engaged with ${stats.articles_read} articles this week, showing a healthy appetite for staying informed.`);
     }
     
-    if (totalMinutes > 30) {
-      insights.push(`With ${totalMinutes} minutes of reading, you're investing quality time in understanding the world around you.`);
-    } else if (totalMinutes > 0) {
-      insights.push(`You've spent ${totalMinutes} minutes reading. Consider setting aside a few more minutes each day for deeper engagement.`);
-    }
-    
     if (topCategory) {
       insights.push(`${topCategory} has captured most of your attention. This focus helps you build expertise in areas that matter to you.`);
-    }
-    
-    if (stats.articles_completed > 0) {
-      const completionRate = Math.round((stats.articles_completed / stats.articles_read) * 100);
-      if (completionRate > 70) {
-        insights.push(`With a ${completionRate}% completion rate, you're reading articles thoroughly rather than just skimming headlines. That's contemplative reading at its best.`);
-      } else {
-        insights.push(`Your ${completionRate}% completion rate suggests room for deeper engagement. Try the collapsible sections in each article for better understanding.`);
-      }
     }
     
     if (stats.bookmarks_count > 0) {
@@ -138,22 +137,40 @@ const ProfilePage = () => {
     return {
       summary: insights.length > 0 
         ? insights.join('\n\n')
-        : "Start reading articles to generate your personalized weekly insights. Every article you engage with helps us understand your interests better.",
+        : "Start reading articles to generate your personalized weekly insights.",
       stats: {
         articlesRead: stats.articles_read || 0,
-        minutesSpent: totalMinutes,
-        topCategory: topCategory || "Not enough data",
-        completionRate: stats.articles_read > 0 
-          ? Math.round((stats.articles_completed / stats.articles_read) * 100)
-          : 0
+        topCategory: topCategory || "Not enough data"
       }
     };
   };
 
-  const formatTime = (seconds) => {
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  const openPollsHistory = () => {
+    setShowPolls(true);
+    fetchVotedPolls();
+  };
+
+  const getPollStatus = (poll) => {
+    if (!poll.created_at) return { active: true, daysLeft: 7 };
+    const createdDate = new Date(poll.created_at);
+    const now = new Date();
+    const daysPassed = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+    const daysLeft = 7 - daysPassed;
+    return {
+      active: daysLeft > 0,
+      daysLeft: Math.max(0, daysLeft)
+    };
+  };
+
+  const getTotalVotes = (poll) => {
+    if (!poll?.votes) return 0;
+    return Object.values(poll.votes).reduce((a, b) => a + b, 0);
+  };
+
+  const getVotePercentage = (poll, option) => {
+    const total = getTotalVotes(poll);
+    if (total === 0) return 0;
+    return Math.round((poll.votes[option] || 0) / total * 100);
   };
 
   if (loading) {
@@ -209,37 +226,13 @@ const ProfilePage = () => {
             </div>
           </motion.div>
 
-          {/* Stats Grid */}
+          {/* Stats Grid - Simplified */}
           <motion.div
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
+            className="grid grid-cols-2 gap-4 mb-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="glass-card rounded-xl p-4 text-center">
-              <Clock className="w-6 h-6 text-red-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-white">
-                {formatTime(stats?.total_reading_time || 0)}
-              </p>
-              <p className="text-gray-500 text-xs">Reading Time</p>
-            </div>
-            
-            <div className="glass-card rounded-xl p-4 text-center">
-              <BookOpen className="w-6 h-6 text-red-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-white">
-                {stats?.articles_read || 0}
-              </p>
-              <p className="text-gray-500 text-xs">Articles Read</p>
-            </div>
-            
-            <div className="glass-card rounded-xl p-4 text-center">
-              <TrendingUp className="w-6 h-6 text-red-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-white">
-                {stats?.articles_completed || 0}
-              </p>
-              <p className="text-gray-500 text-xs">Completed</p>
-            </div>
-            
             <div className="glass-card rounded-xl p-4 text-center">
               <Bookmark className="w-6 h-6 text-red-500 mx-auto mb-2" />
               <p className="text-2xl font-bold text-white">
@@ -247,12 +240,20 @@ const ProfilePage = () => {
               </p>
               <p className="text-gray-500 text-xs">Bookmarks</p>
             </div>
+            
+            <div className="glass-card rounded-xl p-4 text-center">
+              <BarChart2 className="w-6 h-6 text-red-500 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-white">
+                {stats?.articles_read || 0}
+              </p>
+              <p className="text-gray-500 text-xs">Articles Read</p>
+            </div>
           </motion.div>
 
           {/* Weekly Report Button */}
           <motion.button
             onClick={generateWeeklyReport}
-            className="w-full glass-card rounded-xl p-4 mb-8 flex items-center justify-between hover:border-red-500/30 transition-colors group"
+            className="w-full glass-card rounded-xl p-4 mb-4 flex items-center justify-between hover:border-red-500/30 transition-colors group"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
@@ -264,7 +265,28 @@ const ProfilePage = () => {
               </div>
               <div className="text-left">
                 <p className="text-white font-medium">Weekly Reading Report</p>
-                <p className="text-gray-500 text-sm">Get a personalized summary of your week</p>
+                <p className="text-gray-500 text-sm">Get a personalized summary</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-red-500 transition-colors" />
+          </motion.button>
+
+          {/* Poll History Button */}
+          <motion.button
+            onClick={openPollsHistory}
+            className="w-full glass-card rounded-xl p-4 mb-8 flex items-center justify-between hover:border-red-500/30 transition-colors group"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            data-testid="poll-history-btn"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center">
+                <BarChart2 className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="text-left">
+                <p className="text-white font-medium">Poll History</p>
+                <p className="text-gray-500 text-sm">View polls you've voted in</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-red-500 transition-colors" />
@@ -275,7 +297,7 @@ const ProfilePage = () => {
             className="glass-card rounded-xl p-6 mb-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.25 }}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-white font-medium">Your Interests</h2>
@@ -344,7 +366,7 @@ const ProfilePage = () => {
             className="space-y-2"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.35 }}
           >
             <button
               onClick={() => navigate("/bookmarks")}
@@ -440,19 +462,10 @@ const ProfilePage = () => {
               </div>
             ) : report ? (
               <div className="space-y-6 py-4">
-                {/* Quick Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="glass-card rounded-lg p-3 text-center">
                     <p className="text-2xl font-bold text-white">{report.stats?.articlesRead || 0}</p>
                     <p className="text-gray-500 text-xs">Articles</p>
-                  </div>
-                  <div className="glass-card rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-white">{report.stats?.minutesSpent || 0}m</p>
-                    <p className="text-gray-500 text-xs">Reading</p>
-                  </div>
-                  <div className="glass-card rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-white">{report.stats?.completionRate || 0}%</p>
-                    <p className="text-gray-500 text-xs">Completion</p>
                   </div>
                   <div className="glass-card rounded-lg p-3 text-center">
                     <p className="text-lg font-bold text-white truncate">{report.stats?.topCategory || '-'}</p>
@@ -460,7 +473,6 @@ const ProfilePage = () => {
                   </div>
                 </div>
 
-                {/* Summary */}
                 <div className="glass-card rounded-xl p-5">
                   <h3 className="text-red-500 font-mono text-xs uppercase tracking-wider mb-3">Your Week in Review</h3>
                   <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-line">
@@ -474,6 +486,102 @@ const ProfilePage = () => {
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">Unable to generate report</p>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Poll History Dialog */}
+      <Dialog open={showPolls} onOpenChange={setShowPolls}>
+        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-red-500" />
+              Poll History
+            </DialogTitle>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[60vh]">
+            {loadingPolls ? (
+              <div className="flex items-center justify-center py-12">
+                <SuryaLogo className="w-12 h-12 animate-spin-slow" />
+              </div>
+            ) : votedPolls.length > 0 ? (
+              <div className="space-y-4 py-4">
+                {votedPolls.map((poll) => {
+                  const status = getPollStatus(poll);
+                  return (
+                    <div 
+                      key={poll.poll_id}
+                      className={`glass-card rounded-xl p-4 cursor-pointer hover:border-red-500/30 transition-colors ${
+                        selectedPoll?.poll_id === poll.poll_id ? 'border-red-500/50' : ''
+                      }`}
+                      onClick={() => setSelectedPoll(selectedPoll?.poll_id === poll.poll_id ? null : poll)}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-white font-medium text-sm flex-1 pr-4">{poll.question}</p>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          status.active 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {status.active ? `${status.daysLeft}d left` : 'Closed'}
+                        </span>
+                      </div>
+                      
+                      <p className="text-gray-500 text-xs mb-2">
+                        Your vote: <span className="text-red-400">{poll.user_vote}</span>
+                      </p>
+
+                      {/* Expanded view */}
+                      <AnimatePresence>
+                        {selectedPoll?.poll_id === poll.poll_id && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pt-3 mt-3 border-t border-white/10 space-y-2">
+                              {poll.options.map(option => {
+                                const percentage = getVotePercentage(poll, option);
+                                const isUserVote = option === poll.user_vote;
+                                return (
+                                  <div key={option} className="relative">
+                                    <div className={`p-2 rounded-lg ${isUserVote ? 'bg-red-500/10' : 'bg-white/5'}`}>
+                                      <div 
+                                        className={`absolute inset-0 rounded-lg ${isUserVote ? 'bg-red-500/20' : 'bg-white/5'}`}
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                      <div className="relative flex items-center justify-between">
+                                        <span className={`text-sm ${isUserVote ? 'text-red-400' : 'text-gray-400'}`}>
+                                          {option} {isUserVote && '✓'}
+                                        </span>
+                                        <span className="text-gray-500 text-xs font-mono">{percentage}%</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <p className="text-gray-600 text-xs text-center pt-2">
+                                {getTotalVotes(poll)} total votes
+                              </p>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <BarChart2 className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No polls voted in yet</p>
+                <p className="text-gray-600 text-sm mt-1">
+                  Vote on polls in articles to see them here
+                </p>
+              </div>
             )}
           </ScrollArea>
         </DialogContent>
