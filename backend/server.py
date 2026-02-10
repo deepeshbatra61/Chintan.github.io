@@ -1051,6 +1051,15 @@ async def vote_poll(poll_id: str, vote: PollVote, user: dict = Depends(require_a
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
     
+    # Check if poll is expired (7 days)
+    if poll.get("created_at"):
+        created = datetime.fromisoformat(poll["created_at"].replace('Z', '+00:00')) if isinstance(poll["created_at"], str) else poll["created_at"]
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        days_passed = (datetime.now(timezone.utc) - created).days
+        if days_passed >= 7:
+            raise HTTPException(status_code=400, detail="Poll has expired")
+    
     if vote.option not in poll["options"]:
         raise HTTPException(status_code=400, detail="Invalid option")
     
