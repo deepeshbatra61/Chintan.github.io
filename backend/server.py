@@ -660,6 +660,96 @@ async def get_interest_categories():
     """Get all interest categories with subcategories"""
     return INTEREST_CATEGORIES
 
+# ===================== NEWS API CONFIG =====================
+NEWS_API_URL = "https://news-recsys-api-513550308951.europe-west1.run.app/articles"
+
+# Category mapping based on keywords in title/body
+def detect_category(title: str, body: str) -> tuple:
+    """Detect category from article content"""
+    text = (title + " " + body).lower()
+    
+    category_keywords = {
+        "Technology": ["tech", "ai", "software", "app", "digital", "computer", "startup", "innovation", "gadget", "smartphone", "internet", "cyber", "data", "cloud", "robot"],
+        "Business": ["market", "stock", "economy", "finance", "investment", "company", "trade", "business", "revenue", "profit", "bank", "startup", "corporate", "ceo"],
+        "Politics": ["government", "election", "minister", "parliament", "policy", "vote", "political", "congress", "senate", "law", "legislation", "president", "prime minister"],
+        "Sports": ["cricket", "football", "tennis", "match", "player", "tournament", "team", "score", "championship", "olympic", "sports", "game", "league"],
+        "Entertainment": ["movie", "film", "actor", "actress", "music", "singer", "celebrity", "bollywood", "hollywood", "show", "concert", "album", "award"],
+        "Science": ["research", "scientist", "study", "discovery", "space", "nasa", "climate", "environment", "health", "medical", "vaccine", "experiment"],
+        "World": ["international", "global", "foreign", "country", "nation", "war", "diplomatic", "united nations", "europe", "asia", "america"],
+        "Lifestyle": ["food", "travel", "fashion", "wellness", "fitness", "recipe", "restaurant", "vacation", "style", "beauty", "home"]
+    }
+    
+    for category, keywords in category_keywords.items():
+        if any(kw in text for kw in keywords):
+            return category, None
+    
+    return "Technology", None  # Default
+
+def transform_api_article(api_article: dict) -> dict:
+    """Transform API article to our format"""
+    title = api_article.get("title", "")
+    body = api_article.get("body", "")
+    category, subcategory = detect_category(title, body)
+    
+    # Generate summary sections from body
+    body_text = body[:2000] if len(body) > 2000 else body
+    sentences = body_text.split('. ')
+    
+    # Create structured content
+    what = sentences[0] + '.' if sentences else title
+    why = sentences[1] + '.' if len(sentences) > 1 else "This story highlights important developments in the " + category.lower() + " sector."
+    context = sentences[2] + '.' if len(sentences) > 2 else "Understanding this development requires context about recent trends in the industry."
+    impact = sentences[3] + '.' if len(sentences) > 3 else "The implications of this story could affect stakeholders across multiple domains."
+    
+    # Determine if breaking/developing based on recency
+    published_str = api_article.get("published_at", "")
+    is_recent = False
+    is_breaking = False
+    
+    if published_str:
+        try:
+            published = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+            hours_ago = (datetime.now(timezone.utc) - published).total_seconds() / 3600
+            is_recent = hours_ago < 24
+            is_breaking = hours_ago < 6
+        except:
+            pass
+    
+    return {
+        "article_id": api_article.get("id", f"article_{uuid.uuid4().hex[:12]}"),
+        "title": title,
+        "description": body[:200] + "..." if len(body) > 200 else body,
+        "content": body[:1500] + "..." if len(body) > 1500 else body,
+        "what": what[:500],
+        "why": why[:500],
+        "context": context[:500],
+        "impact": impact[:500],
+        "category": category,
+        "subcategory": subcategory,
+        "image_url": api_article.get("image_url", "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"),
+        "source": "News Feed",
+        "author": None,
+        "published_at": published_str or datetime.now(timezone.utc).isoformat(),
+        "is_developing": is_recent,
+        "is_breaking": is_breaking,
+        "likes": 0,
+        "dislikes": 0,
+        "view_count": api_article.get("popularity", 0),
+        "reading_time_sec": api_article.get("reading_time_sec", 5)
+    }
+
+async def fetch_news_from_api():
+    """Fetch news from external API"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(NEWS_API_URL)
+            if response.status_code == 200:
+                api_articles = response.json()
+                return [transform_api_article(a) for a in api_articles]
+    except Exception as e:
+        logger.error(f"Error fetching news from API: {e}")
+    return None
+
 # ===================== ARTICLES ROUTES =====================
 
 @api_router.get("/articles")
@@ -669,17 +759,34 @@ async def get_articles(
     developing: Optional[bool] = None,
     limit: int = 20,
     skip: int = 0,
-    request: Request = None
+    request: Request = None,
+    refresh: bool = False
 ):
-    """Get articles with optional filters"""
-    # First, ensure sample articles exist in DB
-    existing_count = await db.articles.count_documents({})
-    if existing_count == 0:
-        # Insert sample articles
-        for article in SAMPLE_ARTICLES:
-            article_doc = {**article}
-            article_doc["published_at"] = datetime.now(timezone.utc).isoformat()
-            await db.articles.insert_one(article_doc)
+    """Get articles - fetches from live API and caches in DB"""
+    
+    # Try to fetch fresh news from API
+    api_articles = await fetch_news_from_api()
+    
+    if api_articles:
+        # Update database with fresh articles
+        for article in api_articles:
+            existing = await db.articles.find_one({"article_id": article["article_id"]})
+            if not existing:
+                await db.articles.insert_one(article)
+            else:
+                # Update existing article but preserve likes/dislikes/views
+                await db.articles.update_one(
+                    {"article_id": article["article_id"]},
+                    {"$set": {
+                        "title": article["title"],
+                        "description": article["description"],
+                        "content": article["content"],
+                        "image_url": article["image_url"],
+                        "published_at": article["published_at"],
+                        "is_developing": article["is_developing"],
+                        "is_breaking": article["is_breaking"]
+                    }}
+                )
     
     # Build query
     query = {}
@@ -693,24 +800,31 @@ async def get_articles(
     # Get user interests for personalization
     user = await get_current_user(request) if request else None
     if user and user.get("interests") and not category:
-        # Prioritize user interests
         query["category"] = {"$in": user["interests"]}
     
-    articles = await db.articles.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
+    articles = await db.articles.find(query, {"_id": 0}).sort("published_at", -1).skip(skip).limit(limit).to_list(limit)
     
     # If no personalized results, return all
     if not articles and user and user.get("interests"):
-        articles = await db.articles.find({}, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
+        articles = await db.articles.find({}, {"_id": 0}).sort("published_at", -1).skip(skip).limit(limit).to_list(limit)
     
     return articles
 
 @api_router.get("/articles/developing")
 async def get_developing_stories():
     """Get developing/breaking stories"""
+    # First refresh from API
+    api_articles = await fetch_news_from_api()
+    if api_articles:
+        for article in api_articles:
+            existing = await db.articles.find_one({"article_id": article["article_id"]})
+            if not existing:
+                await db.articles.insert_one(article)
+    
     articles = await db.articles.find(
         {"$or": [{"is_developing": True}, {"is_breaking": True}]},
         {"_id": 0}
-    ).limit(10).to_list(10)
+    ).sort("published_at", -1).limit(10).to_list(10)
     return articles
 
 @api_router.get("/articles/{article_id}")
