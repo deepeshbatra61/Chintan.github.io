@@ -832,6 +832,13 @@ async def get_article(article_id: str):
     """Get single article"""
     article = await db.articles.find_one({"article_id": article_id}, {"_id": 0})
     if not article:
+        # Try to refresh from API
+        api_articles = await fetch_news_from_api()
+        if api_articles:
+            for a in api_articles:
+                if a["article_id"] == article_id:
+                    await db.articles.insert_one(a)
+                    return a
         raise HTTPException(status_code=404, detail="Article not found")
     return article
 
