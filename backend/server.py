@@ -662,6 +662,27 @@ async def get_interest_categories():
 
 # ===================== NEWS API CONFIG =====================
 NEWS_API_URL = "https://news-recsys-api-513550308951.europe-west1.run.app/articles"
+USER_REGISTRATION_API_URL = "https://news-recsys-api-513550308951.europe-west1.run.app/users"
+
+async def register_user_with_recsys(user_id: str, name: str, interests: List[str] = None):
+    """Register user with the recommendation system API"""
+    try:
+        payload = {
+            "user_id": user_id,
+            "name": name,
+            "interests": interests or []
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(USER_REGISTRATION_API_URL, json=payload)
+            if response.status_code in [200, 201]:
+                logger.info(f"Successfully registered user {user_id} with RecSys API")
+                return True
+            else:
+                logger.warning(f"RecSys API returned status {response.status_code} for user {user_id}: {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Error registering user {user_id} with RecSys API: {e}")
+        return False
 
 # Category mapping based on keywords in title/body
 def detect_category(title: str, body: str) -> tuple:
