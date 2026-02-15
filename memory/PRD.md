@@ -88,7 +88,13 @@ Build an AI-based news app named "Chintan" with the motto "Don't just consume. C
 - AI responses are cached in MongoDB
 - Horizontal swipe uses touch events, not drag
 - Haptic feedback via navigator.vibrate()
+- **User Registration**: Users are registered with external RecSys API on creation and onboarding completion
 
 ## API Keys Required
 - `EMERGENT_LLM_KEY`: For Claude Sonnet 4.5 (universal key) - configured
 - `NEWS_API_KEY`: For live news (currently set to 'demo')
+
+## External API Integrations
+- **News RecSys API** (https://news-recsys-api-513550308951.europe-west1.run.app):
+  - `GET /articles` - Fetch news articles
+  - `POST /users` - Register users with recommendation system
