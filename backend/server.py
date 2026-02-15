@@ -504,6 +504,9 @@ async def create_session(request: Request, response: Response):
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(new_user)
+        
+        # Register new user with recommendation system API
+        await register_user_with_recsys(user_id, user_data["name"], [])
     
     # Create session
     session_doc = {
