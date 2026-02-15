@@ -683,7 +683,7 @@ async def register_user_with_recsys(user_id: str, name: str, interests: List[str
     """Register user with the recommendation system API"""
     try:
         payload = {
-            "user_id": user_id,
+            "id": user_id,  # API expects 'id' field
             "name": name,
             "interests": interests or []
         }
