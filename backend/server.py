@@ -556,6 +556,9 @@ async def logout(request: Request, response: Response):
 @api_router.put("/users/interests")
 async def update_interests(interests_update: InterestsUpdate, user: dict = Depends(require_auth)):
     """Update user interests"""
+    # Check if this is the first time completing onboarding
+    was_onboarding_completed = user.get("onboarding_completed", False)
+    
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {
@@ -563,6 +566,15 @@ async def update_interests(interests_update: InterestsUpdate, user: dict = Depen
             "onboarding_completed": True
         }}
     )
+    
+    # If onboarding just completed, register/update user with recommendation system
+    if not was_onboarding_completed:
+        await register_user_with_recsys(
+            user["user_id"],
+            user["name"],
+            interests_update.interests
+        )
+    
     updated_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     return updated_user
 
