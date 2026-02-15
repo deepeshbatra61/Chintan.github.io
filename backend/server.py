@@ -682,11 +682,17 @@ USER_REGISTRATION_API_URL = "https://news-recsys-api-513550308951.europe-west1.r
 async def register_user_with_recsys(user_id: str, name: str, interests: List[str] = None):
     """Register user with the recommendation system API"""
     try:
+        # API expects 'declared_interests' as a comma-separated string
+        interests_str = ",".join(interests) if interests else None
+        
         payload = {
-            "id": user_id,  # API expects 'id' field
-            "name": name,
-            "interests": interests or []
+            "id": user_id,
+            "name": name
         }
+        # Only include declared_interests if there are interests
+        if interests_str:
+            payload["declared_interests"] = interests_str
+            
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(USER_REGISTRATION_API_URL, json=payload)
             if response.status_code in [200, 201]:
