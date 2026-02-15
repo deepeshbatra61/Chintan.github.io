@@ -44,6 +44,12 @@ Build an AI-based news app named "Chintan" with the motto "Don't just consume. C
 - [x] **Better "Other Side"** - Natural paragraphs, no markdown
 - [x] **Reduced AI questions** - Max 3 questions per article
 
+### Iteration 3 (Feb 15, 2026)
+- [x] **User Registration API Integration** - POST user data to RecSys API (`https://news-recsys-api-513550308951.europe-west1.run.app/users`) on:
+  - New user creation (during first login)
+  - Onboarding completion (when interests are first set)
+  - Payload: `{ "id": user_id, "name": name, "declared_interests": "cat1,cat2,cat3" }`
+
 ### Pages Implemented
 1. Login (Google OAuth)
 2. Onboarding (3-step interest selection - professional design)
