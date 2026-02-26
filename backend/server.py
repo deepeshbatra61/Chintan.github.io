@@ -9,12 +9,18 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
+import time
+import random
 from datetime import datetime, timezone, timedelta
 import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# CORS allowed origins — comma-separated in ALLOWED_ORIGINS env var, defaults to localhost:3000
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -33,6 +39,129 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ===================== RECOMMENDATION SCORE CACHE =====================
+# {user_id: {"scores": {"completion": {cat: float}, "engagement": {cat: float}}, "ts": float}}
+_affinity_cache: Dict[str, Dict] = {}
+_AFFINITY_CACHE_TTL_SEC: int = 300  # 5 minutes
+
+
+async def _get_user_affinity_scores(user_id: str) -> dict:
+    """
+    Returns per-category scores from reading_history. Cached for 5 min.
+    Shape: {"completion": {cat: 0-20}, "engagement": {cat: 0-20}}
+    """
+    now_ts = time.time()
+    cached = _affinity_cache.get(user_id)
+    if cached and (now_ts - cached["ts"]) < _AFFINITY_CACHE_TTL_SEC:
+        return cached["scores"]
+
+    history_docs = await db.reading_history.find(
+        {"user_id": user_id},
+        {"_id": 0, "article_id": 1, "time_spent": 1, "completed": 1}
+    ).to_list(1000)
+
+    if not history_docs:
+        empty = {"completion": {}, "engagement": {}}
+        _affinity_cache[user_id] = {"scores": empty, "ts": now_ts}
+        return empty
+
+    article_ids = [h["article_id"] for h in history_docs]
+    article_docs = await db.articles.find(
+        {"article_id": {"$in": article_ids}},
+        {"_id": 0, "article_id": 1, "category": 1, "reading_time_sec": 1}
+    ).to_list(len(article_ids))
+    article_map: Dict[str, dict] = {a["article_id"]: a for a in article_docs}
+
+    completion_stats: Dict[str, dict] = {}
+    engagement_stats: Dict[str, dict] = {}
+
+    for h in history_docs:
+        meta = article_map.get(h["article_id"])
+        if not meta:
+            continue
+        cat = meta.get("category")
+        if not cat:
+            continue
+
+        if cat not in completion_stats:
+            completion_stats[cat] = {"total": 0, "completed": 0}
+        completion_stats[cat]["total"] += 1
+        if h.get("completed", False):
+            completion_stats[cat]["completed"] += 1
+
+        rts = meta.get("reading_time_sec", 0)
+        if rts and rts > 0:
+            ratio = min(h.get("time_spent", 0) / rts, 1.0)
+            if cat not in engagement_stats:
+                engagement_stats[cat] = {"total_ratio": 0.0, "count": 0}
+            engagement_stats[cat]["total_ratio"] += ratio
+            engagement_stats[cat]["count"] += 1
+
+    completion_scores = {
+        cat: (s["completed"] / s["total"]) * 20.0
+        for cat, s in completion_stats.items() if s["total"] > 0
+    }
+    engagement_scores = {
+        cat: (s["total_ratio"] / s["count"]) * 20.0
+        for cat, s in engagement_stats.items() if s["count"] > 0
+    }
+
+    scores = {"completion": completion_scores, "engagement": engagement_scores}
+    _affinity_cache[user_id] = {"scores": scores, "ts": now_ts}
+    return scores
+
+
+def _score_article(
+    article: dict,
+    user_interests: List[str],
+    affinity: dict,
+    relevance_by_category: Dict[str, float],
+    now: datetime
+) -> float:
+    """Score one article. Pure function — no I/O."""
+    score = 0.0
+    cat = article.get("category", "")
+
+    # Signal 1: Category affinity (40 pts max)
+    if cat and cat in user_interests:
+        score += 20.0                                          # declared interest
+    score += affinity.get("completion", {}).get(cat, 0.0)     # behaviour completion 0-20
+    # (engagement handled by signal 2 below)
+
+    # Signal 2: Engagement (20 pts max)
+    score += affinity.get("engagement", {}).get(cat, 0.0)
+
+    # Signal 3: Relevance feedback (±10 pts)
+    if cat in relevance_by_category:
+        avg = relevance_by_category[cat]
+        if avg > 0.5:
+            score += 10.0
+        elif avg < 0.3:
+            score -= 10.0
+
+    # Signal 4: Freshness (10 pts max)
+    published_at = article.get("published_at")
+    if isinstance(published_at, str):
+        try:
+            published_at = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            published_at = None
+    if published_at:
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
+        age_hours = (now - published_at).total_seconds() / 3600.0
+        if age_hours <= 6:
+            score += 10.0
+        elif age_hours <= 24:
+            score += 5.0
+
+    # Signal 5: Discovery wildcard (10 pts, 20% probability)
+    if random.random() < 0.20:
+        score += 10.0
+
+    return score
+
 
 # ===================== MODELS =====================
 
@@ -94,6 +223,8 @@ class Comment(BaseModel):
     content: str
     stance: str  # "agree" or "disagree"
     likes: int = 0
+    agrees: int = 0
+    disagrees: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Bookmark(BaseModel):
@@ -613,9 +744,10 @@ async def get_user_stats(user: dict = Depends(require_auth)):
 @api_router.get("/users/weekly-report")
 async def get_weekly_report(user: dict = Depends(require_auth)):
     """Generate weekly reading report"""
-    # Get reading history
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    # Get reading history for last 7 days only
     history = await db.reading_history.find(
-        {"user_id": user["user_id"]},
+        {"user_id": user["user_id"], "created_at": {"$gte": seven_days_ago.isoformat()}},
         {"_id": 0}
     ).to_list(1000)
     
@@ -804,19 +936,16 @@ async def get_articles(
     request: Request = None,
     refresh: bool = False
 ):
-    """Get articles - fetches from live API and caches in DB"""
-    
-    # Try to fetch fresh news from API
+    """Get articles — fetches from live API and caches in DB, with personalised scoring."""
+
+    # ── Preserved: fetch-and-upsert ──────────────────────────────────────────
     api_articles = await fetch_news_from_api()
-    
     if api_articles:
-        # Update database with fresh articles
         for article in api_articles:
             existing = await db.articles.find_one({"article_id": article["article_id"]})
             if not existing:
                 await db.articles.insert_one(article)
             else:
-                # Update existing article but preserve likes/dislikes/views
                 await db.articles.update_one(
                     {"article_id": article["article_id"]},
                     {"$set": {
@@ -829,28 +958,82 @@ async def get_articles(
                         "is_breaking": article["is_breaking"]
                     }}
                 )
-    
-    # Build query
-    query = {}
+    # ── End preserved block ───────────────────────────────────────────────────
+
+    # Explicit query-param filters (always applied at DB level)
+    query: dict = {}
     if category:
         query["category"] = category
     if subcategory:
         query["subcategory"] = subcategory
     if developing is not None:
         query["is_developing"] = developing
-    
-    # Get user interests for personalization
+
     user = await get_current_user(request) if request else None
-    if user and user.get("interests") and not category:
-        query["category"] = {"$in": user["interests"]}
-    
-    articles = await db.articles.find(query, {"_id": 0}).sort("published_at", -1).skip(skip).limit(limit).to_list(limit)
-    
-    # If no personalized results, return all
-    if not articles and user and user.get("interests"):
-        articles = await db.articles.find({}, {"_id": 0}).sort("published_at", -1).skip(skip).limit(limit).to_list(limit)
-    
-    return articles
+    user_interests: List[str] = user.get("interests", []) if user else []
+
+    # ── Unauthenticated path: sort by freshness only ──────────────────────────
+    if not user or not user_interests:
+        return await db.articles.find(query, {"_id": 0}).sort(
+            "published_at", -1
+        ).skip(skip).limit(limit).to_list(limit)
+
+    # ── Authenticated path: fetch 200 candidates, score, rank ────────────────
+    CANDIDATE_LIMIT = 200
+    candidates = await db.articles.find(query, {"_id": 0}).sort(
+        "published_at", -1
+    ).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT)
+
+    if not candidates:
+        return []
+
+    # 1. Category affinity + engagement (cached 5 min)
+    affinity = await _get_user_affinity_scores(user["user_id"])
+
+    # 2. Relevance feedback — aggregate avg(is_relevant) per category
+    relevance_docs = await db.relevance_feedback.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0, "article_id": 1, "is_relevant": 1}
+    ).to_list(5000)
+
+    # Build article_id→category map from candidates + any extras
+    cat_map: Dict[str, str] = {
+        a["article_id"]: a["category"]
+        for a in candidates if a.get("category")
+    }
+    missing_ids = {d["article_id"] for d in relevance_docs} - set(cat_map)
+    if missing_ids:
+        extras = await db.articles.find(
+            {"article_id": {"$in": list(missing_ids)}},
+            {"_id": 0, "article_id": 1, "category": 1}
+        ).to_list(len(missing_ids))
+        for a in extras:
+            if a.get("category"):
+                cat_map[a["article_id"]] = a["category"]
+
+    rel_accum: Dict[str, dict] = {}
+    for doc in relevance_docs:
+        cat = cat_map.get(doc["article_id"])
+        if not cat:
+            continue
+        if cat not in rel_accum:
+            rel_accum[cat] = {"total": 0.0, "count": 0}
+        rel_accum[cat]["total"] += 1.0 if doc["is_relevant"] else 0.0
+        rel_accum[cat]["count"] += 1
+
+    relevance_by_category: Dict[str, float] = {
+        cat: s["total"] / s["count"]
+        for cat, s in rel_accum.items() if s["count"] > 0
+    }
+
+    # 3. Score every candidate, sort, paginate
+    now = datetime.now(timezone.utc)
+    scored = [
+        (_score_article(a, user_interests, affinity, relevance_by_category, now), a)
+        for a in candidates
+    ]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [a for _, a in scored[skip: skip + limit]]
 
 @api_router.get("/articles/developing")
 async def get_developing_stories():
@@ -958,15 +1141,23 @@ async def get_brief(brief_type: str, request: Request = None):
         raise HTTPException(status_code=400, detail="Invalid brief type")
     
     user = await get_current_user(request) if request else None
-    
+
+    # Refresh articles from API before querying
+    api_articles = await fetch_news_from_api()
+    if api_articles:
+        for article in api_articles:
+            existing = await db.articles.find_one({"article_id": article["article_id"]})
+            if not existing:
+                await db.articles.insert_one(article)
+
     # Get articles based on brief type and user interests
     query = {}
     if user and user.get("interests"):
         query["category"] = {"$in": user["interests"]}
-    
+
     limit = 5 if brief_type == "morning" else 3 if brief_type == "midday" else 5
-    
-    articles = await db.articles.find(query, {"_id": 0}).limit(limit).to_list(limit)
+
+    articles = await db.articles.find(query, {"_id": 0}).sort("published_at", -1).limit(limit).to_list(limit)
     
     # If no personalized results, get top articles
     if not articles:
@@ -1429,6 +1620,7 @@ async def submit_relevance_feedback(
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.relevance_feedback.insert_one(feedback_doc)
+    _affinity_cache.pop(user["user_id"], None)  # force recompute on next request
     return {"success": True}
 
 # ===================== NOTIFICATIONS ROUTES =====================
@@ -1541,10 +1733,28 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def create_indexes():
+    # users: enforce unique emails
+    await db.users.create_index("email", unique=True)
+    # articles: fast lookup by article_id
+    await db.articles.create_index("article_id")
+    # reading_history: fast user+article lookups (unique prevents duplicates)
+    await db.reading_history.create_index(
+        [("user_id", 1), ("article_id", 1)], unique=True
+    )
+    # poll_votes: fast duplicate-vote checks
+    await db.poll_votes.create_index(
+        [("poll_id", 1), ("user_id", 1)], unique=True
+    )
+    # user_sessions: auto-expire documents when expires_at passes
+    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    logger.info("MongoDB indexes created")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
