@@ -6,7 +6,7 @@ import { ArrowLeft, Bookmark, Trash2, Clock, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { SuryaLogo } from "../App";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
 const BookmarksPage = () => {

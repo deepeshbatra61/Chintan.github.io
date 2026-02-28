@@ -15,7 +15,7 @@ import ProfilePage from "./pages/ProfilePage";
 import AskAIPage from "./pages/AskAIPage";
 import DevelopingPage from "./pages/DevelopingPage";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
 // Auth Context

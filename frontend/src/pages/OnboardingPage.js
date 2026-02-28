@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "../App";
 import { ChevronRight, ChevronLeft, Check, ChevronDown } from "lucide-react";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
 const INTEREST_CATEGORIES = {

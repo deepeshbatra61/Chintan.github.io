@@ -5,7 +5,7 @@ import axios from "axios";
 import { ArrowLeft, Sun, CloudSun, Moon, Clock, ChevronRight, Coffee, Briefcase, Stars } from "lucide-react";
 import { SuryaLogo } from "../App";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
 const briefThemes = {
