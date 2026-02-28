@@ -11,6 +11,9 @@ from typing import List, Optional, Dict, Any
 import uuid
 import time
 import random
+import asyncio
+import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -27,8 +30,138 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+async def _generate_poll_for_article(article: dict, emergent_key: str) -> None:
+    """Ask the LLM for a question + 4 options, then persist the poll."""
+    article_id = article["article_id"]
+    chat = LlmChat(
+        api_key=emergent_key,
+        session_id=f"poll_gen_{article_id}",
+        system_message="You generate JSON polls for news articles. Respond with ONLY valid JSON, no explanation, no markdown."
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+    prompt = (
+        'Create a reader poll for this news article. '
+        'Return ONLY a JSON object: {"question": "...", "options": ["A", "B", "C", "D"]}\n\n'
+        f'Title: {article["title"]}\n'
+        f'Summary: {article.get("description", "")}'
+    )
+    response = await chat.send_message(UserMessage(text=prompt))
+
+    # Strip optional markdown code fences
+    raw = response.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    # Locate the JSON object
+    start, end = raw.find("{"), raw.rfind("}") + 1
+    data = json.loads(raw[start:end])
+
+    options = data["options"][:4]
+    poll_doc = {
+        "poll_id": f"poll_{uuid.uuid4().hex[:12]}",
+        "article_id": article_id,
+        "question": data["question"],
+        "options": options,
+        "votes": {opt: 0 for opt in options},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.polls.insert_one(poll_doc)
+    logger.info(f"Auto-generated poll for {article_id}: {data['question']}")
+
+
+async def _background_news_ingestor() -> None:
+    """Fetch news + generate missing polls every 30 min. Never crashes the app."""
+    while True:
+        try:
+            # ── 1. Fetch & upsert articles ────────────────────────────────
+            api_articles = await fetch_news_from_api()
+            if api_articles:
+                for article in api_articles:
+                    existing = await db.articles.find_one(
+                        {"article_id": article["article_id"]}
+                    )
+                    if not existing:
+                        await db.articles.insert_one(article)
+                    else:
+                        await db.articles.update_one(
+                            {"article_id": article["article_id"]},
+                            {"$set": {
+                                "title": article["title"],
+                                "description": article["description"],
+                                "content": article["content"],
+                                "image_url": article["image_url"],
+                                "published_at": article["published_at"],
+                                "is_developing": article["is_developing"],
+                                "is_breaking": article["is_breaking"],
+                            }},
+                        )
+                logger.info(
+                    f"Background ingestor: upserted {len(api_articles)} articles"
+                )
+
+            # ── 2. Auto-generate polls for articles that lack one ─────────
+            emergent_key = os.environ.get("EMERGENT_LLM_KEY")
+            if emergent_key:
+                covered = set(await db.polls.distinct("article_id"))
+                needing = await db.articles.find(
+                    {"article_id": {"$nin": list(covered)}},
+                    {"_id": 0, "article_id": 1, "title": 1, "description": 1},
+                ).sort("published_at", -1).limit(10).to_list(10)
+
+                for article in needing:
+                    try:
+                        await _generate_poll_for_article(article, emergent_key)
+                    except Exception as poll_err:
+                        logger.error(
+                            f"Poll generation failed for "
+                            f"{article['article_id']}: {poll_err}"
+                        )
+
+        except asyncio.CancelledError:
+            logger.info("Background news ingestor cancelled")
+            raise                          # allow clean shutdown
+        except Exception as exc:
+            logger.error(f"Background news ingestor error: {exc}")
+
+        await asyncio.sleep(30 * 60)      # 30-minute cadence; cancellable
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────────────────────
+    await db.users.create_index("email", unique=True)
+    await db.articles.create_index("article_id")
+    await db.reading_history.create_index(
+        [("user_id", 1), ("article_id", 1)], unique=True
+    )
+    await db.poll_votes.create_index(
+        [("poll_id", 1), ("user_id", 1)], unique=True
+    )
+    await db.article_likes.create_index(
+        [("user_id", 1), ("article_id", 1)], unique=True
+    )
+    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    logger.info("MongoDB indexes created")
+
+    ingestor_task = asyncio.create_task(_background_news_ingestor())
+    logger.info("Background news ingestor started")
+
+    yield  # ── App is running ────────────────────────────────────────────────
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    ingestor_task.cancel()
+    try:
+        await ingestor_task
+    except asyncio.CancelledError:
+        pass
+    client.close()
+    logger.info("Background news ingestor stopped; DB connection closed")
+
+
 # Create the main app
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -62,7 +195,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
     ).to_list(1000)
 
     if not history_docs:
-        empty = {"completion": {}, "engagement": {}}
+        empty = {"completion": {}, "engagement": {}, "comments": {}, "poll_votes": {}, "likes": {}}
         _affinity_cache[user_id] = {"scores": empty, "ts": now_ts}
         return empty
 
@@ -107,7 +240,82 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
         for cat, s in engagement_stats.items() if s["count"] > 0
     }
 
-    scores = {"completion": completion_scores, "engagement": engagement_scores}
+    # ── Comments signal (1 comment → +3, 3+ → +10 per category) ─────────────
+    comment_docs = await db.comments.find(
+        {"user_id": user_id},
+        {"_id": 0, "article_id": 1}
+    ).to_list(5000)
+
+    comment_article_counts: Dict[str, int] = {}
+    for c in comment_docs:
+        aid = c["article_id"]
+        comment_article_counts[aid] = comment_article_counts.get(aid, 0) + 1
+
+    comment_scores: Dict[str, float] = {}
+    if comment_article_counts:
+        comment_meta = await db.articles.find(
+            {"article_id": {"$in": list(comment_article_counts)}},
+            {"_id": 0, "article_id": 1, "category": 1}
+        ).to_list(len(comment_article_counts))
+        for a in comment_meta:
+            cat = a.get("category")
+            if not cat:
+                continue
+            count = comment_article_counts[a["article_id"]]
+            comment_scores[cat] = max(
+                comment_scores.get(cat, 0.0),
+                10.0 if count >= 3 else count * 3.0
+            )
+
+    # ── Poll-vote signal (+5 per category where user has voted) ──────────────
+    vote_docs = await db.poll_votes.find(
+        {"user_id": user_id},
+        {"_id": 0, "poll_id": 1}
+    ).to_list(5000)
+
+    poll_vote_scores: Dict[str, float] = {}
+    if vote_docs:
+        voted_poll_ids = list({v["poll_id"] for v in vote_docs})
+        poll_meta = await db.polls.find(
+            {"poll_id": {"$in": voted_poll_ids}},
+            {"_id": 0, "article_id": 1}
+        ).to_list(len(voted_poll_ids))
+        voted_article_ids = [p["article_id"] for p in poll_meta if p.get("article_id")]
+        if voted_article_ids:
+            voted_article_meta = await db.articles.find(
+                {"article_id": {"$in": voted_article_ids}},
+                {"_id": 0, "category": 1}
+            ).to_list(len(voted_article_ids))
+            for a in voted_article_meta:
+                cat = a.get("category")
+                if cat:
+                    poll_vote_scores[cat] = 5.0
+
+    # ── Like signal (+5 per category where user has explicitly liked) ─────────
+    like_docs = await db.article_likes.find(
+        {"user_id": user_id},
+        {"_id": 0, "article_id": 1}
+    ).to_list(5000)
+
+    like_scores: Dict[str, float] = {}
+    if like_docs:
+        liked_article_ids = [d["article_id"] for d in like_docs]
+        liked_article_meta = await db.articles.find(
+            {"article_id": {"$in": liked_article_ids}},
+            {"_id": 0, "category": 1}
+        ).to_list(len(liked_article_ids))
+        for a in liked_article_meta:
+            cat = a.get("category")
+            if cat:
+                like_scores[cat] = 5.0
+
+    scores = {
+        "completion": completion_scores,
+        "engagement": engagement_scores,
+        "comments": comment_scores,
+        "poll_votes": poll_vote_scores,
+        "likes": like_scores,
+    }
     _affinity_cache[user_id] = {"scores": scores, "ts": now_ts}
     return scores
 
@@ -132,7 +340,16 @@ def _score_article(
     # Signal 2: Engagement (20 pts max)
     score += affinity.get("engagement", {}).get(cat, 0.0)
 
-    # Signal 3: Relevance feedback (±10 pts)
+    # Signal 3a: Comment engagement (+10 max: 1→+3, 3+→+10)
+    score += affinity.get("comments", {}).get(cat, 0.0)
+
+    # Signal 3b: Poll vote (+5)
+    score += affinity.get("poll_votes", {}).get(cat, 0.0)
+
+    # Signal 3c: Explicit like (+5)
+    score += affinity.get("likes", {}).get(cat, 0.0)
+
+    # Signal 4: Relevance feedback (±10 pts)
     if cat in relevance_by_category:
         avg = relevance_by_category[cat]
         if avg > 0.5:
@@ -140,7 +357,7 @@ def _score_article(
         elif avg < 0.3:
             score -= 10.0
 
-    # Signal 4: Freshness (10 pts max)
+    # Signal 5: Freshness (10 pts max)
     published_at = article.get("published_at")
     if isinstance(published_at, str):
         try:
@@ -1083,6 +1300,15 @@ async def interact_with_article(
             {"article_id": article_id},
             {"$inc": {"likes": 1}}
         )
+        await db.article_likes.update_one(
+            {"user_id": user["user_id"], "article_id": article_id},
+            {"$setOnInsert": {
+                "user_id": user["user_id"],
+                "article_id": article_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
     elif interaction.action == "dislike":
         await db.articles.update_one(
             {"article_id": article_id},
@@ -1738,24 +1964,3 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def create_indexes():
-    # users: enforce unique emails
-    await db.users.create_index("email", unique=True)
-    # articles: fast lookup by article_id
-    await db.articles.create_index("article_id")
-    # reading_history: fast user+article lookups (unique prevents duplicates)
-    await db.reading_history.create_index(
-        [("user_id", 1), ("article_id", 1)], unique=True
-    )
-    # poll_votes: fast duplicate-vote checks
-    await db.poll_votes.create_index(
-        [("poll_id", 1), ("user_id", 1)], unique=True
-    )
-    # user_sessions: auto-expire documents when expires_at passes
-    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
-    logger.info("MongoDB indexes created")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
