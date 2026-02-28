@@ -31,8 +31,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Redis connection (initialised in lifespan)
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+# Redis connection (initialised in lifespan only when REDIS_URL is set)
+REDIS_URL: Optional[str] = os.environ.get("REDIS_URL")
 _redis: Optional[aioredis.Redis] = None
 
 # Anthropic client (initialised in lifespan)
@@ -93,16 +93,17 @@ async def _background_news_ingestor() -> None:
     """Fetch news + generate missing polls every 30 min. Never crashes the app."""
     while True:
         try:
-            # ── 0. Distributed lock — skip if another instance is running ─
-            acquired = await _redis.set(
-                "ingestion:lock", "1", nx=True, ex=25 * 60
-            )
-            if not acquired:
-                logger.info(
-                    "Background ingestor: lock held by another instance, skipping"
+            # ── 0. Distributed lock (Redis only) — skip if another instance is running ─
+            if _redis:
+                acquired = await _redis.set(
+                    "ingestion:lock", "1", nx=True, ex=25 * 60
                 )
-                await asyncio.sleep(30 * 60)
-                continue
+                if not acquired:
+                    logger.info(
+                        "Background ingestor: lock held by another instance, skipping"
+                    )
+                    await asyncio.sleep(30 * 60)
+                    continue
 
             # ── 1. Fetch & upsert articles ────────────────────────────────
             api_articles = await fetch_news_from_api()
@@ -160,8 +161,11 @@ async def _background_news_ingestor() -> None:
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
     global _redis, _anthropic_client
-    _redis = aioredis.from_url(REDIS_URL, decode_responses=True)
-    logger.info("Redis client connected")
+    if REDIS_URL:
+        _redis = aioredis.from_url(REDIS_URL, decode_responses=True)
+        logger.info("Redis client connected")
+    else:
+        logger.info("REDIS_URL not set — using in-memory affinity cache")
     _anthropic_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
     logger.info("Anthropic client initialised")
 
@@ -191,7 +195,8 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     client.close()
-    await _redis.aclose()
+    if _redis:
+        await _redis.aclose()
     await _anthropic_client.close()
     logger.info("Background news ingestor stopped; DB connection closed")
 
@@ -210,7 +215,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===================== RECOMMENDATION SCORE CACHE =====================
-# Scores are cached in Redis under key "affinity:{user_id}" for 5 minutes.
+# Redis is used when REDIS_URL is set; otherwise falls back to an in-memory dict.
+_affinity_cache: Dict[str, Any] = {}
+_AFFINITY_CACHE_TTL_SEC: int = 300  # 5 minutes
 
 
 async def _get_user_affinity_scores(user_id: str) -> dict:
@@ -218,9 +225,14 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
     Returns per-category scores from reading_history. Cached for 5 min.
     Shape: {"completion": {cat: 0-20}, "engagement": {cat: 0-20}}
     """
-    cached_json = await _redis.get(f"affinity:{user_id}")
-    if cached_json:
-        return json.loads(cached_json)
+    if _redis:
+        cached_json = await _redis.get(f"affinity:{user_id}")
+        if cached_json:
+            return json.loads(cached_json)
+    else:
+        cached = _affinity_cache.get(user_id)
+        if cached and (time.time() - cached["ts"]) < _AFFINITY_CACHE_TTL_SEC:
+            return cached["scores"]
 
     history_docs = await db.reading_history.find(
         {"user_id": user_id},
@@ -229,7 +241,10 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
 
     if not history_docs:
         empty = {"completion": {}, "engagement": {}, "comments": {}, "poll_votes": {}, "likes": {}}
-        await _redis.setex(f"affinity:{user_id}", 300, json.dumps(empty))
+        if _redis:
+            await _redis.setex(f"affinity:{user_id}", 300, json.dumps(empty))
+        else:
+            _affinity_cache[user_id] = {"scores": empty, "ts": time.time()}
         return empty
 
     article_ids = [h["article_id"] for h in history_docs]
@@ -349,7 +364,10 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
         "poll_votes": poll_vote_scores,
         "likes": like_scores,
     }
-    await _redis.setex(f"affinity:{user_id}", 300, json.dumps(scores))
+    if _redis:
+        await _redis.setex(f"affinity:{user_id}", 300, json.dumps(scores))
+    else:
+        _affinity_cache[user_id] = {"scores": scores, "ts": time.time()}
     return scores
 
 
