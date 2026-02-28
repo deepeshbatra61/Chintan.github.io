@@ -65,7 +65,7 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Auth Callback Handler
+// Google OAuth Callback Handler
 const AuthCallback = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,33 +77,46 @@ const AuthCallback = () => {
     hasProcessed.current = true;
 
     const processAuth = async () => {
-      const hash = location.hash;
-      const sessionIdMatch = hash.match(/session_id=([^&]+)/);
-      
-      if (sessionIdMatch) {
-        const sessionId = sessionIdMatch[1];
-        try {
-          const response = await axios.post(
-            `${API}/auth/session`,
-            { session_id: sessionId },
-            { withCredentials: true }
-          );
-          
-          login(response.data.user);
-          toast.success("Welcome to Chintan!");
-          
-          // Check if onboarding needed
-          if (!response.data.user.onboarding_completed) {
-            navigate("/onboarding", { replace: true, state: { user: response.data.user } });
-          } else {
-            navigate("/feed", { replace: true, state: { user: response.data.user } });
-          }
-        } catch (error) {
-          console.error("Auth error:", error);
-          toast.error("Authentication failed");
-          navigate("/login", { replace: true });
+      const params = new URLSearchParams(location.search);
+      const code = params.get("code");
+      const state = params.get("state");
+      const error = params.get("error");
+
+      if (error) {
+        toast.error("Google sign-in was cancelled");
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      // CSRF state validation
+      const savedState = sessionStorage.getItem("oauth_state");
+      sessionStorage.removeItem("oauth_state");
+
+      if (!code || !state || state !== savedState) {
+        toast.error("Authentication failed — invalid state");
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      try {
+        const redirectUri = `${window.location.origin}/auth/callback`;
+        const response = await axios.post(
+          `${API}/auth/google`,
+          { code, redirect_uri: redirectUri },
+          { withCredentials: true }
+        );
+
+        login(response.data.user);
+        toast.success("Welcome to Chintan!");
+
+        if (!response.data.user.onboarding_completed) {
+          navigate("/onboarding", { replace: true });
+        } else {
+          navigate("/feed", { replace: true });
         }
-      } else {
+      } catch (err) {
+        console.error("Auth error:", err);
+        toast.error("Authentication failed");
         navigate("/login", { replace: true });
       }
     };
@@ -187,17 +200,10 @@ export const SuryaLogo = ({ className = "w-10 h-10" }) => (
 
 // Main App Router
 function AppRouter() {
-  const location = useLocation();
-
-  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-  // Check for session_id in hash FIRST (synchronously during render)
-  if (location.hash?.includes("session_id=")) {
-    return <AuthCallback />;
-  }
-
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/onboarding" element={
         <ProtectedRoute>
           <OnboardingPage />

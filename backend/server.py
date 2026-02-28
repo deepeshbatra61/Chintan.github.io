@@ -37,6 +37,10 @@ _redis: Optional[aioredis.Redis] = None
 
 # Anthropic client (initialised in lifespan)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Google OAuth credentials
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
 async def _llm(system: str, user_content: str, max_tokens: int = 1024) -> str:
@@ -847,76 +851,89 @@ async def require_auth(request: Request) -> dict:
 
 # ===================== AUTH ROUTES =====================
 
-@api_router.post("/auth/session")
-async def create_session(request: Request, response: Response):
-    """Exchange session_id from Emergent OAuth for session_token"""
+@api_router.post("/auth/google")
+async def google_auth(request: Request, response: Response):
+    """Exchange Google OAuth authorization code for a session token"""
     body = await request.json()
-    session_id = body.get("session_id")
-    
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
-    
-    # Call Emergent OAuth to get user data
-    async with httpx.AsyncClient() as client:
-        try:
-            oauth_response = await client.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                headers={"X-Session-ID": session_id}
-            )
-            if oauth_response.status_code != 200:
-                raise HTTPException(status_code=401, detail="Invalid session")
-            
-            user_data = oauth_response.json()
-        except Exception as e:
-            logger.error(f"OAuth error: {e}")
-            raise HTTPException(status_code=401, detail="Authentication failed")
-    
+    code = body.get("code")
+    redirect_uri = body.get("redirect_uri")
+
+    if not code or not redirect_uri:
+        raise HTTPException(status_code=400, detail="code and redirect_uri required")
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    async with httpx.AsyncClient() as http:
+        # Exchange authorization code for tokens
+        token_resp = await http.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            logger.error(f"Google token exchange failed: {token_resp.text}")
+            raise HTTPException(status_code=401, detail="Failed to exchange code with Google")
+
+        tokens = token_resp.json()
+        access_token = tokens.get("access_token")
+
+        # Fetch user profile from Google
+        userinfo_resp = await http.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if userinfo_resp.status_code != 200:
+            logger.error(f"Google userinfo failed: {userinfo_resp.text}")
+            raise HTTPException(status_code=401, detail="Failed to fetch user info from Google")
+
+        google_user = userinfo_resp.json()
+
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     session_token = f"st_{uuid.uuid4().hex}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
-    # Check if user exists
+
+    # Upsert user — match on verified Google email
     existing_user = await db.users.find_one(
-        {"email": user_data["email"]},
+        {"email": google_user["email"]},
         {"_id": 0}
     )
-    
+
     if existing_user:
         user_id = existing_user["user_id"]
-        # Update user info
         await db.users.update_one(
             {"user_id": user_id},
             {"$set": {
-                "name": user_data["name"],
-                "picture": user_data.get("picture")
+                "name": google_user.get("name"),
+                "picture": google_user.get("picture"),
             }}
         )
     else:
-        # Create new user
         new_user = {
             "user_id": user_id,
-            "email": user_data["email"],
-            "name": user_data["name"],
-            "picture": user_data.get("picture"),
+            "email": google_user["email"],
+            "name": google_user.get("name"),
+            "picture": google_user.get("picture"),
             "interests": [],
             "onboarding_completed": False,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.users.insert_one(new_user)
-        
-        # Register new user with recommendation system API
-        await register_user_with_recsys(user_id, user_data["name"], [])
-    
-    # Create session
+        await register_user_with_recsys(user_id, google_user.get("name", ""), [])
+
     session_doc = {
         "user_id": user_id,
         "session_token": session_token,
         "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.user_sessions.insert_one(session_doc)
-    
-    # Set cookie
+
     response.set_cookie(
         key="session_token",
         value=session_token,
@@ -924,12 +941,10 @@ async def create_session(request: Request, response: Response):
         secure=True,
         samesite="none",
         path="/",
-        max_age=7 * 24 * 60 * 60
+        max_age=7 * 24 * 60 * 60,
     )
-    
-    # Get updated user
+
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    
     return {"user": user, "session_token": session_token}
 
 @api_router.get("/auth/me")
