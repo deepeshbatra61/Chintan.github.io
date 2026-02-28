@@ -16,7 +16,8 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import httpx
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import redis.asyncio as aioredis
+import anthropic
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -30,22 +31,39 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-async def _generate_poll_for_article(article: dict, emergent_key: str) -> None:
+# Redis connection (initialised in lifespan)
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+_redis: Optional[aioredis.Redis] = None
+
+# Anthropic client (initialised in lifespan)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+_anthropic_client: Optional[anthropic.AsyncAnthropic] = None
+
+async def _llm(system: str, user_content: str, max_tokens: int = 1024) -> str:
+    """Single-turn Anthropic API call. Returns the text of the first content block."""
+    msg = await _anthropic_client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    return msg.content[0].text
+
+
+async def _generate_poll_for_article(article: dict) -> None:
     """Ask the LLM for a question + 4 options, then persist the poll."""
     article_id = article["article_id"]
-    chat = LlmChat(
-        api_key=emergent_key,
-        session_id=f"poll_gen_{article_id}",
-        system_message="You generate JSON polls for news articles. Respond with ONLY valid JSON, no explanation, no markdown."
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-
     prompt = (
         'Create a reader poll for this news article. '
         'Return ONLY a JSON object: {"question": "...", "options": ["A", "B", "C", "D"]}\n\n'
         f'Title: {article["title"]}\n'
         f'Summary: {article.get("description", "")}'
     )
-    response = await chat.send_message(UserMessage(text=prompt))
+    response = await _llm(
+        system="You generate JSON polls for news articles. Respond with ONLY valid JSON, no explanation, no markdown.",
+        user_content=prompt,
+        max_tokens=512,
+    )
 
     # Strip optional markdown code fences
     raw = response.strip()
@@ -75,6 +93,17 @@ async def _background_news_ingestor() -> None:
     """Fetch news + generate missing polls every 30 min. Never crashes the app."""
     while True:
         try:
+            # ── 0. Distributed lock — skip if another instance is running ─
+            acquired = await _redis.set(
+                "ingestion:lock", "1", nx=True, ex=25 * 60
+            )
+            if not acquired:
+                logger.info(
+                    "Background ingestor: lock held by another instance, skipping"
+                )
+                await asyncio.sleep(30 * 60)
+                continue
+
             # ── 1. Fetch & upsert articles ────────────────────────────────
             api_articles = await fetch_news_from_api()
             if api_articles:
@@ -102,8 +131,7 @@ async def _background_news_ingestor() -> None:
                 )
 
             # ── 2. Auto-generate polls for articles that lack one ─────────
-            emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-            if emergent_key:
+            if ANTHROPIC_API_KEY:
                 covered = set(await db.polls.distinct("article_id"))
                 needing = await db.articles.find(
                     {"article_id": {"$nin": list(covered)}},
@@ -112,7 +140,7 @@ async def _background_news_ingestor() -> None:
 
                 for article in needing:
                     try:
-                        await _generate_poll_for_article(article, emergent_key)
+                        await _generate_poll_for_article(article)
                     except Exception as poll_err:
                         logger.error(
                             f"Poll generation failed for "
@@ -131,6 +159,12 @@ async def _background_news_ingestor() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
+    global _redis, _anthropic_client
+    _redis = aioredis.from_url(REDIS_URL, decode_responses=True)
+    logger.info("Redis client connected")
+    _anthropic_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    logger.info("Anthropic client initialised")
+
     await db.users.create_index("email", unique=True)
     await db.articles.create_index("article_id")
     await db.reading_history.create_index(
@@ -157,6 +191,8 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     client.close()
+    await _redis.aclose()
+    await _anthropic_client.close()
     logger.info("Background news ingestor stopped; DB connection closed")
 
 
@@ -174,9 +210,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===================== RECOMMENDATION SCORE CACHE =====================
-# {user_id: {"scores": {"completion": {cat: float}, "engagement": {cat: float}}, "ts": float}}
-_affinity_cache: Dict[str, Dict] = {}
-_AFFINITY_CACHE_TTL_SEC: int = 300  # 5 minutes
+# Scores are cached in Redis under key "affinity:{user_id}" for 5 minutes.
 
 
 async def _get_user_affinity_scores(user_id: str) -> dict:
@@ -184,10 +218,9 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
     Returns per-category scores from reading_history. Cached for 5 min.
     Shape: {"completion": {cat: 0-20}, "engagement": {cat: 0-20}}
     """
-    now_ts = time.time()
-    cached = _affinity_cache.get(user_id)
-    if cached and (now_ts - cached["ts"]) < _AFFINITY_CACHE_TTL_SEC:
-        return cached["scores"]
+    cached_json = await _redis.get(f"affinity:{user_id}")
+    if cached_json:
+        return json.loads(cached_json)
 
     history_docs = await db.reading_history.find(
         {"user_id": user_id},
@@ -196,7 +229,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
 
     if not history_docs:
         empty = {"completion": {}, "engagement": {}, "comments": {}, "poll_votes": {}, "likes": {}}
-        _affinity_cache[user_id] = {"scores": empty, "ts": now_ts}
+        await _redis.setex(f"affinity:{user_id}", 300, json.dumps(empty))
         return empty
 
     article_ids = [h["article_id"] for h in history_docs]
@@ -316,7 +349,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
         "poll_votes": poll_vote_scores,
         "likes": like_scores,
     }
-    _affinity_cache[user_id] = {"scores": scores, "ts": now_ts}
+    await _redis.setex(f"affinity:{user_id}", 300, json.dumps(scores))
     return scores
 
 
@@ -1422,18 +1455,11 @@ async def ask_ai(ask_request: AskAIRequest, user: dict = Depends(require_auth)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not emergent_key:
+    if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")
-    
+
     session_id = f"chat_{user['user_id']}_{ask_request.article_id}"
-    
-    # Get chat history
-    history = await db.chat_messages.find(
-        {"session_id": session_id},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(20)
-    
+
     # Build context
     context = f"""You are Chintan AI, an intelligent news analysis assistant. Your role is to help users understand news articles deeply and think critically.
 
@@ -1447,14 +1473,22 @@ Impact: {article['impact']}
 Be informative, balanced, and encourage critical thinking. Keep responses concise but insightful."""
 
     try:
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=session_id,
-            system_message=context
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
-        user_message = UserMessage(text=ask_request.message)
-        response = await chat.send_message(user_message)
+        # Reconstruct multi-turn history from DB for this session
+        history = await db.chat_messages.find(
+            {"session_id": session_id},
+            {"_id": 0, "role": 1, "content": 1}
+        ).sort("created_at", 1).to_list(50)
+
+        api_messages = [{"role": h["role"], "content": h["content"]} for h in history]
+        api_messages.append({"role": "user", "content": ask_request.message})
+
+        msg = await _anthropic_client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=1024,
+            system=context,
+            messages=api_messages,
+        )
+        response = msg.content[0].text
         
         # Save messages to DB
         user_msg_doc = {
@@ -1507,17 +1541,10 @@ async def get_other_side(article_id: str, user: dict = Depends(require_auth)):
     if cached:
         return {"analysis": cached["analysis"]}
     
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not emergent_key:
+    if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")
-    
+
     try:
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=f"otherside_{article_id}",
-            system_message="""You are a thoughtful analyst helping readers see different angles of news stories. Write in a natural, conversational tone as if explaining to a friend. Never use markdown formatting like asterisks, bullet points, or headers. Write in flowing paragraphs. Avoid phrases like 'It's important to note' or 'One must consider'. Just share the insights directly and naturally."""
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
         prompt = f"""Here's a news story. Share a different perspective on it in a natural, conversational way. Write 3-4 short paragraphs covering:
 
 First paragraph - A different way to look at this story that most people might not consider.
@@ -1530,8 +1557,10 @@ Story: {article['content']}
 
 Remember: No bullet points, no asterisks, no headers. Just natural paragraphs like you're having a coffee conversation. Keep each paragraph to 2-3 sentences max."""
 
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        response = await _llm(
+            system="""You are a thoughtful analyst helping readers see different angles of news stories. Write in a natural, conversational tone as if explaining to a friend. Never use markdown formatting like asterisks, bullet points, or headers. Write in flowing paragraphs. Avoid phrases like 'It's important to note' or 'One must consider'. Just share the insights directly and naturally.""",
+            user_content=prompt,
+        )
         
         # Cache result
         cache_doc = {
@@ -1559,22 +1588,15 @@ async def get_ai_questions(article_id: str):
     if cached:
         return {"questions": cached["questions"]}
     
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not emergent_key:
+    if not ANTHROPIC_API_KEY:
         # Return default questions
         return {"questions": [
             f"What are the immediate implications of this?",
             "Who benefits and who loses from this development?",
             "What should we watch for in the coming weeks?"
         ]}
-    
+
     try:
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=f"questions_{article_id}",
-            system_message="Generate 3 thought-provoking questions that encourage critical thinking about news articles. Questions should be concise and engaging. No numbering or bullet points."
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
         prompt = f"""Generate exactly 3 smart questions for this article that encourage deep thinking:
 
 Title: {article['title']}
@@ -1583,8 +1605,11 @@ Impact: {article['impact']}
 
 Return only 3 questions, one per line, no numbering or bullet points."""
 
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        response = await _llm(
+            system="Generate 3 thought-provoking questions that encourage critical thinking about news articles. Questions should be concise and engaging. No numbering or bullet points.",
+            user_content=prompt,
+            max_tokens=256,
+        )
         
         questions = [q.strip().lstrip('0123456789.-) ') for q in response.strip().split('\n') if q.strip()][:3]
         
