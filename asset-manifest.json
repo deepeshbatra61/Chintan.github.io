@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/Chintan.github.io/static/css/main.0da6e0c7.css",
-    "main.js": "/Chintan.github.io/static/js/main.633fdd9f.js",
+    "main.js": "/Chintan.github.io/static/js/main.4ed7a4cf.js",
     "index.html": "/Chintan.github.io/index.html",
     "main.0da6e0c7.css.map": "/Chintan.github.io/static/css/main.0da6e0c7.css.map",
-    "main.633fdd9f.js.map": "/Chintan.github.io/static/js/main.633fdd9f.js.map"
+    "main.4ed7a4cf.js.map": "/Chintan.github.io/static/js/main.4ed7a4cf.js.map"
   },
   "entrypoints": [
     "static/css/main.0da6e0c7.css",
-    "static/js/main.633fdd9f.js"
+    "static/js/main.4ed7a4cf.js"
   ]
 }
