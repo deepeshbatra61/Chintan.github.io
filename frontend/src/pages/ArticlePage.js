@@ -109,6 +109,7 @@ const ArticlePage = () => {
   const touchEndX = useRef(0);
   const touchStartTime = useRef(0);
   const isModalOpen = showComments || showPoll || showOtherSide;
+  const [showThinkDeeper, setShowThinkDeeper] = useState(false);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -189,6 +190,7 @@ const ArticlePage = () => {
   // HORIZONTAL swipe handlers for mobile navigation
   const handleTouchStart = (e) => {
     if (isModalOpen) return;
+    if (e.touches[0].clientY > window.innerHeight * 0.7) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartTime.current = Date.now();
   };
@@ -558,21 +560,27 @@ const ArticlePage = () => {
           {/* AI Questions */}
           {aiQuestions.length > 0 && (
             <div className="glass-card rounded-xl p-6 mb-8">
-              <div className="flex items-center gap-2 mb-4">
+              <button
+                className="flex items-center justify-between w-full gap-2"
+                onClick={() => setShowThinkDeeper(prev => !prev)}
+              >
                 <span className="text-red-500 font-mono text-xs uppercase tracking-wider">Think Deeper</span>
-              </div>
-              <div className="space-y-3">
-                {aiQuestions.map((question, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(question)}`)}
-                    className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
-                    data-testid={`ai-question-${idx}`}
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
+                <span className="text-gray-500 text-xs">{showThinkDeeper ? '▲' : '▼'}</span>
+              </button>
+              {showThinkDeeper && (
+                <div className="space-y-3 mt-4">
+                  {aiQuestions.map((question, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(question)}`)}
+                      className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
+                      data-testid={`ai-question-${idx}`}
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -790,18 +798,48 @@ const ArticlePage = () => {
                 <SuryaLogo className="w-12 h-12 animate-spin-slow" />
               </div>
             ) : otherSideAnalysis ? (
-              <div className="py-4">
-                <div className="glass-card rounded-xl p-6">
-                  <p className="text-red-500 font-mono text-xs uppercase tracking-wider mb-4">
-                    Alternative Perspective
-                  </p>
-                  <div className="text-gray-300 leading-relaxed text-sm space-y-4">
-                    {formatOtherSide(otherSideAnalysis).split('\n\n').map((paragraph, idx) => (
-                      <p key={idx}>{paragraph}</p>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-gray-600 text-xs text-center italic mt-6">
+              <div className="py-4 space-y-3">
+                {(() => {
+                  try {
+                    const parsed = JSON.parse(otherSideAnalysis);
+                    return (parsed.points || []).slice(0, 3).map((point, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#1a1a1a',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '12px',
+                          padding: '16px 18px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                        }}
+                      >
+                        <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
+                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{point}</p>
+                      </div>
+                    ));
+                  } catch {
+                    return formatOtherSide(otherSideAnalysis).split('\n\n').filter(Boolean).slice(0, 3).map((para, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#1a1a1a',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '12px',
+                          padding: '16px 18px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                        }}
+                      >
+                        <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
+                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{para}</p>
+                      </div>
+                    ));
+                  }
+                })()}
+                <p className="text-gray-600 text-xs text-center italic pt-2">
                   Consider multiple perspectives before forming your opinion
                 </p>
               </div>

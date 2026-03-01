@@ -16,6 +16,7 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import hashlib
+import re
 import httpx
 import redis.asyncio as aioredis
 import anthropic
@@ -197,7 +198,7 @@ async def _background_news_ingestor() -> None:
                                 "You are summarizing a news article for the Chintan app. "
                                 "Generate four distinct sections for this article. "
                                 "Return as JSON only with keys: what, why, context, impact. "
-                                "Each value should be 1-2 sentences, specific to this article, not generic. "
+                                "Each value must be 40-80 words, maximum 6 lines, specific to this article only, not generic. "
                                 f"Article title: {art['title']}. "
                                 f"Article content: {art.get('content', '')}"
                             ),
@@ -1224,7 +1225,7 @@ async def fetch_from_newsapi() -> list:
     for url, a in list(seen.items())[:30]:
         title = (a.get("title") or "").strip()
         description = (a.get("description") or "").strip()
-        raw_content = (a.get("content") or description).strip()
+        raw_content = re.sub(r'\s*\[\+\d+ chars\]', '', (a.get("content") or description)).strip()
         source_name = (a.get("source") or {}).get("name") or "News Feed"
         published_at = a.get("publishedAt") or datetime.now(timezone.utc).isoformat()
         image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
@@ -1606,33 +1607,43 @@ async def get_other_side(article_id: str, user: dict = Depends(require_auth)):
         raise HTTPException(status_code=500, detail="AI service not configured")
 
     try:
-        prompt = f"""Here's a news story. Share a different perspective on it in a natural, conversational way. Write 3-4 short paragraphs covering:
-
-First paragraph - A different way to look at this story that most people might not consider.
-Second paragraph - What critics or skeptics might say about this.
-Third paragraph - Important context that the article might be missing.
-Fourth paragraph - One or two questions worth thinking about.
-
-Title: {article['title']}
-Story: {article['content']}
-
-Remember: No bullet points, no asterisks, no headers. Just natural paragraphs like you're having a coffee conversation. Keep each paragraph to 2-3 sentences max."""
+        prompt = (
+            "Give exactly 3 contrasting perspectives on this news article. "
+            'Return as a JSON object with key "points" containing an array of 3 strings. '
+            "Each point must be ONE sentence only, maximum 20 words. "
+            "Total response must be under 70 words. No paragraphs, no elaboration. "
+            f'Format: {{"points": ["point 1", "point 2", "point 3"]}}\n\n'
+            f"Title: {article['title']}\n"
+            f"Story: {article.get('content', '')[:800]}"
+        )
 
         response = await _llm(
-            system="""You are a thoughtful analyst helping readers see different angles of news stories. Write in a natural, conversational tone as if explaining to a friend. Never use markdown formatting like asterisks, bullet points, or headers. Write in flowing paragraphs. Avoid phrases like 'It's important to note' or 'One must consider'. Just share the insights directly and naturally.""",
+            system="You generate contrasting perspectives on news articles. Return only valid JSON, nothing else.",
             user_content=prompt,
+            max_tokens=200,
         )
-        
+
+        # Normalise: strip markdown fences, extract JSON object
+        raw_s = response.strip()
+        if raw_s.startswith("```"):
+            raw_s = raw_s.split("```")[1]
+            if raw_s.startswith("json"):
+                raw_s = raw_s[4:]
+            raw_s = raw_s.strip()
+        start = raw_s.find("{")
+        end = raw_s.rfind("}") + 1
+        analysis = raw_s[start:end] if start >= 0 and end > start else response
+
         # Cache result
         cache_doc = {
             "article_id": article_id,
-            "analysis": response,
+            "analysis": analysis,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.other_side_cache.insert_one(cache_doc)
-        
-        return {"analysis": response}
-    
+
+        return {"analysis": analysis}
+
     except Exception as e:
         logger.error(f"AI error: {e}")
         raise HTTPException(status_code=500, detail="AI service error")
@@ -2077,6 +2088,31 @@ async def admin_recategorize():
                 logger.error(f"Recategorize error for {art['article_id']}: {e}")
 
     return {"updated": total_updated}
+
+@api_router.post("/admin/cleanup-truncated")
+async def admin_cleanup_truncated():
+    """One-time: strip '[+N chars]' from article content and reset claude_summarized."""
+    result = await db.articles.find(
+        {"content": {"$regex": r"\[\+\d+ chars\]"}},
+        {"_id": 0, "article_id": 1, "content": 1}
+    ).to_list(10000)
+
+    updated = 0
+    for art in result:
+        cleaned = re.sub(r'\s*\[\+\d+ chars\]', '', art["content"]).strip()
+        await db.articles.update_one(
+            {"article_id": art["article_id"]},
+            {"$set": {"content": cleaned, "claude_summarized": False}},
+        )
+        updated += 1
+
+    return {"cleaned": updated}
+
+@api_router.post("/admin/clear-other-side-cache")
+async def admin_clear_other_side_cache():
+    """One-time: clear cached other-side analyses so they regenerate with new prompt."""
+    result = await db.other_side_cache.delete_many({})
+    return {"deleted": result.deleted_count}
 
 # ===================== BASIC ROUTES =====================
 
