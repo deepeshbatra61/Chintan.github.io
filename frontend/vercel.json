@@ -1,0 +1,6 @@
+{
+  "buildCommand": "yarn build",
+  "outputDirectory": "build",
+  "installCommand": "yarn install --legacy-peer-deps",
+  "framework": "create-react-app"
+}
