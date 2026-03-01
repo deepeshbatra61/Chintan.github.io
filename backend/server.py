@@ -154,6 +154,78 @@ async def _background_news_ingestor() -> None:
                             f"{article['article_id']}: {poll_err}"
                         )
 
+            # ── 3. Claude categorization for uncategorized articles ───────
+            if ANTHROPIC_API_KEY:
+                _valid_cats = {"Technology", "Politics", "Business", "Sports", "Entertainment", "Health", "Science", "World"}
+                to_categorize = await db.articles.find(
+                    {"claude_categorized": {"$ne": True}},
+                    {"_id": 0, "article_id": 1, "title": 1},
+                ).limit(30).to_list(30)
+
+                for art in to_categorize:
+                    try:
+                        raw = await _llm(
+                            system="You categorize news articles. Return only the category name, nothing else.",
+                            user_content=(
+                                "Categorize this news article into exactly one of these categories: "
+                                "Technology, Politics, Business, Sports, Entertainment, Health, Science, World. "
+                                f"Article title: {art['title']}. Return only the category name, nothing else."
+                            ),
+                            max_tokens=20,
+                        )
+                        cat = raw.strip()
+                        if cat in _valid_cats:
+                            await db.articles.update_one(
+                                {"article_id": art["article_id"]},
+                                {"$set": {"category": cat, "claude_categorized": True}},
+                            )
+                    except Exception as cat_err:
+                        logger.error(f"Claude categorization error for {art['article_id']}: {cat_err}")
+
+            # ── 4. Claude summarization for unsummarized articles ─────────
+            if ANTHROPIC_API_KEY:
+                to_summarize = await db.articles.find(
+                    {"claude_summarized": {"$ne": True}},
+                    {"_id": 0, "article_id": 1, "title": 1, "content": 1},
+                ).limit(30).to_list(30)
+
+                for art in to_summarize:
+                    try:
+                        raw = await _llm(
+                            system="You summarize news articles into structured sections. Return only valid JSON.",
+                            user_content=(
+                                "You are summarizing a news article for the Chintan app. "
+                                "Generate four distinct sections for this article. "
+                                "Return as JSON only with keys: what, why, context, impact. "
+                                "Each value should be 1-2 sentences, specific to this article, not generic. "
+                                f"Article title: {art['title']}. "
+                                f"Article content: {art.get('content', '')}"
+                            ),
+                            max_tokens=512,
+                        )
+                        raw_s = raw.strip()
+                        if raw_s.startswith("```"):
+                            raw_s = raw_s.split("```")[1]
+                            if raw_s.startswith("json"):
+                                raw_s = raw_s[4:]
+                            raw_s = raw_s.strip()
+                        start = raw_s.find("{")
+                        end = raw_s.rfind("}") + 1
+                        if start >= 0 and end > start:
+                            data = json.loads(raw_s[start:end])
+                            await db.articles.update_one(
+                                {"article_id": art["article_id"]},
+                                {"$set": {
+                                    "what": str(data.get("what", ""))[:500],
+                                    "why": str(data.get("why", ""))[:500],
+                                    "context": str(data.get("context", ""))[:500],
+                                    "impact": str(data.get("impact", ""))[:500],
+                                    "claude_summarized": True,
+                                }},
+                            )
+                    except Exception as sum_err:
+                        logger.error(f"Claude summarization error for {art['article_id']}: {sum_err}")
+
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
             raise                          # allow clean shutdown
@@ -926,7 +998,6 @@ async def google_auth(request: Request, response: Response):
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.users.insert_one(new_user)
-        await register_user_with_recsys(user_id, google_user.get("name", ""), [])
 
     session_doc = {
         "user_id": user_id,
@@ -982,14 +1053,6 @@ async def update_interests(interests_update: InterestsUpdate, user: dict = Depen
             "onboarding_completed": True
         }}
     )
-    
-    # If onboarding just completed, register/update user with recommendation system
-    if not was_onboarding_completed:
-        await register_user_with_recsys(
-            user["user_id"],
-            user["name"],
-            interests_update.interests
-        )
     
     updated_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     return updated_user
@@ -1093,34 +1156,6 @@ async def get_interest_categories():
     return INTEREST_CATEGORIES
 
 # ===================== NEWS API CONFIG =====================
-NEWS_API_URL = "https://news-recsys-api-513550308951.europe-west1.run.app/articles"
-USER_REGISTRATION_API_URL = "https://news-recsys-api-513550308951.europe-west1.run.app/users"
-
-async def register_user_with_recsys(user_id: str, name: str, interests: List[str] = None):
-    """Register user with the recommendation system API"""
-    try:
-        # API expects 'declared_interests' as a comma-separated string
-        interests_str = ",".join(interests) if interests else None
-        
-        payload = {
-            "id": user_id,
-            "name": name
-        }
-        # Only include declared_interests if there are interests
-        if interests_str:
-            payload["declared_interests"] = interests_str
-            
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(USER_REGISTRATION_API_URL, json=payload)
-            if response.status_code in [200, 201]:
-                logger.info(f"Successfully registered user {user_id} with RecSys API")
-                return True
-            else:
-                logger.warning(f"RecSys API returned status {response.status_code} for user {user_id}: {response.text}")
-                return False
-    except Exception as e:
-        logger.error(f"Error registering user {user_id} with RecSys API: {e}")
-        return False
 
 # Category mapping based on keywords in title/body
 def detect_category(title: str, body: str) -> tuple:
@@ -1153,11 +1188,11 @@ async def fetch_from_newsapi() -> list:
     seen: dict = {}  # url → raw NewsAPI article, for deduplication
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. Top headlines from India
+        # 1. Top headlines from India (country=in)
         try:
             resp = await client.get(
                 "https://newsapi.org/v2/top-headlines",
-                params={"country": "in", "pageSize": 50, "apiKey": NEWSAPI_KEY},
+                params={"country": "in", "pageSize": 30, "apiKey": NEWSAPI_KEY},
             )
             if resp.status_code == 200:
                 for a in resp.json().get("articles", []):
@@ -1169,17 +1204,11 @@ async def fetch_from_newsapi() -> list:
         except Exception as e:
             logger.error(f"NewsAPI top-headlines error: {e}")
 
-        # 2. Everything from major Indian publications
+        # 2. Top headlines from The Hindu and Economic Times
         try:
             resp = await client.get(
-                "https://newsapi.org/v2/everything",
-                params={
-                    "domains": "thehindu.com,ndtv.com,hindustantimes.com,timesofindia.indiatimes.com,indianexpress.com",
-                    "pageSize": 50,
-                    "language": "en",
-                    "sortBy": "publishedAt",
-                    "apiKey": NEWSAPI_KEY,
-                },
+                "https://newsapi.org/v2/top-headlines",
+                params={"sources": "the-hindu,economic-times", "pageSize": 30, "apiKey": NEWSAPI_KEY},
             )
             if resp.status_code == 200:
                 for a in resp.json().get("articles", []):
@@ -1187,12 +1216,12 @@ async def fetch_from_newsapi() -> list:
                     if url and url not in seen:
                         seen[url] = a
             else:
-                logger.warning(f"NewsAPI everything {resp.status_code}: {resp.text[:200]}")
+                logger.warning(f"NewsAPI sources {resp.status_code}: {resp.text[:200]}")
         except Exception as e:
-            logger.error(f"NewsAPI everything error: {e}")
+            logger.error(f"NewsAPI sources error: {e}")
 
     results = []
-    for url, a in seen.items():
+    for url, a in list(seen.items())[:30]:
         title = (a.get("title") or "").strip()
         description = (a.get("description") or "").strip()
         raw_content = (a.get("content") or description).strip()
@@ -1784,8 +1813,8 @@ async def agree_comment(comment_id: str, user: dict = Depends(require_auth)):
         "user_id": user["user_id"]
     })
     if existing:
-        return {"success": False, "message": "Already reacted"}
-    
+        raise HTTPException(status_code=400, detail="Already reacted")
+
     await db.comments.update_one(
         {"comment_id": comment_id},
         {"$inc": {"agrees": 1}}
@@ -1807,8 +1836,8 @@ async def disagree_comment(comment_id: str, user: dict = Depends(require_auth)):
         "user_id": user["user_id"]
     })
     if existing:
-        return {"success": False, "message": "Already reacted"}
-    
+        raise HTTPException(status_code=400, detail="Already reacted")
+
     await db.comments.update_one(
         {"comment_id": comment_id},
         {"$inc": {"disagrees": 1}}

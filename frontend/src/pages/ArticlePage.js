@@ -107,6 +107,7 @@ const ArticlePage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
+  const touchStartTime = useRef(0);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -187,6 +188,7 @@ const ArticlePage = () => {
   // HORIZONTAL swipe handlers for mobile navigation
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
+    touchStartTime.current = Date.now();
   };
 
   const handleTouchMove = (e) => {
@@ -195,9 +197,9 @@ const ArticlePage = () => {
 
   const handleTouchEnd = () => {
     const diffX = touchStartX.current - touchEndX.current;
-    const threshold = 80;
+    const elapsed = Date.now() - touchStartTime.current;
 
-    if (Math.abs(diffX) > threshold) {
+    if (Math.abs(diffX) > 50 && elapsed < 200) {
       if (diffX > 0) {
         // Swipe LEFT - next article
         if (currentIndex < allArticles.length - 1) {
