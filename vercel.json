@@ -2,6 +2,5 @@
   "buildCommand": "yarn build",
   "outputDirectory": "frontend/build",
   "installCommand": "yarn install --legacy-peer-deps",
-  "framework": "create-react-app",
-  "rootDirectory": "frontend"
+  "framework": "create-react-app"
 }
