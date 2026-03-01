@@ -2,7 +2,14 @@
 <html>
 <head>
 <script>
-  window.location.href = '/Chintan.github.io' + window.location.pathname;
+  var path = window.location.pathname;
+  var search = window.location.search;
+  var hash = window.location.hash;
+
+  // If path doesn't start with /Chintan.github.io, redirect to it
+  if (path.indexOf('/Chintan.github.io') !== 0) {
+    window.location.replace('https://deepeshbatra61.github.io/Chintan.github.io' + path + search + hash);
+  }
 </script>
 </head>
 </html>
