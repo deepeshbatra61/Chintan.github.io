@@ -15,6 +15,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
+import hashlib
 import httpx
 import redis.asyncio as aioredis
 import anthropic
@@ -41,6 +42,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # Google OAuth credentials
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
 async def _llm(system: str, user_content: str, max_tokens: int = 1024) -> str:
@@ -110,7 +112,7 @@ async def _background_news_ingestor() -> None:
                     continue
 
             # ── 1. Fetch & upsert articles ────────────────────────────────
-            api_articles = await fetch_news_from_api()
+            api_articles = await fetch_from_newsapi()
             if api_articles:
                 for article in api_articles:
                     existing = await db.articles.find_one(
@@ -1142,70 +1144,112 @@ def detect_category(title: str, body: str) -> tuple:
     
     return "Technology", None  # Default
 
-def transform_api_article(api_article: dict) -> dict:
-    """Transform API article to our format"""
-    title = api_article.get("title", "")
-    body = api_article.get("body", "")
-    category, subcategory = detect_category(title, body)
-    
-    # Generate summary sections from body
-    body_text = body[:2000] if len(body) > 2000 else body
-    sentences = body_text.split('. ')
-    
-    # Create structured content
-    what = sentences[0] + '.' if sentences else title
-    why = sentences[1] + '.' if len(sentences) > 1 else "This story highlights important developments in the " + category.lower() + " sector."
-    context = sentences[2] + '.' if len(sentences) > 2 else "Understanding this development requires context about recent trends in the industry."
-    impact = sentences[3] + '.' if len(sentences) > 3 else "The implications of this story could affect stakeholders across multiple domains."
-    
-    # Determine if breaking/developing based on recency
-    published_str = api_article.get("published_at", "")
-    is_recent = False
-    is_breaking = False
-    
-    if published_str:
+async def fetch_from_newsapi() -> list:
+    """Fetch Indian news from NewsAPI.org (top-headlines + major Indian publications)."""
+    if not NEWSAPI_KEY:
+        logger.warning("NEWSAPI_KEY not set — skipping NewsAPI fetch")
+        return []
+
+    seen: dict = {}  # url → raw NewsAPI article, for deduplication
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # 1. Top headlines from India
         try:
-            published = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+            resp = await client.get(
+                "https://newsapi.org/v2/top-headlines",
+                params={"country": "in", "pageSize": 50, "apiKey": NEWSAPI_KEY},
+            )
+            if resp.status_code == 200:
+                for a in resp.json().get("articles", []):
+                    url = a.get("url") or ""
+                    if url and url not in seen:
+                        seen[url] = a
+            else:
+                logger.warning(f"NewsAPI top-headlines {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.error(f"NewsAPI top-headlines error: {e}")
+
+        # 2. Everything from major Indian publications
+        try:
+            resp = await client.get(
+                "https://newsapi.org/v2/everything",
+                params={
+                    "domains": "thehindu.com,ndtv.com,hindustantimes.com,timesofindia.indiatimes.com,indianexpress.com",
+                    "pageSize": 50,
+                    "language": "en",
+                    "sortBy": "publishedAt",
+                    "apiKey": NEWSAPI_KEY,
+                },
+            )
+            if resp.status_code == 200:
+                for a in resp.json().get("articles", []):
+                    url = a.get("url") or ""
+                    if url and url not in seen:
+                        seen[url] = a
+            else:
+                logger.warning(f"NewsAPI everything {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.error(f"NewsAPI everything error: {e}")
+
+    results = []
+    for url, a in seen.items():
+        title = (a.get("title") or "").strip()
+        description = (a.get("description") or "").strip()
+        raw_content = (a.get("content") or description).strip()
+        source_name = (a.get("source") or {}).get("name") or "News Feed"
+        published_at = a.get("publishedAt") or datetime.now(timezone.utc).isoformat()
+        image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
+
+        if not title or title == "[Removed]":
+            continue
+
+        article_id = "article_" + hashlib.md5(url.encode()).hexdigest()[:12]
+        category, subcategory = detect_category(title, description + " " + raw_content)
+
+        sentences = (description + " " + raw_content).split(". ")
+        what = (sentences[0] + ".") if sentences else title
+        why = (sentences[1] + ".") if len(sentences) > 1 else f"An important development in {category.lower()}."
+        context = (sentences[2] + ".") if len(sentences) > 2 else "This story reflects recent trends in the sector."
+        impact = (sentences[3] + ".") if len(sentences) > 3 else "The implications may affect stakeholders across multiple domains."
+
+        content = raw_content[:1500] + "..." if len(raw_content) > 1500 else raw_content
+
+        is_recent = False
+        is_breaking = False
+        try:
+            published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
             hours_ago = (datetime.now(timezone.utc) - published).total_seconds() / 3600
             is_recent = hours_ago < 24
             is_breaking = hours_ago < 6
-        except:
+        except Exception:
             pass
-    
-    return {
-        "article_id": api_article.get("id", f"article_{uuid.uuid4().hex[:12]}"),
-        "title": title,
-        "description": body[:200] + "..." if len(body) > 200 else body,
-        "content": body[:1500] + "..." if len(body) > 1500 else body,
-        "what": what[:500],
-        "why": why[:500],
-        "context": context[:500],
-        "impact": impact[:500],
-        "category": category,
-        "subcategory": subcategory,
-        "image_url": api_article.get("image_url", "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"),
-        "source": "News Feed",
-        "author": None,
-        "published_at": published_str or datetime.now(timezone.utc).isoformat(),
-        "is_developing": is_recent,
-        "is_breaking": is_breaking,
-        "likes": 0,
-        "dislikes": 0,
-        "view_count": api_article.get("popularity", 0),
-        "reading_time_sec": api_article.get("reading_time_sec", 5)
-    }
 
-async def fetch_news_from_api():
-    """Fetch news from external API"""
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(NEWS_API_URL)
-            if response.status_code == 200:
-                api_articles = response.json()
-                return [transform_api_article(a) for a in api_articles]
-    except Exception as e:
-        logger.error(f"Error fetching news from API: {e}")
-    return None
+        results.append({
+            "article_id": article_id,
+            "title": title,
+            "description": description[:300] + "..." if len(description) > 300 else description,
+            "content": content,
+            "what": what[:500],
+            "why": why[:500],
+            "context": context[:500],
+            "impact": impact[:500],
+            "category": category,
+            "subcategory": subcategory,
+            "source": source_name,
+            "author": a.get("author"),
+            "published_at": published_at,
+            "image_url": image_url,
+            "is_developing": is_recent,
+            "is_breaking": is_breaking,
+            "likes": 0,
+            "dislikes": 0,
+            "view_count": 0,
+            "reading_time_sec": max(5, len(raw_content.split()) // 200 * 60),
+            "url": url,
+        })
+
+    logger.info(f"NewsAPI: fetched {len(results)} articles")
+    return results
 
 # ===================== ARTICLES ROUTES =====================
 
@@ -1219,29 +1263,7 @@ async def get_articles(
     request: Request = None,
     refresh: bool = False
 ):
-    """Get articles — fetches from live API and caches in DB, with personalised scoring."""
-
-    # ── Preserved: fetch-and-upsert ──────────────────────────────────────────
-    api_articles = await fetch_news_from_api()
-    if api_articles:
-        for article in api_articles:
-            existing = await db.articles.find_one({"article_id": article["article_id"]})
-            if not existing:
-                await db.articles.insert_one(article)
-            else:
-                await db.articles.update_one(
-                    {"article_id": article["article_id"]},
-                    {"$set": {
-                        "title": article["title"],
-                        "description": article["description"],
-                        "content": article["content"],
-                        "image_url": article["image_url"],
-                        "published_at": article["published_at"],
-                        "is_developing": article["is_developing"],
-                        "is_breaking": article["is_breaking"]
-                    }}
-                )
-    # ── End preserved block ───────────────────────────────────────────────────
+    """Get articles from DB with personalised scoring."""
 
     # Explicit query-param filters (always applied at DB level)
     query: dict = {}
@@ -1261,8 +1283,8 @@ async def get_articles(
             "published_at", -1
         ).skip(skip).limit(limit).to_list(limit)
 
-    # ── Authenticated path: fetch 200 candidates, score, rank ────────────────
-    CANDIDATE_LIMIT = 200
+    # ── Authenticated path: fetch 50 candidates, score, return top 10 ─────────
+    CANDIDATE_LIMIT = 50
     candidates = await db.articles.find(query, {"_id": 0}).sort(
         "published_at", -1
     ).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT)
@@ -1316,19 +1338,11 @@ async def get_articles(
         for a in candidates
     ]
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [a for _, a in scored[skip: skip + limit]]
+    return [a for _, a in scored[:10]]
 
 @api_router.get("/articles/developing")
 async def get_developing_stories():
     """Get developing/breaking stories"""
-    # First refresh from API
-    api_articles = await fetch_news_from_api()
-    if api_articles:
-        for article in api_articles:
-            existing = await db.articles.find_one({"article_id": article["article_id"]})
-            if not existing:
-                await db.articles.insert_one(article)
-    
     articles = await db.articles.find(
         {"$or": [{"is_developing": True}, {"is_breaking": True}]},
         {"_id": 0}
@@ -1340,13 +1354,6 @@ async def get_article(article_id: str):
     """Get single article"""
     article = await db.articles.find_one({"article_id": article_id}, {"_id": 0})
     if not article:
-        # Try to refresh from API
-        api_articles = await fetch_news_from_api()
-        if api_articles:
-            for a in api_articles:
-                if a["article_id"] == article_id:
-                    await db.articles.insert_one(a)
-                    return a
         raise HTTPException(status_code=404, detail="Article not found")
     return article
 
@@ -1433,14 +1440,6 @@ async def get_brief(brief_type: str, request: Request = None):
         raise HTTPException(status_code=400, detail="Invalid brief type")
     
     user = await get_current_user(request) if request else None
-
-    # Refresh articles from API before querying
-    api_articles = await fetch_news_from_api()
-    if api_articles:
-        for article in api_articles:
-            existing = await db.articles.find_one({"article_id": article["article_id"]})
-            if not existing:
-                await db.articles.insert_one(article)
 
     # Get articles based on brief type and user interests
     query = {}
