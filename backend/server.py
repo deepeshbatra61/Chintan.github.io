@@ -259,6 +259,9 @@ async def lifespan(app: FastAPI):
     await db.article_likes.create_index(
         [("user_id", 1), ("article_id", 1)], unique=True
     )
+    await db.article_dislikes.create_index(
+        [("user_id", 1), ("article_id", 1)], unique=True
+    )
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     logger.info("MongoDB indexes created")
 
@@ -319,7 +322,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
     ).to_list(1000)
 
     if not history_docs:
-        empty = {"completion": {}, "engagement": {}, "comments": {}, "poll_votes": {}, "likes": {}}
+        empty = {"completion": {}, "engagement": {}, "comments": {}, "poll_votes": {}, "likes": {}, "dislikes": {}}
         if _redis:
             await _redis.setex(f"affinity:{user_id}", 300, json.dumps(empty))
         else:
@@ -418,7 +421,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
                 if cat:
                     poll_vote_scores[cat] = 5.0
 
-    # ── Like signal (+5 per category where user has explicitly liked) ─────────
+    # ── Like signal (+8 per liked article's category, cap +20) ──────────────
     like_docs = await db.article_likes.find(
         {"user_id": user_id},
         {"_id": 0, "article_id": 1}
@@ -434,7 +437,25 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
         for a in liked_article_meta:
             cat = a.get("category")
             if cat:
-                like_scores[cat] = 5.0
+                like_scores[cat] = min(like_scores.get(cat, 0.0) + 8.0, 20.0)
+
+    # ── Dislike signal (-5 per disliked article's category, cap -10) ─────────
+    dislike_docs = await db.article_dislikes.find(
+        {"user_id": user_id},
+        {"_id": 0, "article_id": 1}
+    ).to_list(5000)
+
+    dislike_scores: Dict[str, float] = {}
+    if dislike_docs:
+        disliked_article_ids = [d["article_id"] for d in dislike_docs]
+        disliked_article_meta = await db.articles.find(
+            {"article_id": {"$in": disliked_article_ids}},
+            {"_id": 0, "category": 1}
+        ).to_list(len(disliked_article_ids))
+        for a in disliked_article_meta:
+            cat = a.get("category")
+            if cat:
+                dislike_scores[cat] = max(dislike_scores.get(cat, 0.0) - 5.0, -10.0)
 
     scores = {
         "completion": completion_scores,
@@ -442,6 +463,7 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
         "comments": comment_scores,
         "poll_votes": poll_vote_scores,
         "likes": like_scores,
+        "dislikes": dislike_scores,
     }
     if _redis:
         await _redis.setex(f"affinity:{user_id}", 300, json.dumps(scores))
@@ -476,8 +498,9 @@ def _score_article(
     # Signal 3b: Poll vote (+5)
     score += affinity.get("poll_votes", {}).get(cat, 0.0)
 
-    # Signal 3c: Explicit like (+5)
+    # Signal 3c: Explicit like (+8/article, cap +20) and dislike (-5/article, cap -10)
     score += affinity.get("likes", {}).get(cat, 0.0)
+    score += affinity.get("dislikes", {}).get(cat, 0.0)
 
     # Signal 4: Relevance feedback (±10 pts)
     if cat in relevance_by_category:
@@ -1423,6 +1446,15 @@ async def interact_with_article(
         await db.articles.update_one(
             {"article_id": article_id},
             {"$inc": {"dislikes": 1}}
+        )
+        await db.article_dislikes.update_one(
+            {"user_id": user["user_id"], "article_id": article_id},
+            {"$setOnInsert": {
+                "user_id": user["user_id"],
+                "article_id": article_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
         )
     elif interaction.action == "view":
         await db.articles.update_one(
