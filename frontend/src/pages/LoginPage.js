@@ -14,7 +14,7 @@ const LoginPage = () => {
     const state = crypto.randomUUID();
     sessionStorage.setItem("oauth_state", state);
 
-    const redirectUri = `${window.location.origin}/auth/callback`;
+    const redirectUri = `${window.location.origin}${process.env.PUBLIC_URL}/auth/callback`;
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,

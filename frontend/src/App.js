@@ -99,7 +99,7 @@ const AuthCallback = () => {
       }
 
       try {
-        const redirectUri = `${window.location.origin}/auth/callback`;
+        const redirectUri = `${window.location.origin}${process.env.PUBLIC_URL}/auth/callback`;
         const response = await axios.post(
           `${API}/auth/google`,
           { code, redirect_uri: redirectUri },
