@@ -2029,6 +2029,55 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
     
     return voted_polls
 
+# ===================== ADMIN ROUTES =====================
+
+@api_router.post("/admin/recategorize")
+async def admin_recategorize():
+    """One-time migration: run Claude categorization on all uncategorized articles."""
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=503, detail="Anthropic API key not configured")
+
+    _valid_cats = {"Technology", "Politics", "Business", "Sports", "Entertainment", "Health", "Science", "World"}
+    total_updated = 0
+
+    while True:
+        batch = await db.articles.find(
+            {"claude_categorized": {"$ne": True}},
+            {"_id": 0, "article_id": 1, "title": 1},
+        ).limit(10).to_list(10)
+
+        if not batch:
+            break
+
+        for art in batch:
+            try:
+                raw = await _llm(
+                    system="You categorize news articles. Return only the category name, nothing else.",
+                    user_content=(
+                        "Categorize this news article into exactly one of these categories: "
+                        "Technology, Politics, Business, Sports, Entertainment, Health, Science, World. "
+                        f"Article title: {art['title']}. Return only the category name, nothing else."
+                    ),
+                    max_tokens=20,
+                )
+                cat = raw.strip()
+                if cat in _valid_cats:
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"category": cat, "claude_categorized": True}},
+                    )
+                    total_updated += 1
+                else:
+                    # Mark as processed even if category was unrecognised so we don't loop forever
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"claude_categorized": True}},
+                    )
+            except Exception as e:
+                logger.error(f"Recategorize error for {art['article_id']}: {e}")
+
+    return {"updated": total_updated}
+
 # ===================== BASIC ROUTES =====================
 
 @api_router.get("/")

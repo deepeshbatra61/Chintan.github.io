@@ -108,6 +108,7 @@ const ArticlePage = () => {
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const touchStartTime = useRef(0);
+  const isModalOpen = showComments || showPoll || showOtherSide;
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -187,15 +188,18 @@ const ArticlePage = () => {
 
   // HORIZONTAL swipe handlers for mobile navigation
   const handleTouchStart = (e) => {
+    if (isModalOpen) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartTime.current = Date.now();
   };
 
   const handleTouchMove = (e) => {
+    if (isModalOpen) return;
     touchEndX.current = e.touches[0].clientX;
   };
 
   const handleTouchEnd = () => {
+    if (isModalOpen) return;
     const diffX = touchStartX.current - touchEndX.current;
     const elapsed = Date.now() - touchStartTime.current;
 
@@ -344,12 +348,17 @@ const ArticlePage = () => {
       await axios.post(`${API}/comments/${commentId}/${reaction}`, {}, { withCredentials: true });
       setComments(prev => prev.map(c => {
         if (c.comment_id === commentId) {
-          return { ...c, [reaction === 'agree' ? 'agrees' : 'disagrees']: (c[reaction === 'agree' ? 'agrees' : 'disagrees'] || 0) + 1 };
+          const key = reaction === 'agree' ? 'agrees' : 'disagrees';
+          return { ...c, [key]: (c[key] || 0) + 1 };
         }
         return c;
       }));
     } catch (error) {
-      console.error("Failed to react:", error);
+      if (error.response?.status === 400) {
+        toast.info("Already reacted");
+      } else {
+        console.error("Failed to react:", error);
+      }
     }
   };
 
