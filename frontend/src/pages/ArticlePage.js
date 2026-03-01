@@ -199,7 +199,9 @@ const ArticlePage = () => {
   // HORIZONTAL swipe handlers for mobile navigation
   const handleTouchStart = (e) => {
     if (isModalOpen) return;
-    if (e.touches[0].clientY > window.innerHeight * 0.7) return;
+    const y = e.touches[0].clientY;
+    if (y < window.innerHeight * 0.10) return;  // header dead zone
+    if (y > window.innerHeight * 0.70) return;  // action bar dead zone
     touchStartX.current = e.touches[0].clientX;
     touchStartTime.current = Date.now();
   };

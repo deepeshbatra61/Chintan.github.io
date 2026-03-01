@@ -1530,16 +1530,21 @@ async def ask_ai(ask_request: AskAIRequest, user: dict = Depends(require_auth)):
     session_id = f"chat_{user['user_id']}_{ask_request.article_id}"
 
     # Build context
-    context = f"""You are Chintan AI, an intelligent news analysis assistant. Your role is to help users understand news articles deeply and think critically.
-
-Article Title: {article['title']}
-Article Content: {article['content']}
-What happened: {article['what']}
-Why it matters: {article['why']}
-Context: {article['context']}
-Impact: {article['impact']}
-
-Be informative, balanced, and encourage critical thinking. Keep responses concise but insightful."""
+    context = (
+        "You are a news analyst for Chintan app. Answer questions about news articles concisely. Rules:\n"
+        "- Maximum 120 words\n"
+        "- Always respond in 2-4 bullet points\n"
+        "- No markdown symbols like ##, **, $ or headers\n"
+        "- Each bullet point starts with a simple dash (-)\n"
+        "- Be specific, well-researched and directly address the question asked\n"
+        "- No fluff or generic statements\n\n"
+        f"Article Title: {article['title']}\n"
+        f"Article Content: {article.get('content', '')}\n"
+        f"What happened: {article.get('what', '')}\n"
+        f"Why it matters: {article.get('why', '')}\n"
+        f"Context: {article.get('context', '')}\n"
+        f"Impact: {article.get('impact', '')}"
+    )
 
     try:
         # Reconstruct multi-turn history from DB for this session
@@ -1552,8 +1557,8 @@ Be informative, balanced, and encourage critical thinking. Keep responses concis
         api_messages.append({"role": "user", "content": ask_request.message})
 
         msg = await _anthropic_client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=1024,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
             system=context,
             messages=api_messages,
         )
