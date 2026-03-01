@@ -1504,47 +1504,102 @@ async def update_reading_time(
 
 @api_router.get("/briefs/{brief_type}")
 async def get_brief(brief_type: str, request: Request = None):
-    """Get morning/midday/night brief"""
+    """Get morning/midday/night brief with Claude-generated narrative."""
     if brief_type not in ["morning", "midday", "night"]:
         raise HTTPException(status_code=400, detail="Invalid brief type")
-    
+
     user = await get_current_user(request) if request else None
+    user_interests: List[str] = (user.get("interests") or []) if user else []
+    raw_name: str = (user.get("name") or "") if user else ""
+    user_name = raw_name.split()[0] if raw_name else "there"
 
-    # Get articles based on brief type and user interests
-    query = {}
-    if user and user.get("interests"):
-        query["category"] = {"$in": user["interests"]}
+    # ── 1. Fetch articles published in the last 24 hours ─────────────────────
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff_str = cutoff.isoformat()
 
-    limit = 5 if brief_type == "morning" else 3 if brief_type == "midday" else 5
+    category_query: dict = {}
+    if user_interests:
+        category_query = {"category": {"$in": user_interests}}
 
-    articles = await db.articles.find(query, {"_id": 0}).sort("published_at", -1).limit(limit).to_list(limit)
-    
-    # If no personalized results, get top articles
-    if not articles:
-        articles = await db.articles.find({}, {"_id": 0}).limit(limit).to_list(limit)
-    
-    brief_info = {
-        "morning": {
-            "title": "Morning Brief",
-            "subtitle": "Start your day informed",
-            "reading_time": "5 min read"
-        },
-        "midday": {
-            "title": "Midday Update",
-            "subtitle": "Catch up on what's happening",
-            "reading_time": "3 min read"
-        },
-        "night": {
-            "title": "Night Summary",
-            "subtitle": "Reflect on the day",
-            "reading_time": "5 min read"
+    fresh_articles = await db.articles.find(
+        {"published_at": {"$gte": cutoff_str}, **category_query},
+        {"_id": 0}
+    ).sort("published_at", -1).to_list(300)
+
+    # ── 2. Group by category; skip categories with fewer than 3 articles ─────
+    by_category: Dict[str, list] = {}
+    for a in fresh_articles:
+        cat = a.get("category")
+        if cat:
+            by_category.setdefault(cat, []).append(a)
+
+    eligible = {cat: arts for cat, arts in by_category.items() if len(arts) >= 3}
+
+    # Order: user interest order first, then by article count
+    if user_interests:
+        ordered = [c for c in user_interests if c in eligible]
+        # append any eligible category not in declared interests
+        ordered += [c for c in sorted(eligible, key=lambda x: len(eligible[x]), reverse=True) if c not in ordered]
+    else:
+        ordered = sorted(eligible, key=lambda c: len(eligible[c]), reverse=True)
+
+    top_cats = ordered[:3]
+
+    # ── 3. Fallback when not enough fresh content ─────────────────────────────
+    if not top_cats:
+        fallback = await db.articles.find({}, {"_id": 0}).sort("published_at", -1).limit(3).to_list(3)
+        return {
+            "type": brief_type,
+            "narrative": "Not enough fresh stories are available right now. Check back soon.",
+            "source_articles": fallback,
+            "reading_time": "1 min read",
         }
-    }
-    
+
+    # Best (most recent) article per category
+    source_articles = [eligible[cat][0] for cat in top_cats]
+
+    # ── 4. Build Claude prompt ────────────────────────────────────────────────
+    articles_text = "\n\n".join(
+        f"Category: {a.get('category')}\nTitle: {a.get('title', '')}\nSummary: {a.get('what') or a.get('description') or ''}"
+        for a in source_articles
+    )
+
+    prompt = (
+        f"You are writing a personalized news brief for {user_name}.\n"
+        f"Their top interests today are: {', '.join(top_cats)}.\n"
+        f"Here are today's top stories for each category:\n\n{articles_text}\n\n"
+        "Write ONE consolidated narrative summary (120-150 words) that weaves together the most "
+        "important story from each category into a coherent, engaging read. Write in second person "
+        "('you', 'your'). Be specific — mention actual names, places, numbers from the articles. "
+        "End with one forward-looking sentence about what to watch next.\n"
+        "No generic filler. No 'stay informed, stay ahead' type phrases. No sign-off lines."
+    )
+
+    narrative = ""
+    try:
+        msg = await _anthropic_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=350,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        narrative = msg.content[0].text.strip()
+    except Exception as e:
+        logger.error(f"Brief Claude call failed: {e}")
+        # Graceful fallback: stitch article summaries together
+        narrative = " ".join(
+            a.get("what") or a.get("description") or a.get("title") or ""
+            for a in source_articles
+        ).strip()
+
+    word_count = len(narrative.split())
+    minutes = max(1, round(word_count / 200))
+    reading_time = f"{minutes} min read"
+
     return {
         "type": brief_type,
-        **brief_info[brief_type],
-        "articles": articles
+        "narrative": narrative,
+        "source_articles": source_articles,
+        "reading_time": reading_time,
     }
 
 # ===================== AI ROUTES =====================
