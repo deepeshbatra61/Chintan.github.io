@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Chintan.github.io/static/css/main.0da6e0c7.css",
+    "main.js": "/Chintan.github.io/static/js/main.23d5185c.js",
+    "index.html": "/Chintan.github.io/index.html",
+    "main.0da6e0c7.css.map": "/Chintan.github.io/static/css/main.0da6e0c7.css.map",
+    "main.23d5185c.js.map": "/Chintan.github.io/static/js/main.23d5185c.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.0da6e0c7.css",
+    "static/js/main.23d5185c.js"
+  ]
+}
