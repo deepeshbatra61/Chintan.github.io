@@ -96,7 +96,6 @@ const ArticlePage = () => {
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [expandedSections, setExpandedSections] = useState({
-    what: true,
     why: false,
     context: false,
     impact: false
@@ -130,7 +129,17 @@ const ArticlePage = () => {
 
   const fetchAllArticles = useCallback(async () => {
     try {
+      // Reuse the session-level ordered list so navigation order never changes
+      const stored = sessionStorage.getItem('articleList');
+      if (stored) {
+        const list = JSON.parse(stored);
+        setAllArticles(list);
+        const idx = list.findIndex(a => a.article_id === articleId);
+        if (idx !== -1) setCurrentIndex(idx);
+        return;
+      }
       const response = await axios.get(`${API}/articles`, { withCredentials: true });
+      sessionStorage.setItem('articleList', JSON.stringify(response.data));
       setAllArticles(response.data);
       const idx = response.data.findIndex(a => a.article_id === articleId);
       if (idx !== -1) setCurrentIndex(idx);
@@ -490,10 +499,10 @@ const ArticlePage = () => {
         </div>
       </div>
 
-      {/* Content - Normal scrolling works */}
+      {/* Content */}
       <main className="px-6 pb-32 -mt-4 relative">
         <article className="max-w-3xl mx-auto">
-          <motion.h1 
+          <motion.h1
             className="font-serif text-3xl md:text-4xl font-bold text-white mb-4 leading-tight"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -501,23 +510,23 @@ const ArticlePage = () => {
             {article.title}
           </motion.h1>
 
-          <div className="flex items-center gap-4 text-sm text-gray-500 mb-6">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 mb-6">
             <span className="font-mono">{article.source}</span>
             {article.author && <span>• {article.author}</span>}
+            {article.published_at && (
+              <span>• {new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            )}
           </div>
 
-          <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-            {article.description}
-          </p>
-
-          <div className="text-gray-400 leading-relaxed mb-8">
-            {article.content}
-          </div>
+          {article.what && (
+            <p className="text-gray-300 mb-8 leading-relaxed">
+              {article.what}
+            </p>
+          )}
 
           {/* Collapsible Sections */}
           <div className="space-y-3 mb-8">
             {[
-              { key: "what", content: article.what },
               { key: "why", content: article.why },
               { key: "context", content: article.context },
               { key: "impact", content: article.impact }

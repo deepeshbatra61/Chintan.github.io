@@ -1180,6 +1180,13 @@ def detect_category(title: str, body: str) -> tuple:
     
     return "Technology", None  # Default
 
+def clean_newsapi_text(text: str) -> str:
+    """Strip NewsAPI truncation artifacts like '[+1234 chars]' and anything after."""
+    if not text:
+        return text
+    return re.sub(r'\s*\[\+\d+\s*chars?\].*', '', text, flags=re.IGNORECASE).strip()
+
+
 async def fetch_from_newsapi() -> list:
     """Fetch Indian news from NewsAPI.org (top-headlines + major Indian publications)."""
     if not NEWSAPI_KEY:
@@ -1223,9 +1230,9 @@ async def fetch_from_newsapi() -> list:
 
     results = []
     for url, a in list(seen.items())[:30]:
-        title = (a.get("title") or "").strip()
-        description = (a.get("description") or "").strip()
-        raw_content = re.sub(r'\s*\[\+\d+ chars\]', '', (a.get("content") or description)).strip()
+        title = clean_newsapi_text((a.get("title") or "").strip())
+        description = clean_newsapi_text((a.get("description") or "").strip())
+        raw_content = clean_newsapi_text((a.get("content") or description).strip())
         source_name = (a.get("source") or {}).get("name") or "News Feed"
         published_at = a.get("publishedAt") or datetime.now(timezone.utc).isoformat()
         image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
@@ -2091,20 +2098,34 @@ async def admin_recategorize():
 
 @api_router.post("/admin/cleanup-truncated")
 async def admin_cleanup_truncated():
-    """One-time: strip '[+N chars]' from article content and reset claude_summarized."""
-    result = await db.articles.find(
-        {"content": {"$regex": r"\[\+\d+ chars\]"}},
-        {"_id": 0, "article_id": 1, "content": 1}
+    """Clean '[+N chars]' truncation from title/description/content on ALL articles."""
+    all_articles = await db.articles.find(
+        {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
     ).to_list(10000)
 
     updated = 0
-    for art in result:
-        cleaned = re.sub(r'\s*\[\+\d+ chars\]', '', art["content"]).strip()
-        await db.articles.update_one(
-            {"article_id": art["article_id"]},
-            {"$set": {"content": cleaned, "claude_summarized": False}},
+    for art in all_articles:
+        new_title = clean_newsapi_text(art.get("title", ""))
+        new_desc = clean_newsapi_text(art.get("description", ""))
+        new_content = clean_newsapi_text(art.get("content", ""))
+        changed = (
+            new_title != art.get("title", "")
+            or new_desc != art.get("description", "")
+            or new_content != art.get("content", "")
         )
-        updated += 1
+        if changed:
+            patch = {"claude_summarized": False}
+            if new_title != art.get("title", ""):
+                patch["title"] = new_title
+            if new_desc != art.get("description", ""):
+                patch["description"] = new_desc
+            if new_content != art.get("content", ""):
+                patch["content"] = new_content
+            await db.articles.update_one(
+                {"article_id": art["article_id"]},
+                {"$set": patch},
+            )
+            updated += 1
 
     return {"cleaned": updated}
 
