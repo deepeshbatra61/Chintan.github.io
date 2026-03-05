@@ -1517,6 +1517,22 @@ async def get_article(article_id: str):
         raise HTTPException(status_code=404, detail="Article not found")
     return article
 
+@api_router.get("/articles/{article_id}/reaction")
+async def get_article_reaction(article_id: str, user: dict = Depends(require_auth)):
+    """Return the current user's like/dislike state for an article."""
+    article = await db.articles.find_one({"article_id": article_id}, {"_id": 0, "likes": 1, "dislikes": 1})
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    uid = user["user_id"]
+    liked    = await db.article_likes.find_one({"user_id": uid, "article_id": article_id}) is not None
+    disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": article_id}) is not None
+    return {
+        "liked": liked,
+        "disliked": disliked,
+        "likes_count": max(0, article.get("likes", 0)),
+        "dislikes_count": max(0, article.get("dislikes", 0)),
+    }
+
 @api_router.post("/articles/{article_id}/interact")
 async def interact_with_article(
     article_id: str,
@@ -1529,33 +1545,63 @@ async def interact_with_article(
         raise HTTPException(status_code=404, detail="Article not found")
     
     if interaction.action == "like":
-        await db.articles.update_one(
-            {"article_id": article_id},
-            {"$inc": {"likes": 1}}
-        )
-        await db.article_likes.update_one(
-            {"user_id": user["user_id"], "article_id": article_id},
-            {"$setOnInsert": {
-                "user_id": user["user_id"],
-                "article_id": article_id,
+        uid, aid = user["user_id"], article_id
+        already_liked    = await db.article_likes.find_one({"user_id": uid, "article_id": aid})
+        already_disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": aid})
+
+        if already_liked:
+            # Toggle off
+            await db.article_likes.delete_one({"user_id": uid, "article_id": aid})
+            await db.articles.update_one({"article_id": aid}, {"$inc": {"likes": -1}})
+        else:
+            # Add like; remove any existing dislike
+            await db.article_likes.insert_one({
+                "user_id": uid, "article_id": aid,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            }},
-            upsert=True,
-        )
+            })
+            await db.articles.update_one({"article_id": aid}, {"$inc": {"likes": 1}})
+            if already_disliked:
+                await db.article_dislikes.delete_one({"user_id": uid, "article_id": aid})
+                await db.articles.update_one({"article_id": aid}, {"$inc": {"dislikes": -1}})
+
+        updated = await db.articles.find_one({"article_id": aid}, {"_id": 0, "likes": 1, "dislikes": 1})
+        is_liked    = await db.article_likes.find_one({"user_id": uid, "article_id": aid}) is not None
+        is_disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": aid}) is not None
+        return {
+            "liked": is_liked, "disliked": is_disliked,
+            "likes_count": max(0, updated.get("likes", 0)),
+            "dislikes_count": max(0, updated.get("dislikes", 0)),
+        }
+
     elif interaction.action == "dislike":
-        await db.articles.update_one(
-            {"article_id": article_id},
-            {"$inc": {"dislikes": 1}}
-        )
-        await db.article_dislikes.update_one(
-            {"user_id": user["user_id"], "article_id": article_id},
-            {"$setOnInsert": {
-                "user_id": user["user_id"],
-                "article_id": article_id,
+        uid, aid = user["user_id"], article_id
+        already_disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": aid})
+        already_liked    = await db.article_likes.find_one({"user_id": uid, "article_id": aid})
+
+        if already_disliked:
+            # Toggle off
+            await db.article_dislikes.delete_one({"user_id": uid, "article_id": aid})
+            await db.articles.update_one({"article_id": aid}, {"$inc": {"dislikes": -1}})
+        else:
+            # Add dislike; remove any existing like
+            await db.article_dislikes.insert_one({
+                "user_id": uid, "article_id": aid,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            }},
-            upsert=True,
-        )
+            })
+            await db.articles.update_one({"article_id": aid}, {"$inc": {"dislikes": 1}})
+            if already_liked:
+                await db.article_likes.delete_one({"user_id": uid, "article_id": aid})
+                await db.articles.update_one({"article_id": aid}, {"$inc": {"likes": -1}})
+
+        updated = await db.articles.find_one({"article_id": aid}, {"_id": 0, "likes": 1, "dislikes": 1})
+        is_liked    = await db.article_likes.find_one({"user_id": uid, "article_id": aid}) is not None
+        is_disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": aid}) is not None
+        return {
+            "liked": is_liked, "disliked": is_disliked,
+            "likes_count": max(0, updated.get("likes", 0)),
+            "dislikes_count": max(0, updated.get("dislikes", 0)),
+        }
+
     elif interaction.action == "view":
         await db.articles.update_one(
             {"article_id": article_id},

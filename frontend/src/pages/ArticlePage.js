@@ -85,6 +85,7 @@ const ArticlePage = () => {
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [userReaction, setUserReaction] = useState({ liked: false, disliked: false });
   const [poll, setPoll] = useState(null);
   const [userVoted, setUserVoted] = useState(false);
   const [comments, setComments] = useState([]);
@@ -157,6 +158,20 @@ const ArticlePage = () => {
     }
   }, [articleId]);
 
+  const fetchReaction = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/articles/${articleId}/reaction`, { withCredentials: true });
+      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
+      setArticle(prev => prev ? {
+        ...prev,
+        likes: response.data.likes_count,
+        dislikes: response.data.dislikes_count,
+      } : prev);
+    } catch (error) {
+      // Not authenticated or article not found — leave defaults
+    }
+  }, [articleId]);
+
   const fetchPoll = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/polls/${articleId}`, { withCredentials: true });
@@ -190,11 +205,11 @@ const ArticlePage = () => {
     const loadData = async () => {
       setLoading(true);
       await fetchArticle();
-      await Promise.all([checkBookmark(), fetchPoll(), fetchComments(), fetchAIQuestions(), fetchAllArticles()]);
+      await Promise.all([checkBookmark(), fetchReaction(), fetchPoll(), fetchComments(), fetchAIQuestions(), fetchAllArticles()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchArticle, checkBookmark, fetchPoll, fetchComments, fetchAIQuestions, fetchAllArticles]);
+  }, [fetchArticle, checkBookmark, fetchReaction, fetchPoll, fetchComments, fetchAIQuestions, fetchAllArticles]);
 
   // HORIZONTAL swipe handlers for mobile navigation
   const handleTouchStart = (e) => {
@@ -273,30 +288,64 @@ const ArticlePage = () => {
   };
 
   const handleLike = async () => {
+    // Optimistic update
+    const wasLiked = userReaction.liked;
+    const wasDisliked = userReaction.disliked;
+    setUserReaction({ liked: !wasLiked, disliked: false });
+    setArticle(prev => ({
+      ...prev,
+      likes: Math.max(0, (prev.likes || 0) + (wasLiked ? -1 : 1)),
+      dislikes: wasDisliked ? Math.max(0, (prev.dislikes || 0) - 1) : (prev.dislikes || 0),
+    }));
     try {
       triggerHaptic('success');
-      await axios.post(`${API}/articles/${articleId}/interact`, 
-        { action: "like" }, 
+      const response = await axios.post(
+        `${API}/articles/${articleId}/interact`,
+        { action: "like" },
         { withCredentials: true }
       );
-      setArticle(prev => ({ ...prev, likes: (prev.likes || 0) + 1 }));
-      toast.success("Thanks for your feedback!");
+      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
+      setArticle(prev => ({ ...prev, likes: response.data.likes_count, dislikes: response.data.dislikes_count }));
     } catch (error) {
-      toast.error("Failed to like");
+      // Revert on failure
+      setUserReaction({ liked: wasLiked, disliked: wasDisliked });
+      setArticle(prev => ({
+        ...prev,
+        likes: Math.max(0, (prev.likes || 0) + (wasLiked ? 1 : -1)),
+        dislikes: wasDisliked ? (prev.dislikes || 0) + 1 : (prev.dislikes || 0),
+      }));
+      toast.error("Failed to update reaction");
     }
   };
 
   const handleDislike = async () => {
+    // Optimistic update
+    const wasDisliked = userReaction.disliked;
+    const wasLiked = userReaction.liked;
+    setUserReaction({ liked: false, disliked: !wasDisliked });
+    setArticle(prev => ({
+      ...prev,
+      dislikes: Math.max(0, (prev.dislikes || 0) + (wasDisliked ? -1 : 1)),
+      likes: wasLiked ? Math.max(0, (prev.likes || 0) - 1) : (prev.likes || 0),
+    }));
     try {
       triggerHaptic('light');
-      await axios.post(`${API}/articles/${articleId}/interact`, 
-        { action: "dislike" }, 
+      const response = await axios.post(
+        `${API}/articles/${articleId}/interact`,
+        { action: "dislike" },
         { withCredentials: true }
       );
-      setArticle(prev => ({ ...prev, dislikes: (prev.dislikes || 0) + 1 }));
-      toast.success("Thanks for your feedback!");
+      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
+      setArticle(prev => ({ ...prev, likes: response.data.likes_count, dislikes: response.data.dislikes_count }));
     } catch (error) {
-      toast.error("Failed to dislike");
+      // Revert on failure
+      setUserReaction({ liked: wasLiked, disliked: wasDisliked });
+      setArticle(prev => ({
+        ...prev,
+        dislikes: Math.max(0, (prev.dislikes || 0) + (wasDisliked ? 1 : -1)),
+        likes: wasLiked ? (prev.likes || 0) + 1 : (prev.likes || 0),
+      }));
+      toast.error("Failed to update reaction");
     }
   };
 
@@ -598,17 +647,25 @@ const ArticlePage = () => {
           {/* Feedback */}
           <div className="flex items-center justify-center gap-6 py-6 border-t border-white/10">
             <span className="text-gray-500 text-sm">Was this helpful?</span>
-            <button 
+            <button
               onClick={handleLike}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-green-500/20 transition-colors text-gray-400 hover:text-green-400"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                userReaction.liked
+                  ? "bg-green-500/20 text-green-400"
+                  : "bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400"
+              }`}
               data-testid="like-btn"
             >
               <ThumbsUp className="w-4 h-4" />
               <span className="text-sm">{article.likes || 0}</span>
             </button>
-            <button 
+            <button
               onClick={handleDislike}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-red-500/20 transition-colors text-gray-400 hover:text-red-400"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+                userReaction.disliked
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+              }`}
               data-testid="dislike-btn"
             >
               <ThumbsDown className="w-4 h-4" />
