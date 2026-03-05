@@ -2327,6 +2327,34 @@ async def admin_clear_other_side_cache():
     result = await db.other_side_cache.delete_many({})
     return {"deleted": result.deleted_count}
 
+@api_router.delete("/admin/purge-blacklisted-domains")
+async def admin_purge_blacklisted_domains():
+    """One-shot: delete all articles whose URL domain is in _BLACKLISTED_DOMAINS."""
+    all_articles = await db.articles.find(
+        {"url": {"$exists": True}},
+        {"_id": 0, "article_id": 1, "url": 1},
+    ).to_list(100000)
+
+    to_delete = []
+    domain_counts: dict = {}
+    for art in all_articles:
+        url = art.get("url") or ""
+        try:
+            domain = url.split("//", 1)[1].split("/")[0].lower().removeprefix("www.")
+        except Exception:
+            continue
+        if domain in _BLACKLISTED_DOMAINS:
+            to_delete.append(art["article_id"])
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+    if to_delete:
+        result = await db.articles.delete_many({"article_id": {"$in": to_delete}})
+        deleted = result.deleted_count
+    else:
+        deleted = 0
+
+    return {"deleted": deleted, "domains": domain_counts}
+
 @api_router.get("/admin/test-newsapi")
 async def admin_test_newsapi():
     """Trigger fetch_from_newsapi() immediately and return diagnostic info."""
