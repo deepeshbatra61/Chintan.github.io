@@ -53,13 +53,12 @@ const STAR_KEYFRAMES = `
 const FallingStars = () => {
   const stars = useMemo(
     () =>
-      Array.from({ length: 18 }, (_, i) => ({
+      Array.from({ length: 15 }, (_, i) => ({
         id: i,
-        left: `${(i * 5.5 + Math.sin(i * 1.7) * 8 + 50) % 100}%`,
-        delay: `${(i * 0.6) % 10}s`,
+        left: `${(i * 6.5 + Math.sin(i * 1.9) * 9 + 50) % 100}%`,
+        delay: `${(i * 0.7) % 10}s`,
         duration: `${8 + (i % 5)}s`,
-        size: i % 3 === 0 ? "3px" : "2px",
-        opacity: 0.3 + (i % 4) * 0.08,
+        opacity: 0.4,
       })),
     []
   );
@@ -74,8 +73,8 @@ const FallingStars = () => {
             position: "absolute",
             left: star.left,
             top: 0,
-            width: star.size,
-            height: star.size,
+            width: "2px",
+            height: "2px",
             borderRadius: "50%",
             background: "white",
             opacity: star.opacity,
@@ -121,10 +120,11 @@ const BriefPage = () => {
     );
   }
 
-  const narrative =
-    brief?.narrative || "No brief available right now. Check back soon.";
-  const sourceArticles = brief?.source_articles || [];
-  const readingTime = brief?.reading_time || "1 min read";
+  const summary = brief?.summary || "No brief available right now. Check back soon.";
+  const referencedStories = brief?.referenced_stories || [];
+  const readTime = brief?.read_time || "1 min read";
+  const greeting = brief?.greeting || theme.greeting;
+  const subtitle = brief?.subtitle || theme.subtitle;
 
   return (
     <div
@@ -175,7 +175,7 @@ const BriefPage = () => {
             animate={{ opacity: 1, y: 0 }}
           >
             <Icon className={`w-6 h-6 ${theme.accent} flex-shrink-0`} />
-            <h1 className="text-2xl font-bold text-white">{theme.greeting}</h1>
+            <h1 className="text-2xl font-bold text-white">{greeting}</h1>
           </motion.div>
 
           {/* Subtitle — one line, muted */}
@@ -185,7 +185,7 @@ const BriefPage = () => {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
           >
-            {theme.subtitle}
+            {subtitle}
           </motion.p>
 
           {/* Read time */}
@@ -196,7 +196,7 @@ const BriefPage = () => {
             transition={{ delay: 0.15 }}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>{readingTime}</span>
+            <span>{readTime}</span>
           </motion.div>
 
           {/* Narrative */}
@@ -206,11 +206,11 @@ const BriefPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            {narrative}
+            {summary}
           </motion.p>
 
           {/* Divider + Referenced Stories */}
-          {sourceArticles.length > 0 && (
+          {referencedStories.length > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -225,7 +225,7 @@ const BriefPage = () => {
               </p>
 
               <div className="space-y-3">
-                {sourceArticles.map((article, idx) => (
+                {referencedStories.map((article, idx) => (
                   <motion.button
                     key={article.article_id}
                     onClick={() => navigate(`/article/${article.article_id}`)}
@@ -245,12 +245,6 @@ const BriefPage = () => {
                 ))}
               </div>
             </motion.div>
-          )}
-
-          {sourceArticles.length === 0 && (
-            <p className="text-center text-gray-600 text-sm py-10">
-              No stories available for this brief
-            </p>
           )}
         </div>
       </main>

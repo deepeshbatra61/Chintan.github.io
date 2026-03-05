@@ -1613,93 +1613,136 @@ async def get_brief(brief_type: str, request: Request = None):
     raw_name: str = (user.get("name") or "") if user else ""
     user_name = raw_name.split()[0] if raw_name else "there"
 
-    # ── 1. Fetch articles published in the last 24 hours ─────────────────────
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    cutoff_str = cutoff.isoformat()
+    _greetings = {
+        "morning": ("Good Morning",  "while you were sleeping, we curated your morning brief"),
+        "midday":  ("Good Afternoon", "while you were working, we were curating your tailored afternoon brief"),
+        "night":   ("Good Evening",  "while you wound down, here's what shaped your world today"),
+    }
+    greeting, subtitle = _greetings[brief_type]
 
-    category_query: dict = {}
-    if user_interests:
-        category_query = {"category": {"$in": user_interests}}
+    category_query: dict = {"category": {"$in": user_interests}} if user_interests else {}
 
-    fresh_articles = await db.articles.find(
-        {"published_at": {"$gte": cutoff_str}, **category_query},
-        {"_id": 0}
-    ).sort("published_at", -1).to_list(300)
+    # ── 1. Cascade: 24 h → 72 h → no time filter → drop interest filter ──────
+    fresh_articles: list = []
+    for hours in (24, 72):
+        cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        fresh_articles = await db.articles.find(
+            {"published_at": {"$gte": cutoff_str}, **category_query},
+            {"_id": 0},
+        ).sort("published_at", -1).to_list(300)
+        if len(fresh_articles) >= 3:
+            break
 
-    # ── 2. Group by category; skip categories with fewer than 3 articles ─────
+    if len(fresh_articles) < 3:
+        # Drop the time window entirely, keep interest filter
+        fresh_articles = await db.articles.find(
+            category_query if category_query else {},
+            {"_id": 0},
+        ).sort("published_at", -1).to_list(50)
+
+    if len(fresh_articles) < 3 and user_interests:
+        # Last resort: ignore interests too
+        fresh_articles = await db.articles.find(
+            {}, {"_id": 0}
+        ).sort("published_at", -1).to_list(50)
+
+    # ── 2. Group by category, no minimum threshold ───────────────────────────
     by_category: Dict[str, list] = {}
     for a in fresh_articles:
         cat = a.get("category")
         if cat:
             by_category.setdefault(cat, []).append(a)
 
-    eligible = {cat: arts for cat, arts in by_category.items() if len(arts) >= 3}
-
-    # Order: user interest order first, then by article count
     if user_interests:
-        ordered = [c for c in user_interests if c in eligible]
-        # append any eligible category not in declared interests
-        ordered += [c for c in sorted(eligible, key=lambda x: len(eligible[x]), reverse=True) if c not in ordered]
+        ordered = [c for c in user_interests if c in by_category]
+        ordered += [c for c in sorted(by_category, key=lambda x: len(by_category[x]), reverse=True)
+                    if c not in ordered]
     else:
-        ordered = sorted(eligible, key=lambda c: len(eligible[c]), reverse=True)
+        ordered = sorted(by_category, key=lambda c: len(by_category[c]), reverse=True)
 
     top_cats = ordered[:3]
 
-    # ── 3. Fallback when not enough fresh content ─────────────────────────────
+    # ── 3. Hard fallback — only if DB is completely empty ────────────────────
     if not top_cats:
-        fallback = await db.articles.find({}, {"_id": 0}).sort("published_at", -1).limit(3).to_list(3)
+        any_articles = await db.articles.find({}, {"_id": 0}).sort(
+            "published_at", -1).limit(3).to_list(3)
         return {
-            "type": brief_type,
-            "narrative": "Not enough fresh stories are available right now. Check back soon.",
-            "source_articles": fallback,
-            "reading_time": "1 min read",
+            "greeting": greeting,
+            "subtitle": subtitle,
+            "summary": "No stories are available right now. Check back soon.",
+            "referenced_stories": [
+                {"title": a.get("title", ""), "source": a.get("source", ""),
+                 "article_id": a.get("article_id", "")}
+                for a in any_articles
+            ],
+            "read_time": "1 min read",
         }
 
-    # Best (most recent) article per category
-    source_articles = [eligible[cat][0] for cat in top_cats]
+    # ── 4. Up to 3 articles per category for Claude context ──────────────────
+    cat_articles: Dict[str, list] = {cat: by_category[cat][:3] for cat in top_cats}
 
-    # ── 4. Build Claude prompt ────────────────────────────────────────────────
-    articles_text = "\n\n".join(
-        f"Category: {a.get('category')}\nTitle: {a.get('title', '')}\nSummary: {a.get('what') or a.get('description') or ''}"
-        for a in source_articles
-    )
+    referenced_stories = [
+        {
+            "title":      cat_articles[cat][0].get("title", ""),
+            "source":     cat_articles[cat][0].get("source", ""),
+            "article_id": cat_articles[cat][0].get("article_id", ""),
+        }
+        for cat in top_cats
+    ]
+
+    # ── 5. Build Claude prompt ────────────────────────────────────────────────
+    articles_text = ""
+    for cat in top_cats:
+        for a in cat_articles[cat]:
+            articles_text += (
+                f"Category: {cat}\n"
+                f"Title: {a.get('title', '')}\n"
+                f"Summary: {a.get('what') or a.get('description') or ''}\n\n"
+            )
 
     prompt = (
-        f"You are writing a personalized news brief for {user_name}.\n"
-        f"Their top interests today are: {', '.join(top_cats)}.\n"
-        f"Here are today's top stories for each category:\n\n{articles_text}\n\n"
-        "Write ONE consolidated narrative summary (120-150 words) that weaves together the most "
-        "important story from each category into a coherent, engaging read. Write in second person "
-        "('you', 'your'). Be specific — mention actual names, places, numbers from the articles. "
-        "End with one forward-looking sentence about what to watch next.\n"
-        "No generic filler. No 'stay informed, stay ahead' type phrases. No sign-off lines."
+        f"You are writing a personalized {brief_type} brief for {user_name}.\n"
+        f"Their top interests are: {', '.join(top_cats)}.\n"
+        f"Here are today's top stories across these categories:\n\n{articles_text}"
+        f"Write ONE flowing narrative (120-150 words) that covers the most important story from each "
+        f"category. Write in second person. Be specific — use actual names, places, numbers from the "
+        f"articles. No generic phrases like 'stay informed' or 'stay ahead'. End with one sentence "
+        f"about what to watch next."
     )
 
-    narrative = ""
+    summary = ""
     try:
         msg = await _anthropic_client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=350,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
-        narrative = msg.content[0].text.strip()
+        summary = msg.content[0].text.strip()
     except Exception as e:
         logger.error(f"Brief Claude call failed: {e}")
-        # Graceful fallback: stitch article summaries together
-        narrative = " ".join(
-            a.get("what") or a.get("description") or a.get("title") or ""
-            for a in source_articles
+        summary = " ".join(
+            cat_articles[cat][0].get("what") or cat_articles[cat][0].get("description") or
+            cat_articles[cat][0].get("title") or ""
+            for cat in top_cats
         ).strip()
 
-    word_count = len(narrative.split())
-    minutes = max(1, round(word_count / 200))
-    reading_time = f"{minutes} min read"
+    # Strip known generic sign-off phrases
+    for phrase in (
+        "Stay informed, stay ahead",
+        "That's your midday update",
+        "Here's how the day unfolded",
+        "Before you rest, here's today's story",
+    ):
+        summary = summary.replace(phrase, "").strip().rstrip(".")
+
+    read_time = f"{max(1, round(len(summary.split()) / 200))} min read"
 
     return {
-        "type": brief_type,
-        "narrative": narrative,
-        "source_articles": source_articles,
-        "reading_time": reading_time,
+        "greeting":           greeting,
+        "subtitle":           subtitle,
+        "summary":            summary,
+        "referenced_stories": referenced_stories,
+        "read_time":          read_time,
     }
 
 # ===================== AI ROUTES =====================
