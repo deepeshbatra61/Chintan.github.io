@@ -4,6 +4,18 @@ import axios from "axios";
 import { Toaster, toast } from "sonner";
 import "./App.css";
 
+// ── Global axios setup ────────────────────────────────────────────────────────
+// Always send cookies AND, when available, the session token as a Bearer header.
+// This dual approach handles browsers that drop cross-origin Set-Cookie headers.
+axios.defaults.withCredentials = true;
+axios.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem("chintan_session_token");
+  if (token && !config.headers["Authorization"]) {
+    config.headers["Authorization"] = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Pages
 import LoginPage from "./pages/LoginPage";
 import OnboardingPage from "./pages/OnboardingPage";
@@ -45,8 +57,11 @@ const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = (userData) => {
+  const login = (userData, token = null) => {
     setUser(userData);
+    if (token) {
+      sessionStorage.setItem("chintan_session_token", token);
+    }
   };
 
   const logout = async () => {
@@ -55,6 +70,7 @@ const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Logout error:", error);
     }
+    sessionStorage.removeItem("chintan_session_token");
     setUser(null);
   };
 
@@ -106,7 +122,7 @@ const AuthCallback = () => {
           { withCredentials: true }
         );
 
-        login(response.data.user);
+        login(response.data.user, response.data.session_token);
         toast.success("Welcome to Chintan!");
 
         if (!response.data.user.onboarding_completed) {
