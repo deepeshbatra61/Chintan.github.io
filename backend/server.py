@@ -115,12 +115,15 @@ async def _background_news_ingestor() -> None:
             # ── 1. Fetch & upsert articles ────────────────────────────────
             api_articles = await fetch_from_newsapi()
             if api_articles:
+                new_count = 0
+                updated_count = 0
                 for article in api_articles:
                     existing = await db.articles.find_one(
                         {"article_id": article["article_id"]}
                     )
                     if not existing:
                         await db.articles.insert_one(article)
+                        new_count += 1
                     else:
                         await db.articles.update_one(
                             {"article_id": article["article_id"]},
@@ -134,9 +137,13 @@ async def _background_news_ingestor() -> None:
                                 "is_breaking": article["is_breaking"],
                             }},
                         )
+                        updated_count += 1
                 logger.info(
-                    f"Background ingestor: upserted {len(api_articles)} articles"
+                    f"Background ingestor: {new_count} new, {updated_count} updated "
+                    f"(total fetched: {len(api_articles)})"
                 )
+            else:
+                logger.warning("Background ingestor: fetch_from_newsapi returned 0 articles")
 
             # ── 2. Auto-generate polls for articles that lack one ─────────
             if ANTHROPIC_API_KEY:
@@ -227,13 +234,13 @@ async def _background_news_ingestor() -> None:
                     except Exception as sum_err:
                         logger.error(f"Claude summarization error for {art['article_id']}: {sum_err}")
 
+            await asyncio.sleep(30 * 60)  # 30-minute cadence; cancellable
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
             raise                          # allow clean shutdown
         except Exception as exc:
             logger.error(f"Background news ingestor error: {exc}")
-
-        await asyncio.sleep(30 * 60)      # 30-minute cadence; cancellable
+            await asyncio.sleep(30 * 60)  # wait before retry
 
 
 @asynccontextmanager
@@ -1211,45 +1218,63 @@ def clean_newsapi_text(text: str) -> str:
 
 
 async def fetch_from_newsapi() -> list:
-    """Fetch Indian news from NewsAPI.org (top-headlines + major Indian publications)."""
+    """Fetch Indian news from NewsAPI.org (/v2/everything with fresh sortBy=publishedAt)."""
     if not NEWSAPI_KEY:
         logger.warning("NEWSAPI_KEY not set — skipping NewsAPI fetch")
         return []
 
+    logger.info("NewsAPI: key present, starting fetch")
     seen: dict = {}  # url → raw NewsAPI article, for deduplication
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. Top headlines from India (country=in)
+        # 1. Everything about India, sorted by newest first
         try:
             resp = await client.get(
-                "https://newsapi.org/v2/top-headlines",
-                params={"country": "in", "pageSize": 30, "apiKey": NEWSAPI_KEY},
+                "https://newsapi.org/v2/everything",
+                params={
+                    "q": "India",
+                    "language": "en",
+                    "sortBy": "publishedAt",
+                    "pageSize": 30,
+                    "apiKey": NEWSAPI_KEY,
+                },
             )
+            logger.info(f"NewsAPI everything?q=India status={resp.status_code}")
             if resp.status_code == 200:
-                for a in resp.json().get("articles", []):
+                articles_returned = resp.json().get("articles", [])
+                logger.info(f"NewsAPI everything?q=India returned {len(articles_returned)} articles")
+                for a in articles_returned:
                     url = a.get("url") or ""
                     if url and url not in seen:
                         seen[url] = a
             else:
-                logger.warning(f"NewsAPI top-headlines {resp.status_code}: {resp.text[:200]}")
+                logger.warning(f"NewsAPI everything?q=India {resp.status_code}: {resp.text[:300]}")
         except Exception as e:
-            logger.error(f"NewsAPI top-headlines error: {e}")
+            logger.error(f"NewsAPI everything?q=India error: {e}")
 
-        # 2. Top headlines from The Hindu and Economic Times
+        # 2. Latest from major Indian news domains
         try:
             resp = await client.get(
-                "https://newsapi.org/v2/top-headlines",
-                params={"sources": "the-hindu,economic-times", "pageSize": 30, "apiKey": NEWSAPI_KEY},
+                "https://newsapi.org/v2/everything",
+                params={
+                    "domains": "thehindu.com,livemint.com,indianexpress.com",
+                    "sortBy": "publishedAt",
+                    "pageSize": 30,
+                    "apiKey": NEWSAPI_KEY,
+                },
             )
+            logger.info(f"NewsAPI everything?domains=indian-press status={resp.status_code}")
             if resp.status_code == 200:
-                for a in resp.json().get("articles", []):
+                articles_returned = resp.json().get("articles", [])
+                logger.info(f"NewsAPI everything?domains returned {len(articles_returned)} articles")
+                for a in articles_returned:
                     url = a.get("url") or ""
                     if url and url not in seen:
                         seen[url] = a
             else:
-                logger.warning(f"NewsAPI sources {resp.status_code}: {resp.text[:200]}")
+                logger.warning(f"NewsAPI everything?domains {resp.status_code}: {resp.text[:300]}")
         except Exception as e:
-            logger.error(f"NewsAPI sources error: {e}")
+            logger.error(f"NewsAPI everything?domains error: {e}")
 
     results = []
     for url, a in list(seen.items())[:30]:
@@ -2226,6 +2251,40 @@ async def admin_clear_other_side_cache():
     """One-time: clear cached other-side analyses so they regenerate with new prompt."""
     result = await db.other_side_cache.delete_many({})
     return {"deleted": result.deleted_count}
+
+@api_router.get("/admin/test-newsapi")
+async def admin_test_newsapi():
+    """Trigger fetch_from_newsapi() immediately and return diagnostic info."""
+    if not NEWSAPI_KEY:
+        return {"error": "NEWSAPI_KEY is not set in environment variables", "articles": []}
+
+    articles = await fetch_from_newsapi()
+
+    new_count = 0
+    existing_count = 0
+    for article in articles:
+        exists = await db.articles.find_one({"article_id": article["article_id"]}, {"_id": 1})
+        if exists:
+            existing_count += 1
+        else:
+            new_count += 1
+
+    return {
+        "newsapi_key_present": True,
+        "total_fetched": len(articles),
+        "new_to_db": new_count,
+        "already_in_db": existing_count,
+        "articles": [
+            {
+                "title": a["title"],
+                "source": a["source"],
+                "published_at": a["published_at"],
+                "article_id": a["article_id"],
+                "url": a["url"],
+            }
+            for a in articles
+        ],
+    }
 
 # ===================== BASIC ROUTES =====================
 
