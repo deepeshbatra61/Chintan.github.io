@@ -1208,7 +1208,7 @@ def detect_category(title: str, body: str) -> tuple:
         if any(kw in text for kw in keywords):
             return category, None
     
-    return "Technology", None  # Default
+    return "World", None  # Default fallback
 
 def clean_newsapi_text(text: str) -> str:
     """Strip NewsAPI truncation artifacts like '[+1234 chars]' and anything after."""
@@ -1216,6 +1216,22 @@ def clean_newsapi_text(text: str) -> str:
         return text
     return re.sub(r'\s*\[\+\d+\s*chars?\].*', '', text, flags=re.IGNORECASE).strip()
 
+
+# Domains that consistently produce off-topic / non-India content.
+# Articles from these domains are dropped regardless of keyword matches.
+_BLACKLISTED_DOMAINS = {
+    "whyevolutionistrue.com",
+    "kdnuggets.com",
+    "spektrum.de",
+    "financialpost.com",
+    "abc.net.au",
+    "linkedin.com",
+    "globenewswire.com",
+    "hurriyetdailynews.com",
+    "oilprice.com",
+    "scilogs.spektrum.de",
+    "consent.yahoo.com",
+}
 
 # Keywords used to filter out off-topic articles returned by the broad q=India query.
 # An article passes if its title OR description contains at least one of these (case-insensitive).
@@ -1330,6 +1346,15 @@ async def fetch_from_newsapi() -> list:
         image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
 
         if not title or title == "[Removed]":
+            continue
+
+        # Domain blacklist: drop known non-India domains unconditionally
+        try:
+            _domain = url.split("//", 1)[1].split("/")[0].lower().removeprefix("www.")
+        except Exception:
+            _domain = ""
+        if _domain in _BLACKLISTED_DOMAINS:
+            logger.debug(f"NewsAPI: dropped blacklisted domain {_domain}: {title[:60]}")
             continue
 
         # Relevance filter: drop articles unrelated to India
