@@ -1217,6 +1217,33 @@ def clean_newsapi_text(text: str) -> str:
     return re.sub(r'\s*\[\+\d+\s*chars?\].*', '', text, flags=re.IGNORECASE).strip()
 
 
+# Keywords used to filter out off-topic articles returned by the broad q=India query.
+# An article passes if its title OR description contains at least one of these (case-insensitive).
+_INDIA_RELEVANCE_KEYWORDS = [
+    "india", "indian", "delhi", "mumbai", "chennai", "kolkata", "bangalore",
+    "bengaluru", "hyderabad", "pune", "ahmedabad", "jaipur", "lucknow",
+    "chandigarh", "bhopal", "patna", "bhubaneswar", "guwahati", "srinagar",
+    "kashmir", "northeast", "modi", "bjp", "congress", "aap", "kejriwal",
+    "rahul gandhi", "amit shah", "yogi", "mamata", "rupee", "inr", "sebi",
+    "rbi", "nse", "bse", "sensex", "nifty", "adani", "tata", "reliance",
+    "infosys", "tcs", "wipro", "hcl", "flipkart", "zomato", "swiggy",
+    "paytm", "phonepe", "isro", "chandrayaan", "gaganyaan", "ipl", "bcci",
+    "virat", "rohit", "dhoni", "sachin", "bumrah", "shubman", "jadeja",
+    "test cricket", "odi", "t20", "bollywood", "hindi film", "tollywood",
+    "ott", "netflix india", "hotstar", "amazon prime india", "aadhaar", "upi",
+    "digital india", "make in india", "startup india", "gst", "income tax",
+    "budget", "finance minister", "nirmala", "supreme court india", "high court",
+    "cbi", "ed", "lokpal", "army", "air force", "navy", "lac", "loc",
+    "pakistan", "china", "bangladesh", "sri lanka", "nepal", "maldives",
+    "brics", "g20", "sco", "farmer", "msp", "agriculture", "kisan",
+    "monsoon", "imd", "cyclone", "flood", "earthquake", "heatwave",
+    "pollution", "aqi", "iit", "iim", "neet", "jee", "cbse", "ugc",
+    "narayana murthy", "ratan tata", "mukesh ambani", "gautam adani",
+    "hospital", "aiims", "vaccine", "dengue", "malaria", "tuberculosis",
+    "cancer india",
+]
+
+
 async def fetch_from_newsapi() -> list:
     """Fetch Indian news from NewsAPI.org (/v2/everything with fresh sortBy=publishedAt)."""
     if not NEWSAPI_KEY:
@@ -1227,12 +1254,29 @@ async def fetch_from_newsapi() -> list:
     seen: dict = {}  # url → raw NewsAPI article, for deduplication
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. Everything about India, sorted by newest first
+        # 1. Everything about India (broad keyword query), sorted by newest first
+        _q = (
+            "India AND ("
+            "politics OR cricket OR business OR economy OR government OR court OR election OR "
+            "minister OR rupee OR sensex OR bollywood OR IPL OR BJP OR Congress OR Modi OR "
+            "Rahul OR Kejriwal OR \"Supreme Court\" OR \"High Court\" OR RBI OR SEBI OR NSE OR "
+            "BSE OR startup OR unicorn OR fintech OR Infosys OR TCS OR Wipro OR Reliance OR "
+            "Adani OR Tata OR Mahindra OR Bajaj OR ISRO OR space OR nuclear OR defence OR "
+            "army OR border OR Pakistan OR China OR Kashmir OR Manipur OR CAA OR GST OR "
+            "budget OR inflation OR fuel OR petrol OR diesel OR farmer OR agriculture OR "
+            "monsoon OR drought OR flood OR earthquake OR cyclone OR Aadhaar OR UPI OR "
+            "digital OR AI OR tech OR 5G OR telecom OR Jio OR Airtel OR healthcare OR "
+            "hospital OR vaccine OR cancer OR education OR IIT OR IIM OR NEET OR JEE OR "
+            "film OR OTT OR Netflix OR \"Amazon Prime\" OR Test OR ODI OR T20 OR "
+            "\"World Cup\" OR FIFA OR Olympics OR hockey OR badminton OR Sindhu OR Neeraj OR "
+            "Virat OR Rohit OR Dhoni OR Sachin"
+            ")"
+        )
         try:
             resp = await client.get(
                 "https://newsapi.org/v2/everything",
                 params={
-                    "q": "India",
+                    "q": _q,
                     "language": "en",
                     "sortBy": "publishedAt",
                     "pageSize": 30,
@@ -1286,6 +1330,12 @@ async def fetch_from_newsapi() -> list:
         image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
 
         if not title or title == "[Removed]":
+            continue
+
+        # Relevance filter: drop articles unrelated to India
+        _haystack = (title + " " + description).lower()
+        if not any(kw in _haystack for kw in _INDIA_RELEVANCE_KEYWORDS):
+            logger.debug(f"NewsAPI: dropped off-topic article: {title[:80]}")
             continue
 
         article_id = "article_" + hashlib.md5(url.encode()).hexdigest()[:12]
