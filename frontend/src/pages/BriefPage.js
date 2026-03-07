@@ -127,6 +127,7 @@ const BriefPage = () => {
 
   const theme = briefThemes[briefType] || briefThemes.morning;
   const Icon = theme.icon;
+  console.log('Briefs user object:', user);
   const firstName = user?.name?.split(" ")[0] || "";
 
   const fetchBrief = useCallback(async () => {
