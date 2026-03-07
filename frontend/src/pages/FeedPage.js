@@ -40,7 +40,7 @@ const FeedPage = () => {
 
   const fetchDevelopingStories = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/articles/developing`, { withCredentials: true });
+      const response = await axios.get(`${API}/developing-stories`, { withCredentials: true });
       setDevelopingStories(response.data);
     } catch (error) {
       console.error("Error fetching developing stories:", error);
@@ -178,7 +178,7 @@ const FeedPage = () => {
                           </div>
                           <div className="flex-1">
                             <span className="text-red-400 font-medium">Developing Stories</span>
-                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} live)</span>
+                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
                           </div>
                         </div>
                         {/* Subtle breathing background glow */}
@@ -275,15 +275,15 @@ const FeedPage = () => {
                   <div className="flex gap-4">
                     {developingStories.slice(0, 3).map((story) => (
                       <button
-                        key={story.article_id}
-                        onClick={() => navigate(`/article/${story.article_id}`)}
+                        key={story.story_id}
+                        onClick={() => navigate(`/developing/${story.story_id}`)}
                         className="flex-shrink-0 text-left group"
-                        data-testid={`developing-${story.article_id}`}
+                        data-testid={`developing-${story.story_id}`}
                       >
                         <p className="text-white text-sm font-medium group-hover:text-red-400 transition-colors line-clamp-2 max-w-[200px]">
                           {story.title}
                         </p>
-                        <p className="text-gray-500 text-xs mt-1">{story.source}</p>
+                        <p className="text-gray-500 text-xs mt-1">{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
                       </button>
                     ))}
                   </div>

@@ -234,6 +234,32 @@ async def _background_news_ingestor() -> None:
                     except Exception as sum_err:
                         logger.error(f"Claude summarization error for {art['article_id']}: {sum_err}")
 
+            # ── 5. Tag new articles to watched developing stories ─────────
+            if api_articles:
+                watched = await db.developing_stories.find(
+                    {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1}
+                ).to_list(100)
+                for topic in watched:
+                    keywords = topic.get("keywords", [])
+                    matched_ids = []
+                    for article in api_articles:
+                        haystack = (
+                            article.get("title", "") + " " + article.get("description", "")
+                        ).lower()
+                        if any(kw.lower() in haystack for kw in keywords):
+                            matched_ids.append(article["article_id"])
+                    if matched_ids:
+                        await db.developing_stories.update_one(
+                            {"story_id": topic["story_id"]},
+                            {
+                                "$addToSet": {"article_ids": {"$each": matched_ids}},
+                                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()},
+                            },
+                        )
+                        logger.info(
+                            f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}"
+                        )
+
             await asyncio.sleep(30 * 60)  # 30-minute cadence; cancellable
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
@@ -270,7 +296,28 @@ async def lifespan(app: FastAPI):
         [("user_id", 1), ("article_id", 1)], unique=True
     )
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    await db.developing_stories.create_index("story_id", unique=True)
     logger.info("MongoDB indexes created")
+
+    # Upsert watched topics — updates title/theme/keywords, preserves article_ids
+    for topic in WATCHED_TOPICS:
+        await db.developing_stories.update_one(
+            {"story_id": topic["story_id"]},
+            {
+                "$setOnInsert": {
+                    "article_ids": [],
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "is_active": True,
+                },
+                "$set": {
+                    "title": topic["title"],
+                    "theme": topic["theme"],
+                    "keywords": topic["keywords"],
+                },
+            },
+            upsert=True,
+        )
+    logger.info(f"Developing stories: upserted {len(WATCHED_TOPICS)} watched topics")
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
@@ -1257,6 +1304,41 @@ _INDIA_RELEVANCE_KEYWORDS = [
     "narayana murthy", "ratan tata", "mukesh ambani", "gautam adani",
     "hospital", "aiims", "vaccine", "dengue", "malaria", "tuberculosis",
     "cancer india",
+]
+
+# ── Developing-story topics ──────────────────────────────────────────────────
+# Upserted into the developing_stories collection on startup.
+# The background ingestor matches new articles against these keyword lists.
+WATCHED_TOPICS = [
+    {
+        "story_id": "iran-us-war-2026",
+        "title": "Iran–US Military Tensions 2026",
+        "theme": "war",
+        "keywords": [
+            "iran", "us strike", "trump iran", "tehran", "nuclear deal",
+            "sanctions iran", "middle east conflict", "pentagon iran",
+            "missile strike", "islamic republic",
+        ],
+    },
+    {
+        "story_id": "india-pakistan-tensions-2026",
+        "title": "India–Pakistan Tensions 2026",
+        "theme": "war",
+        "keywords": [
+            "india pakistan", "loc", "kashmir tension", "ceasefire",
+            "surgical strike", "islamabad", "pak army", "imf pakistan",
+            "pakistan india", "border tension",
+        ],
+    },
+    {
+        "story_id": "ipl-2026",
+        "title": "IPL 2026",
+        "theme": "cricket",
+        "keywords": [
+            "ipl", "ipl 2026", "indian premier league", "rcb", "csk",
+            "kkr", "srh", "pbks", "ipl season", "ipl match",
+        ],
+    },
 ]
 
 
@@ -2477,6 +2559,61 @@ async def admin_test_newsapi():
             for a in articles
         ],
     }
+
+# ===================== DEVELOPING STORIES =====================
+
+@api_router.get("/developing-stories")
+async def get_developing_stories_list(user: dict = Depends(require_auth)):
+    """Return all active watched topics with article count and latest article preview."""
+    stories = await db.developing_stories.find(
+        {"is_active": True}, {"_id": 0}
+    ).to_list(100)
+
+    result = []
+    for story in stories:
+        article_ids = story.get("article_ids", [])
+        latest_article = None
+        if article_ids:
+            latest_article = await db.articles.find_one(
+                {"article_id": {"$in": article_ids}},
+                {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
+                sort=[("published_at", -1)],
+            )
+        result.append({
+            "story_id": story["story_id"],
+            "title": story["title"],
+            "theme": story["theme"],
+            "article_count": len(article_ids),
+            "last_updated": story.get("last_updated"),
+            "latest_article": latest_article,
+        })
+    return result
+
+
+@api_router.get("/developing-stories/{story_id}")
+async def get_developing_story_detail(story_id: str, user: dict = Depends(require_auth)):
+    """Return full topic detail with all matched articles sorted newest-first."""
+    story = await db.developing_stories.find_one({"story_id": story_id}, {"_id": 0})
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    article_ids = story.get("article_ids", [])
+    articles = []
+    if article_ids:
+        articles = await db.articles.find(
+            {"article_id": {"$in": article_ids}},
+            {"_id": 0, "article_id": 1, "title": 1, "description": 1, "source": 1,
+             "published_at": 1, "image_url": 1, "url": 1, "is_breaking": 1},
+        ).sort("published_at", -1).to_list(50)
+
+    return {
+        "story_id": story["story_id"],
+        "title": story["title"],
+        "theme": story["theme"],
+        "articles": articles,
+        "last_updated": story.get("last_updated"),
+    }
+
 
 # ===================== BASIC ROUTES =====================
 

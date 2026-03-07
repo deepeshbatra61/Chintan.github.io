@@ -26,6 +26,7 @@ import BookmarksPage from "./pages/BookmarksPage";
 import ProfilePage from "./pages/ProfilePage";
 import AskAIPage from "./pages/AskAIPage";
 import DevelopingPage from "./pages/DevelopingPage";
+import DevelopingStoryDetail from "./pages/DevelopingStoryDetail";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -253,6 +254,11 @@ function AppRouter() {
       <Route path="/developing" element={
         <ProtectedRoute>
           <DevelopingPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/developing/:storyId" element={
+        <ProtectedRoute>
+          <DevelopingStoryDetail />
         </ProtectedRoute>
       } />
       <Route path="/ask-ai/:articleId" element={
