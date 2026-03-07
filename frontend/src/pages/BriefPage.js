@@ -18,6 +18,10 @@ const briefThemes = {
     borderAccent: "border-amber-500/30",
     greeting: "Good Morning",
     subtitle: "while you were sleeping, we curated your morning brief",
+    sentenceCardBg: "bg-amber-950/20",
+    sentenceCardBorder: "border-amber-800/30",
+    pillBg: "bg-amber-500/15",
+    pillText: "text-amber-400",
   },
   midday: {
     icon: CloudSun,
@@ -28,6 +32,10 @@ const briefThemes = {
     borderAccent: "border-orange-500/30",
     greeting: "Good Afternoon",
     subtitle: "while you were working, we were curating your tailored afternoon brief",
+    sentenceCardBg: "bg-orange-950/20",
+    sentenceCardBorder: "border-orange-800/30",
+    pillBg: "bg-orange-500/15",
+    pillText: "text-orange-400",
   },
   night: {
     icon: Moon,
@@ -38,6 +46,10 @@ const briefThemes = {
     borderAccent: "border-indigo-500/30",
     greeting: "Good Evening",
     subtitle: "while you wound down, here's what shaped your world today",
+    sentenceCardBg: "bg-indigo-950/30",
+    sentenceCardBorder: "border-indigo-800/30",
+    pillBg: "bg-indigo-500/15",
+    pillText: "text-indigo-300",
   },
 };
 
@@ -86,6 +98,19 @@ const FallingStars = () => {
   );
 };
 
+const cleanText = (text) =>
+  text
+    .replace(/^#+\s*/gm, "")
+    .replace(/\*\*/g, "")
+    .trim();
+
+const splitSentences = (text) =>
+  cleanText(text)
+    .split(/\.\s+/)
+    .filter((s) => s.trim().length > 0)
+    .slice(0, 3)
+    .map((s) => s.trim().replace(/\.$/, "") + ".");
+
 const BriefPage = () => {
   const { briefType } = useParams();
   const navigate = useNavigate();
@@ -120,7 +145,9 @@ const BriefPage = () => {
     );
   }
 
-  const summary = brief?.summary || "No brief available right now. Check back soon.";
+  const rawSummary = brief?.summary || "No brief available right now. Check back soon.";
+  const sentences = splitSentences(rawSummary);
+  const categories = brief?.categories || [];
   const referencedStories = brief?.referenced_stories || [];
   const readTime = brief?.read_time || "1 min read";
   const greeting = brief?.greeting || theme.greeting;
@@ -168,7 +195,7 @@ const BriefPage = () => {
       {/* Content */}
       <main className="relative z-10 pt-20 pb-16 px-6">
         <div className="max-w-2xl mx-auto">
-          {/* Header row: icon + greeting inline */}
+          {/* Header row: icon + greeting */}
           <motion.div
             className="flex items-center gap-3 mt-6 mb-2"
             initial={{ opacity: 0, y: 16 }}
@@ -178,7 +205,7 @@ const BriefPage = () => {
             <h1 className="text-2xl font-bold text-white">{greeting}</h1>
           </motion.div>
 
-          {/* Subtitle — one line, muted */}
+          {/* Subtitle */}
           <motion.p
             className="text-sm text-gray-500 mb-5"
             initial={{ opacity: 0 }}
@@ -199,22 +226,39 @@ const BriefPage = () => {
             <span>{readTime}</span>
           </motion.div>
 
-          {/* Narrative */}
-          <motion.p
-            className="text-gray-200 leading-relaxed text-base mb-10"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {summary}
-          </motion.p>
+          {/* Sentence boxes */}
+          <div className="space-y-3 mb-10">
+            {sentences.map((sentence, idx) => {
+              const category = categories[idx] || null;
+              return (
+                <motion.div
+                  key={idx}
+                  className={`${theme.sentenceCardBg} border ${theme.sentenceCardBorder} rounded-xl px-5 py-4`}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 + idx * 0.1 }}
+                >
+                  {category && (
+                    <span
+                      className={`inline-block text-xs font-mono uppercase tracking-wider ${theme.pillBg} ${theme.pillText} px-2 py-0.5 rounded mb-3`}
+                    >
+                      {category}
+                    </span>
+                  )}
+                  <p className="text-gray-100 leading-relaxed text-[15px]">
+                    {sentence}
+                  </p>
+                </motion.div>
+              );
+            })}
+          </div>
 
           {/* Divider + Referenced Stories */}
           {referencedStories.length > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
+              transition={{ delay: 0.55 }}
             >
               <div className={`border-t ${theme.borderAccent} mb-7`} />
 
@@ -232,7 +276,7 @@ const BriefPage = () => {
                     className={`w-full text-left p-4 rounded-xl glass-card border ${theme.borderAccent} hover:bg-white/5 transition-colors group`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 + idx * 0.08 }}
+                    transition={{ delay: 0.6 + idx * 0.08 }}
                     data-testid={`ref-article-${article.article_id}`}
                   >
                     <p className="text-white text-sm font-medium leading-snug group-hover:text-red-400 transition-colors line-clamp-2">

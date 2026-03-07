@@ -1831,29 +1831,39 @@ async def get_brief(brief_type: str, request: Request = None):
     prompt = (
         f"You are writing a personalized {brief_type} brief for {user_name}.\n"
         f"Their top interests are: {', '.join(top_cats)}.\n"
-        f"Here are today's top stories across these categories:\n\n{articles_text}"
-        f"Write ONE flowing narrative (120-150 words) that covers the most important story from each "
-        f"category. Write in second person. Be specific — use actual names, places, numbers from the "
-        f"articles. No generic phrases like 'stay informed' or 'stay ahead'. End with one sentence "
-        f"about what to watch next."
+        f"Here are today's top stories:\n\n{articles_text}"
+        f"Write EXACTLY 3 sentences total — one sentence per category in this order: {', '.join(top_cats)}.\n"
+        f"Each sentence covers exactly ONE specific story from that category.\n"
+        f"Be specific: use actual names, places, and numbers from the articles.\n"
+        f"RULES: No markdown (no #, no **). No greeting prefix. Maximum 90 words total.\n"
+        f"Each sentence must end with a period. Output only the 3 sentences, nothing else."
     )
 
     summary = ""
     try:
         msg = await _anthropic_client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=350,
+            max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
         summary = msg.content[0].text.strip()
     except Exception as e:
         logger.error(f"Brief Claude call failed: {e}")
-        summary = " ".join(
-            cat_articles[cat][0].get("what") or cat_articles[cat][0].get("description") or
-            cat_articles[cat][0].get("title") or ""
-            for cat in top_cats
-        ).strip()
+        fallback_parts = []
+        for cat in top_cats:
+            a = cat_articles[cat][0]
+            text = (a.get("what") or a.get("description") or a.get("title") or "").strip()
+            first = text.split(".")[0].strip()
+            if first:
+                fallback_parts.append(first + ".")
+        summary = " ".join(fallback_parts)
 
+    # Strip markdown artifacts
+    summary = re.sub(r'^#+\s*', '', summary, flags=re.MULTILINE)
+    summary = summary.replace('**', '')
+    # Strip greeting/brief-name prefixes that Claude sometimes adds
+    summary = re.sub(r'^(Your\s+\w+\s+Brief[,:\s]+)', '', summary, flags=re.IGNORECASE)
+    summary = re.sub(r'^(Good\s+(Morning|Evening|Afternoon)[,:\s]+)', '', summary, flags=re.IGNORECASE)
     # Strip known generic sign-off phrases
     for phrase in (
         "Stay informed, stay ahead",
@@ -1869,6 +1879,7 @@ async def get_brief(brief_type: str, request: Request = None):
         "greeting":           greeting,
         "subtitle":           subtitle,
         "summary":            summary,
+        "categories":         top_cats,
         "referenced_stories": referenced_stories,
         "read_time":          read_time,
     }
