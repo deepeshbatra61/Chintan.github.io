@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { ArrowLeft, Sun, CloudSun, Moon, Clock } from "lucide-react";
-import { SuryaLogo } from "../App";
+import { SuryaLogo, useAuth } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -104,21 +104,30 @@ const cleanText = (text) =>
     .replace(/\*\*/g, "")
     .trim();
 
+const cleanSentence = (text) =>
+  text
+    .replace(/^[\.\s]+/, "")
+    .replace(/^(Your\s+\w+\s+Brief[\,\s]*)/i, "")
+    .replace(/^(\w+'s\s+\w+\s+Brief[\,\s]*)/i, "")
+    .trim();
+
 const splitSentences = (text) =>
   cleanText(text)
     .split(/\.\s+/)
     .filter((s) => s.trim().length > 0)
     .slice(0, 3)
-    .map((s) => s.trim().replace(/\.$/, "") + ".");
+    .map((s) => cleanSentence(s.trim().replace(/\.$/, "") + "."));
 
 const BriefPage = () => {
   const { briefType } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const theme = briefThemes[briefType] || briefThemes.morning;
   const Icon = theme.icon;
+  const firstName = user?.name?.split(" ")[0] || "";
 
   const fetchBrief = useCallback(async () => {
     try {
@@ -202,7 +211,9 @@ const BriefPage = () => {
             animate={{ opacity: 1, y: 0 }}
           >
             <Icon className={`w-6 h-6 ${theme.accent} flex-shrink-0`} />
-            <h1 className="text-2xl font-bold text-white">{greeting}</h1>
+            <h1 className="text-2xl font-bold text-white">
+              {greeting}{firstName ? `, ${firstName}` : ""}
+            </h1>
           </motion.div>
 
           {/* Subtitle */}

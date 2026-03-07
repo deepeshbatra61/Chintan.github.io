@@ -1835,7 +1835,8 @@ async def get_brief(brief_type: str, request: Request = None):
         f"Write EXACTLY 3 sentences total — one sentence per category in this order: {', '.join(top_cats)}.\n"
         f"Each sentence covers exactly ONE specific story from that category.\n"
         f"Be specific: use actual names, places, and numbers from the articles.\n"
-        f"RULES: No markdown (no #, no **). No greeting prefix. Maximum 90 words total.\n"
+        f"RULES: No markdown (no #, no **). Maximum 90 words total.\n"
+        f"Do NOT start with the user's name or any title like 'Your Night Brief' or '{user_name}'s Night Brief'. Start directly with the news content.\n"
         f"Each sentence must end with a period. Output only the 3 sentences, nothing else."
     )
 
