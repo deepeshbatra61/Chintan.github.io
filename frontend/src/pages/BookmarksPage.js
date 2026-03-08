@@ -71,7 +71,7 @@ const BookmarksPage = () => {
       </header>
 
       {/* Content */}
-      <main className="pb-12 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)' }}>
+      <main className="pb-12 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-3xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

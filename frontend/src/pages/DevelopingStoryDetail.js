@@ -131,7 +131,7 @@ const DevelopingStoryDetail = () => {
       </header>
 
       {/* Content — top padding = 56px header + safe area already on outer div */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '56px' }}>
+      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: 'calc(var(--sat) + 56px)', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-2xl mx-auto">
           {/* Story header */}
           <motion.div

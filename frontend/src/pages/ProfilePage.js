@@ -201,7 +201,7 @@ const ProfilePage = () => {
       </header>
 
       {/* Content */}
-      <main className="pb-12 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)' }}>
+      <main className="pb-12 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-3xl mx-auto">
           {/* Profile Card */}
           <motion.div

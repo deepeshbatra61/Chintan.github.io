@@ -203,7 +203,7 @@ const BriefPage = () => {
       </header>
 
       {/* Content */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)' }}>
+      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-2xl mx-auto">
           {/* Header row: icon + greeting */}
           <motion.div
