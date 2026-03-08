@@ -1441,19 +1441,9 @@ async def fetch_from_newsapi() -> list:
         # 1. Everything about India (broad keyword query), sorted by newest first
         _q = (
             "India AND ("
-            "politics OR cricket OR business OR economy OR government OR court OR election OR "
-            "minister OR rupee OR sensex OR bollywood OR IPL OR BJP OR Congress OR Modi OR "
-            "Rahul OR Kejriwal OR \"Supreme Court\" OR \"High Court\" OR RBI OR SEBI OR NSE OR "
-            "BSE OR startup OR unicorn OR fintech OR Infosys OR TCS OR Wipro OR Reliance OR "
-            "Adani OR Tata OR Mahindra OR Bajaj OR ISRO OR space OR nuclear OR defence OR "
-            "army OR border OR Pakistan OR China OR Kashmir OR Manipur OR CAA OR GST OR "
-            "budget OR inflation OR fuel OR petrol OR diesel OR farmer OR agriculture OR "
-            "monsoon OR drought OR flood OR earthquake OR cyclone OR Aadhaar OR UPI OR "
-            "digital OR AI OR tech OR 5G OR telecom OR Jio OR Airtel OR healthcare OR "
-            "hospital OR vaccine OR cancer OR education OR IIT OR IIM OR NEET OR JEE OR "
-            "film OR OTT OR Netflix OR \"Amazon Prime\" OR Test OR ODI OR T20 OR "
-            "\"World Cup\" OR FIFA OR Olympics OR hockey OR badminton OR Sindhu OR Neeraj OR "
-            "Virat OR Rohit OR Dhoni OR Sachin"
+            "politics OR cricket OR business OR Modi OR BJP OR Congress OR RBI OR SEBI OR "
+            "Sensex OR Rupee OR ISRO OR IPL OR Bollywood OR Kashmir OR Pakistan OR "
+            "Adani OR Tata OR Reliance OR startup OR budget"
             ")"
         )
         try:
