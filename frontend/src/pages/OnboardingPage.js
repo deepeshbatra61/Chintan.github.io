@@ -112,7 +112,7 @@ const OnboardingPage = () => {
       </div>
 
       {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 h-0.5 bg-[#1a1a1a] z-50">
+      <div className="fixed left-0 right-0 h-0.5 bg-[#1a1a1a] z-50" style={{ top: 'var(--sat)' }}>
         <motion.div 
           className="h-full bg-red-600"
           initial={{ width: "0%" }}

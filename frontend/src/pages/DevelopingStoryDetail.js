@@ -101,8 +101,8 @@ const DevelopingStoryDetail = () => {
 
       {/* Header — 56px, sits at top-0 (WebView already starts below status bar via overlaysWebView:false) */}
       <header
-        className="glass-nav fixed top-0 left-0 right-0 z-40"
-        style={{ height: '56px' }}
+        className="glass-nav fixed left-0 right-0 z-40"
+        style={{ height: '56px', top: 'var(--sat)' }}
       >
         {/* Relative container so the LIVE badge can be absolutely centred */}
         <div className="relative h-full flex items-center justify-between px-4">

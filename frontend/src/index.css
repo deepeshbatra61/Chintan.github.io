@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  --sat: 44px;
   --obsidian: #0A0A0A;
   --obsidian-light: #171717;
   --obsidian-lighter: #262626;
@@ -34,7 +35,14 @@ body {
 }
 
 #root {
-  padding-top: var(--sat, 0px);
+  padding-top: var(--sat) !important;
+}
+
+/* Fix ALL fixed position headers */
+.glass-nav,
+header[class*="fixed"],
+nav[class*="fixed"] {
+  top: var(--sat) !important;
 }
 
 .font-serif {

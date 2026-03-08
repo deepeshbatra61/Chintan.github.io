@@ -112,7 +112,7 @@ const FeedPage = () => {
   return (
     <div className="min-h-screen bg-[#0A0A0A]" data-testid="feed-page">
       {/* Header */}
-      <header className="glass-nav fixed top-0 left-0 right-0 z-40 px-4 py-3">
+      <header className="glass-nav fixed left-0 right-0 z-40 px-4 py-3" style={{ top: 'var(--sat)' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
