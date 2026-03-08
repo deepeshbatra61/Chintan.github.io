@@ -34,7 +34,7 @@ const LoginPage = () => {
 
   const finishNativeAuth = async (sessionToken) => {
     stopPolling();
-    sessionStorage.setItem("chintan_session_token", sessionToken);
+    localStorage.setItem("chintan_session_token", sessionToken);
     try { await Browser.close(); } catch (_) {}
     const meResp = await axios.get(`${API}/auth/me`);
     login(meResp.data, sessionToken);
@@ -173,7 +173,8 @@ const LoginPage = () => {
         {/* Login Button */}
         <motion.button
           onClick={handleGoogleLogin}
-          className="w-full max-w-xs mx-auto flex items-center justify-center gap-3 bg-white text-gray-900 py-4 px-6 rounded-full font-semibold text-lg hover:bg-gray-100 transition-colors"
+          className="flex items-center justify-center gap-3 bg-white text-gray-900 px-6 rounded-full font-semibold text-base hover:bg-gray-100 transition-colors"
+          style={{ maxWidth: '280px', height: '44px', margin: '0 auto' }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}

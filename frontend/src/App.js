@@ -11,7 +11,7 @@ import "./App.css";
 // This dual approach handles browsers that drop cross-origin Set-Cookie headers.
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("chintan_session_token");
+  const token = localStorage.getItem("chintan_session_token");
   if (token && !config.headers["Authorization"]) {
     config.headers["Authorization"] = `Bearer ${token}`;
   }
@@ -63,7 +63,7 @@ const AuthProvider = ({ children }) => {
   const login = (userData, token = null) => {
     setUser(userData);
     if (token) {
-      sessionStorage.setItem("chintan_session_token", token);
+      localStorage.setItem("chintan_session_token", token);
     }
   };
 
@@ -73,7 +73,7 @@ const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Logout error:", error);
     }
-    sessionStorage.removeItem("chintan_session_token");
+    localStorage.removeItem("chintan_session_token");
     setUser(null);
   };
 
@@ -262,7 +262,7 @@ const NativeAuthHandler = () => {
       // Mark auth as complete so the LoginPage polling stops
       sessionStorage.removeItem("native_auth_pending");
       // Store token so the axios interceptor sends it as Bearer on every request
-      sessionStorage.setItem("chintan_session_token", sessionToken);
+      localStorage.setItem("chintan_session_token", sessionToken);
 
       try {
         const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
@@ -295,7 +295,7 @@ const NativeAuthHandler = () => {
           sessionStorage.removeItem("native_auth_pending");
           sessionStorage.removeItem("oauth_state");
           const sessionToken = resp.data.session_token;
-          sessionStorage.setItem("chintan_session_token", sessionToken);
+          localStorage.setItem("chintan_session_token", sessionToken);
           const meResp = await axios.get(`${API}/auth/me`);
           login(meResp.data, sessionToken);
           navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
@@ -379,6 +379,7 @@ function App() {
       <AuthProvider>
         <Toaster
           position="top-center"
+          containerStyle={{ top: 'calc(var(--sat) + 10px)' }}
           toastOptions={{
             style: {
               background: '#171717',

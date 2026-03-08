@@ -551,7 +551,7 @@ const ArticlePage = () => {
       </div>
 
       {/* Content */}
-      <main className="px-6 pb-32 -mt-4 relative">
+      <main className="px-6 pb-32 relative" style={{ paddingTop: 'calc(var(--sat) + 60px)' }}>
         <article className="max-w-3xl mx-auto">
           <motion.h1
             className="font-serif text-3xl md:text-4xl font-bold text-white mb-4 leading-tight"
