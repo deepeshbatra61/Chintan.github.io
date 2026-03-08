@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import traceback
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
@@ -1123,82 +1124,99 @@ async def google_native_callback(
     Add this URL to Google Cloud Console → OAuth client → Authorised redirect URIs:
       https://chintangithubio-production.up.railway.app/api/auth/native-callback
     """
-    if error or not code:
-        return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=access_denied")
+    try:
+        if error or not code:
+            logger.warning(f"native-callback: error={error} code_present={bool(code)}")
+            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=access_denied")
 
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=server_misconfigured")
+        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            logger.error("native-callback: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set")
+            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=server_misconfigured")
 
-    async with httpx.AsyncClient() as http:
-        token_resp = await http.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code": code,
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": _NATIVE_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        if token_resp.status_code != 200:
-            logger.error(f"Native OAuth token exchange failed: {token_resp.text}")
-            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=token_exchange_failed")
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            token_resp = await http.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": _NATIVE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_resp.status_code != 200:
+                logger.error(f"Native OAuth token exchange failed: {token_resp.text}")
+                return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=token_exchange_failed")
 
-        tokens = token_resp.json()
-        access_token = tokens.get("access_token")
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+            if not access_token:
+                logger.error(f"Native OAuth: no access_token in response: {tokens}")
+                return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=no_access_token")
 
-        userinfo_resp = await http.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if userinfo_resp.status_code != 200:
-            logger.error(f"Native OAuth userinfo failed: {userinfo_resp.text}")
-            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=userinfo_failed")
+            userinfo_resp = await http.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if userinfo_resp.status_code != 200:
+                logger.error(f"Native OAuth userinfo failed: {userinfo_resp.text}")
+                return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=userinfo_failed")
 
-        google_user = userinfo_resp.json()
+            google_user = userinfo_resp.json()
+            logger.info(f"Native OAuth userinfo keys: {list(google_user.keys())}")
 
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    session_token = f"st_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        email = google_user.get("email")
+        if not email:
+            logger.error(f"Native OAuth: no email in userinfo: {google_user}")
+            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=no_email")
 
-    existing_user = await db.users.find_one({"email": google_user["email"]}, {"_id": 0})
-    if existing_user:
-        user_id = existing_user["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": google_user.get("name"), "picture": google_user.get("picture")}},
-        )
-    else:
-        await db.users.insert_one({
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        session_token = f"st_{uuid.uuid4().hex}"
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+        if existing_user:
+            user_id = existing_user["user_id"]
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"name": google_user.get("name"), "picture": google_user.get("picture")}},
+            )
+        else:
+            await db.users.insert_one({
+                "user_id": user_id,
+                "email": email,
+                "name": google_user.get("name"),
+                "picture": google_user.get("picture"),
+                "interests": [],
+                "onboarding_completed": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+        await db.user_sessions.insert_one({
             "user_id": user_id,
-            "email": google_user["email"],
-            "name": google_user.get("name"),
-            "picture": google_user.get("picture"),
-            "interests": [],
-            "onboarding_completed": False,
+            "session_token": session_token,
+            "expires_at": expires_at.isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+        # Store session_token in memory cache keyed by state so the app can poll for it.
+        # This is the fallback path when the deep link redirect doesn't fire.
+        if state:
+            _native_auth_cache[state] = {
+                "session_token": session_token,
+                "expires_at": time.time() + 300,  # 5-minute TTL
+            }
 
-    # Store session_token in memory cache keyed by state so the app can poll for it.
-    # This is the fallback path when the deep link redirect doesn't fire.
-    if state:
-        _native_auth_cache[state] = {
-            "session_token": session_token,
-            "expires_at": time.time() + 300,  # 5-minute TTL
-        }
+        logger.info(f"native-callback: success for {email}, redirecting to app scheme")
+        # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
+        state_param = f"&state={state}" if state else ""
+        return RedirectResponse(
+            url=f"{_NATIVE_APP_SCHEME}?session_token={session_token}{state_param}"
+        )
 
-    # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
-    state_param = f"&state={state}" if state else ""
-    return RedirectResponse(
-        url=f"{_NATIVE_APP_SCHEME}?session_token={session_token}{state_param}"
-    )
+    except Exception as e:
+        logger.error(f"native-callback CRASH: {traceback.format_exc()}")
+        return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=server_error")
 
 
 @api_router.get("/auth/native-poll")
