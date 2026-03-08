@@ -173,8 +173,8 @@ const LoginPage = () => {
         {/* Login Button */}
         <motion.button
           onClick={handleGoogleLogin}
-          className="flex items-center justify-center gap-3 bg-white text-gray-900 px-6 rounded-full font-semibold text-base hover:bg-gray-100 transition-colors"
-          style={{ maxWidth: '280px', height: '44px', margin: '0 auto' }}
+          className="bg-white text-gray-900 px-6 rounded-full font-semibold hover:bg-gray-100 transition-colors"
+          style={{ maxWidth: '280px', height: '44px', margin: '0 auto', whiteSpace: 'nowrap', overflow: 'hidden', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
