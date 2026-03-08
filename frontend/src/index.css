@@ -4,6 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  padding-top: env(safe-area-inset-top);
+}
+
 :root {
   --obsidian: #0A0A0A;
   --obsidian-light: #171717;
