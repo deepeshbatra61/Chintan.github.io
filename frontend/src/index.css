@@ -32,6 +32,9 @@ body {
   background-color: #000000;
   color: var(--text-primary);
   overflow-x: hidden;
+}
+
+#root {
   padding-top: env(safe-area-inset-top, 24px);
 }
 
