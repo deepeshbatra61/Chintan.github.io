@@ -379,7 +379,6 @@ function App() {
       <AuthProvider>
         <Toaster
           position="top-center"
-          offset="var(--status-bar-height, 48px)"
           toastOptions={{
             style: {
               background: '#171717',
