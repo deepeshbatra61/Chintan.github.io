@@ -5,7 +5,6 @@
 @tailwind utilities;
 
 :root {
-  --safe-area-top: env(safe-area-inset-top, 24px);
   --obsidian: #0A0A0A;
   --obsidian-light: #171717;
   --obsidian-lighter: #262626;
@@ -35,7 +34,7 @@ body {
 }
 
 #root {
-  padding-top: env(safe-area-inset-top, 24px);
+  padding-top: env(safe-area-inset-top);
 }
 
 .font-serif {
