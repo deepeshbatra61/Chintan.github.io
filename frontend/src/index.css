@@ -34,7 +34,7 @@ body {
 }
 
 #root {
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--sat, 0px);
 }
 
 .font-serif {
