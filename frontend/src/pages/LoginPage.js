@@ -1,14 +1,74 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { SuryaLogo } from "../App";
+import axios from "axios";
+import { toast } from "sonner";
+import { SuryaLogo, useAuth } from "../App";
 import { Browser } from "@capacitor/browser";
 
 const NATIVE_REDIRECT_URI =
   "https://chintangithubio-production.up.railway.app/api/auth/native-callback";
+const API = "https://chintangithubio-production.up.railway.app/api";
 
 const isNative = () => !!window.Capacitor?.isNativePlatform();
 
 const LoginPage = () => {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const pollingRef = useRef(null);
+
+  // Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    sessionStorage.removeItem("native_auth_pending");
+  };
+
+  const finishNativeAuth = async (sessionToken) => {
+    stopPolling();
+    sessionStorage.setItem("chintan_session_token", sessionToken);
+    try { await Browser.close(); } catch (_) {}
+    const meResp = await axios.get(`${API}/auth/me`);
+    login(meResp.data, sessionToken);
+    toast.success("Welcome to Chintan!");
+    navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
+  };
+
+  const startNativePoll = (state) => {
+    sessionStorage.setItem("native_auth_pending", "true");
+    const deadline = Date.now() + 60000; // 60-second window
+
+    pollingRef.current = setInterval(async () => {
+      // Stop if auth already completed by deep-link handler
+      if (!sessionStorage.getItem("native_auth_pending")) {
+        stopPolling();
+        return;
+      }
+      if (Date.now() > deadline) {
+        stopPolling();
+        toast.error("Sign-in timed out — please try again");
+        return;
+      }
+      try {
+        const resp = await axios.get(`${API}/auth/native-poll?state=${state}`);
+        if (resp.data?.session_token) {
+          console.log("native-poll: session_token received");
+          await finishNativeAuth(resp.data.session_token);
+        }
+      } catch (e) {
+        // 404 = backend hasn't received the code yet — keep polling
+      }
+    }, 2000);
+  };
+
   const handleGoogleLogin = async () => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -37,6 +97,7 @@ const LoginPage = () => {
 
     if (isNative()) {
       await Browser.open({ url: oauthUrl });
+      startNativePoll(state);
     } else {
       window.location.href = oauthUrl;
     }

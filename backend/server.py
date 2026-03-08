@@ -1100,6 +1100,8 @@ async def google_auth(request: Request, response: Response):
 
 _NATIVE_REDIRECT_URI = "https://chintangithubio-production.up.railway.app/api/auth/native-callback"
 _NATIVE_APP_SCHEME  = "com.chintan.app://auth/callback"
+# In-memory cache: state → {session_token, expires_at}  (5-min TTL, cleared on retrieval)
+_native_auth_cache: dict = {}
 
 @api_router.get("/auth/native-callback")
 async def google_native_callback(
@@ -1177,11 +1179,41 @@ async def google_native_callback(
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
+    # Store session_token in memory cache keyed by state so the app can poll for it.
+    # This is the fallback path when the deep link redirect doesn't fire.
+    if state:
+        _native_auth_cache[state] = {
+            "session_token": session_token,
+            "expires_at": time.time() + 300,  # 5-minute TTL
+        }
+
     # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
     state_param = f"&state={state}" if state else ""
     return RedirectResponse(
         url=f"{_NATIVE_APP_SCHEME}?session_token={session_token}{state_param}"
     )
+
+
+@api_router.get("/auth/native-poll")
+async def native_poll(state: str = None):
+    """
+    Polling endpoint for native OAuth fallback.
+    The Android app polls this with the CSRF state every 2 s after opening the browser.
+    Returns the session_token once the backend relay has processed the OAuth code.
+    One-time use: the cache entry is deleted on successful retrieval.
+    """
+    if not state:
+        raise HTTPException(status_code=400, detail="state required")
+    # Purge expired entries
+    now = time.time()
+    expired = [k for k, v in list(_native_auth_cache.items()) if v["expires_at"] < now]
+    for k in expired:
+        _native_auth_cache.pop(k, None)
+    entry = _native_auth_cache.get(state)
+    if not entry:
+        raise HTTPException(status_code=404, detail="not ready")
+    _native_auth_cache.pop(state, None)  # one-time use
+    return {"session_token": entry["session_token"]}
 
 
 @api_router.get("/auth/me")

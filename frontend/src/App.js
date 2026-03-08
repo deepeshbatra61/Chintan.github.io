@@ -257,6 +257,8 @@ const NativeAuthHandler = () => {
         return;
       }
 
+      // Mark auth as complete so the LoginPage polling stops
+      sessionStorage.removeItem("native_auth_pending");
       // Store token so the axios interceptor sends it as Bearer on every request
       sessionStorage.setItem("chintan_session_token", sessionToken);
 
@@ -278,18 +280,27 @@ const NativeAuthHandler = () => {
     };
 
     const handleBrowserFinished = async () => {
-      const token = sessionStorage.getItem("chintan_session_token");
-      if (!token) {
-        // Deep link didn't fire - try polling the backend
-        try {
-          const response = await axios.get(`${API}/auth/me`);
-          if (response.data) {
-            login(response.data);
-            navigate("/feed");
-          }
-        } catch (e) {
-          // Still not logged in
+      // If polling (in LoginPage) or deep link already completed auth, do nothing
+      if (!sessionStorage.getItem("native_auth_pending")) return;
+
+      // Immediate poll check with the state as key
+      const state = sessionStorage.getItem("oauth_state");
+      if (!state) return;
+      try {
+        const resp = await axios.get(`${API}/auth/native-poll?state=${state}`);
+        if (resp.data?.session_token) {
+          console.log("browserFinished poll: session_token received");
+          sessionStorage.removeItem("native_auth_pending");
+          sessionStorage.removeItem("oauth_state");
+          const sessionToken = resp.data.session_token;
+          sessionStorage.setItem("chintan_session_token", sessionToken);
+          const meResp = await axios.get(`${API}/auth/me`);
+          login(meResp.data, sessionToken);
+          toast.success("Welcome to Chintan!");
+          navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
         }
+      } catch (e) {
+        // Not logged in — user may have cancelled
       }
     };
 
