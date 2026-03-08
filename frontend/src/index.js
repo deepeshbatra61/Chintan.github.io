@@ -9,10 +9,16 @@ const applyStatusBarPadding = async () => {
   if (Capacitor.isNativePlatform()) {
     try {
       const info = await StatusBar.getInfo();
-      const height = info.statusBarHeight || 48;
-      document.getElementById('root').style.paddingTop = height + 'px';
+      // statusBarHeight is in pixels, convert to dp for CSS
+      const pixelRatio = window.devicePixelRatio || 3;
+      const heightInDp = (info.statusBarHeight || 48) / pixelRatio;
+      const finalHeight = Math.max(heightInDp, 48); // minimum 48px
+      document.getElementById('root').style.paddingTop = finalHeight + 'px';
+      document.documentElement.style.setProperty('--status-bar-height', finalHeight + 'px');
+      console.log('StatusBar height px:', info.statusBarHeight, 'dp:', heightInDp, 'final:', finalHeight);
     } catch (e) {
       document.getElementById('root').style.paddingTop = '48px';
+      document.documentElement.style.setProperty('--status-bar-height', '48px');
     }
   }
 };

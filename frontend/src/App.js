@@ -231,6 +231,8 @@ const NativeAuthHandler = () => {
     const handleUrl = async ({ url }) => {
       console.log("appUrlOpen fired with url: " + url);
       if (!url.startsWith("com.chintan.app://auth/callback")) return;
+      // Bail if polling or browserFinished already completed auth
+      if (!sessionStorage.getItem("native_auth_pending")) return;
 
       // Close the in-app browser
       try { await Browser.close(); } catch (_) {}
@@ -296,7 +298,6 @@ const NativeAuthHandler = () => {
           sessionStorage.setItem("chintan_session_token", sessionToken);
           const meResp = await axios.get(`${API}/auth/me`);
           login(meResp.data, sessionToken);
-          toast.success("Welcome to Chintan!");
           navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
         }
       } catch (e) {
@@ -376,8 +377,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster 
-          position="top-center" 
+        <Toaster
+          position="top-center"
+          offset="var(--status-bar-height, 48px)"
           toastOptions={{
             style: {
               background: '#171717',
