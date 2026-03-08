@@ -95,13 +95,22 @@ const DevelopingStoryDetail = () => {
   const Icon = cfg.icon;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]" data-testid="developing-story-detail">
+    <div
+      className="min-h-screen bg-[#0A0A0A]"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      data-testid="developing-story-detail"
+    >
       {/* Background gradient */}
       <div className={`fixed inset-0 bg-gradient-to-b ${cfg.gradient} pointer-events-none`} />
 
-      {/* Header */}
-      <header className="glass-nav fixed top-0 left-0 right-0 z-40 px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+      {/* Header — 56px fixed, no extra top padding */}
+      <header
+        className="glass-nav fixed left-0 right-0 z-40"
+        style={{ top: 'env(safe-area-inset-top)', height: '56px' }}
+      >
+        {/* Relative container so the LIVE badge can be absolutely centred */}
+        <div className="relative h-full flex items-center justify-between px-4">
+          {/* Back arrow — left, vertically centred */}
           <button
             onClick={() => navigate(-1)}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors"
@@ -109,18 +118,24 @@ const DevelopingStoryDetail = () => {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </button>
-          <div className="flex items-center gap-2">
+
+          {/* LIVE badge — absolutely centred horizontally and vertically */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className={`text-xs font-mono px-2 py-0.5 rounded ${cfg.liveBadge} flex items-center gap-1`}>
               <span className={`w-1.5 h-1.5 ${cfg.liveColor} rounded-full animate-pulse`} />
               LIVE
             </span>
           </div>
-          <div className="w-9" />
+
+          {/* Theme icon — right, 32×32, vertically centred */}
+          <div className="w-8 h-8 flex items-center justify-center">
+            <Icon className={`w-5 h-5 ${cfg.accent}`} />
+          </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="relative z-10 pt-20 pb-16 px-6">
+      {/* Content — top padding = 56px header + safe area already on outer div */}
+      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '56px' }}>
         <div className="max-w-2xl mx-auto">
           {/* Story header */}
           <motion.div
