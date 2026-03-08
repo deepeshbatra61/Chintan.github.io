@@ -86,7 +86,7 @@ const DevelopingPage = () => {
       </header>
 
       {/* Content */}
-      <main className="relative z-10 pt-24 pb-12 px-6">
+      <main className="relative z-10 pb-12 px-6" style={{ paddingTop: 'calc(var(--sat) + 56px)' }}>
         <div className="max-w-2xl mx-auto">
           {/* Hero */}
           <motion.div

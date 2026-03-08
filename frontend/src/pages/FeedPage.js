@@ -255,7 +255,7 @@ const FeedPage = () => {
       </header>
 
       {/* Main Content */}
-      <main className="pt-20 pb-24 px-4">
+      <main className="pb-24 px-4" style={{ paddingTop: 'calc(var(--sat) + 56px)' }}>
         <div className="max-w-6xl mx-auto">
           {/* Developing Stories Banner */}
           {developingStories.length > 0 && (
