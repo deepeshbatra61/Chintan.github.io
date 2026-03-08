@@ -4,11 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  padding-top: env(safe-area-inset-top);
-}
-
 :root {
+  --safe-area-top: env(safe-area-inset-top, 24px);
   --obsidian: #0A0A0A;
   --obsidian-light: #171717;
   --obsidian-lighter: #262626;
@@ -32,9 +29,10 @@ body {
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--obsidian);
+  background-color: #000000;
   color: var(--text-primary);
   overflow-x: hidden;
+  padding-top: env(safe-area-inset-top, 24px);
 }
 
 .font-serif {
