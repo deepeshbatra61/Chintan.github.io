@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Response, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1097,6 +1097,92 @@ async def google_auth(request: Request, response: Response):
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return {"user": user, "session_token": session_token}
+
+_NATIVE_REDIRECT_URI = "https://chintangithubio-production.up.railway.app/api/auth/native-callback"
+_NATIVE_APP_SCHEME  = "com.chintan.app://auth/callback"
+
+@api_router.get("/auth/native-callback")
+async def google_native_callback(
+    code: str = None,
+    state: str = None,
+    error: str = None,
+):
+    """
+    Google OAuth relay for the Capacitor Android app.
+    Google redirects here (https://), we exchange the code and redirect
+    back to the app via the custom scheme com.chintan.app://auth/callback.
+    Add this URL to Google Cloud Console → OAuth client → Authorised redirect URIs:
+      https://chintangithubio-production.up.railway.app/api/auth/native-callback
+    """
+    if error or not code:
+        return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=access_denied")
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=server_misconfigured")
+
+    async with httpx.AsyncClient() as http:
+        token_resp = await http.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": _NATIVE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            logger.error(f"Native OAuth token exchange failed: {token_resp.text}")
+            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=token_exchange_failed")
+
+        tokens = token_resp.json()
+        access_token = tokens.get("access_token")
+
+        userinfo_resp = await http.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if userinfo_resp.status_code != 200:
+            logger.error(f"Native OAuth userinfo failed: {userinfo_resp.text}")
+            return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=userinfo_failed")
+
+        google_user = userinfo_resp.json()
+
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    session_token = f"st_{uuid.uuid4().hex}"
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+    existing_user = await db.users.find_one({"email": google_user["email"]}, {"_id": 0})
+    if existing_user:
+        user_id = existing_user["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": google_user.get("name"), "picture": google_user.get("picture")}},
+        )
+    else:
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": google_user["email"],
+            "name": google_user.get("name"),
+            "picture": google_user.get("picture"),
+            "interests": [],
+            "onboarding_completed": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
+    state_param = f"&state={state}" if state else ""
+    return RedirectResponse(
+        url=f"{_NATIVE_APP_SCHEME}?session_token={session_token}{state_param}"
+    )
+
 
 @api_router.get("/auth/me")
 async def get_me(request: Request):

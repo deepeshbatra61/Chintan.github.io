@@ -1,9 +1,15 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { SuryaLogo } from "../App";
+import { Browser } from "@capacitor/browser";
+
+const NATIVE_REDIRECT_URI =
+  "https://chintangithubio-production.up.railway.app/api/auth/native-callback";
+
+const isNative = () => !!window.Capacitor?.isNativePlatform();
 
 const LoginPage = () => {
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
     if (!clientId) {
       console.error("REACT_APP_GOOGLE_CLIENT_ID is not set");
@@ -14,7 +20,10 @@ const LoginPage = () => {
     const state = crypto.randomUUID();
     sessionStorage.setItem("oauth_state", state);
 
-    const redirectUri = `${window.location.origin}${process.env.PUBLIC_URL}/auth/callback`;
+    const redirectUri = isNative()
+      ? NATIVE_REDIRECT_URI
+      : `${window.location.origin}${process.env.PUBLIC_URL}/auth/callback`;
+
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -24,7 +33,13 @@ const LoginPage = () => {
       access_type: "online",
     });
 
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+
+    if (isNative()) {
+      await Browser.open({ url: oauthUrl, windowName: "_self" });
+    } else {
+      window.location.href = oauthUrl;
+    }
   };
 
   return (

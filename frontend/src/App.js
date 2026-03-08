@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, createContext, useContext } from "r
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import axios from "axios";
 import { Toaster, toast } from "sonner";
+import { App as CapApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import "./App.css";
 
 // ── Global axios setup ────────────────────────────────────────────────────────
@@ -215,10 +217,74 @@ export const SuryaLogo = ({ className = "w-10 h-10" }) => (
   </svg>
 );
 
+// Handles Google OAuth deep-link callback for the native Capacitor app.
+// Google redirects to the backend relay, which redirects back here via
+// com.chintan.app://auth/callback?session_token=...&state=...
+const NativeAuthHandler = () => {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform()) return;
+
+    const handleUrl = async ({ url }) => {
+      if (!url.startsWith("com.chintan.app://auth/callback")) return;
+
+      // Close the in-app browser
+      try { await Browser.close(); } catch (_) {}
+
+      const params = new URLSearchParams(url.split("?")[1] || "");
+      const sessionToken = params.get("session_token");
+      const state = params.get("state");
+      const error = params.get("error");
+
+      if (error || !sessionToken) {
+        toast.error("Google sign-in failed");
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      // CSRF state validation
+      const savedState = sessionStorage.getItem("oauth_state");
+      sessionStorage.removeItem("oauth_state");
+      if (state && state !== savedState) {
+        toast.error("Authentication failed — invalid state");
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      // Store token so the axios interceptor sends it as Bearer on every request
+      sessionStorage.setItem("chintan_session_token", sessionToken);
+
+      try {
+        const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
+        login(response.data, sessionToken);
+        toast.success("Welcome to Chintan!");
+        if (!response.data.onboarding_completed) {
+          navigate("/onboarding", { replace: true });
+        } else {
+          navigate("/feed", { replace: true });
+        }
+      } catch (err) {
+        console.error("Native auth error:", err);
+        toast.error("Authentication failed");
+        navigate("/login", { replace: true });
+      }
+    };
+
+    CapApp.addListener("appUrlOpen", handleUrl);
+    return () => { CapApp.removeAllListeners(); };
+  }, [login, navigate]);
+
+  return null;
+};
+
 // Main App Router
 function AppRouter() {
   return (
-    <Routes>
+    <>
+      <NativeAuthHandler />
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/onboarding" element={
@@ -269,6 +335,7 @@ function AppRouter() {
       <Route path="/" element={<Navigate to="/feed" replace />} />
       <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>
+    </>
   );
 }
 
