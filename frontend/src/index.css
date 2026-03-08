@@ -34,16 +34,6 @@ body {
   overflow-x: hidden;
 }
 
-#root {
-  padding-top: var(--sat) !important;
-}
-
-/* Fix ALL fixed position headers */
-.glass-nav,
-header[class*="fixed"],
-nav[class*="fixed"] {
-  top: var(--sat) !important;
-}
 
 .font-serif {
   font-family: 'Playfair Display', serif;

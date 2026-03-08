@@ -188,7 +188,7 @@ const BriefPage = () => {
       )}
 
       {/* Nav */}
-      <header className="glass-nav fixed left-0 right-0 z-40 px-4 py-3" style={{ top: 'var(--sat)' }}>
+      <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat, 44px)', paddingBottom: '12px' }}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
@@ -203,7 +203,7 @@ const BriefPage = () => {
       </header>
 
       {/* Content */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: 'calc(var(--sat) + 60px)', height: '100vh', overflowY: 'auto' }}>
+      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-2xl mx-auto">
           {/* Header row: icon + greeting */}
           <motion.div

@@ -101,8 +101,8 @@ const DevelopingStoryDetail = () => {
 
       {/* Header — 56px, sits at top-0 (WebView already starts below status bar via overlaysWebView:false) */}
       <header
-        className="glass-nav fixed left-0 right-0 z-40"
-        style={{ height: '56px', top: 'var(--sat)' }}
+        className="glass-nav sticky z-40"
+        style={{ top: 0, paddingTop: 'var(--sat, 44px)' }}
       >
         {/* Relative container so the LIVE badge can be absolutely centred */}
         <div className="relative h-full flex items-center justify-between px-4">
@@ -131,7 +131,7 @@ const DevelopingStoryDetail = () => {
       </header>
 
       {/* Content — top padding = 56px header + safe area already on outer div */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: 'calc(var(--sat) + 56px)', height: '100vh', overflowY: 'auto' }}>
+      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-2xl mx-auto">
           {/* Story header */}
           <motion.div
