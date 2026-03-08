@@ -25,8 +25,15 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # CORS allowed origins — comma-separated in ALLOWED_ORIGINS env var, defaults to localhost:3000
+# Always include Capacitor Android WebView origins (https://localhost, capacitor://localhost)
+# so native-poll and other API calls work from the APK regardless of env config.
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
-ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+ALLOWED_ORIGINS = list({
+    *[o.strip() for o in _raw_origins.split(",") if o.strip()],
+    "https://localhost",       # Capacitor WebView (androidScheme: https)
+    "capacitor://localhost",   # Capacitor WebView (androidScheme: capacitor)
+    "http://localhost",        # Capacitor WebView fallback
+})
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
