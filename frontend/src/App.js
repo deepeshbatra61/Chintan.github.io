@@ -225,9 +225,11 @@ const NativeAuthHandler = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log("NativeAuthHandler mounted, is native: " + window.Capacitor?.isNativePlatform());
     if (!window.Capacitor?.isNativePlatform()) return;
 
     const handleUrl = async ({ url }) => {
+      console.log("appUrlOpen fired with url: " + url);
       if (!url.startsWith("com.chintan.app://auth/callback")) return;
 
       // Close the in-app browser
@@ -237,6 +239,8 @@ const NativeAuthHandler = () => {
       const sessionToken = params.get("session_token");
       const state = params.get("state");
       const error = params.get("error");
+
+      console.log("session_token found: " + !!sessionToken);
 
       if (error || !sessionToken) {
         toast.error("Google sign-in failed");
@@ -258,6 +262,7 @@ const NativeAuthHandler = () => {
 
       try {
         const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
+        console.log("auth/me response: " + response.status);
         login(response.data, sessionToken);
         toast.success("Welcome to Chintan!");
         if (!response.data.onboarding_completed) {
@@ -272,7 +277,24 @@ const NativeAuthHandler = () => {
       }
     };
 
+    const handleBrowserFinished = async () => {
+      const token = sessionStorage.getItem("chintan_session_token");
+      if (!token) {
+        // Deep link didn't fire - try polling the backend
+        try {
+          const response = await axios.get(`${API}/auth/me`);
+          if (response.data) {
+            login(response.data);
+            navigate("/feed");
+          }
+        } catch (e) {
+          // Still not logged in
+        }
+      }
+    };
+
     CapApp.addListener("appUrlOpen", handleUrl);
+    CapApp.addListener("browserFinished", handleBrowserFinished);
     return () => { CapApp.removeAllListeners(); };
   }, [login, navigate]);
 
