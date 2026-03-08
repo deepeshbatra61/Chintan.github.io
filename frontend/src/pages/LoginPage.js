@@ -36,7 +36,7 @@ const LoginPage = () => {
     const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 
     if (isNative()) {
-      await Browser.open({ url: oauthUrl, windowName: "_self" });
+      await Browser.open({ url: oauthUrl });
     } else {
       window.location.href = oauthUrl;
     }
