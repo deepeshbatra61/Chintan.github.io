@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import {
   Search, Bell, User, Menu, Sun, CloudSun, Moon,
-  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X, Sparkles
+  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
@@ -419,20 +419,7 @@ const FeedPage = () => {
             <currentBrief.icon className="w-5 h-5" />
             <span className="text-xs">Brief</span>
           </button>
-          {/* Ask AI - centre FAB */}
-          <button
-            onClick={() => {
-              const first = articles[0];
-              if (first) navigate(`/ask-ai/${first.article_id}`);
-            }}
-            className="flex flex-col items-center gap-1 -mt-4"
-          >
-            <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-[0_0_16px_rgba(220,38,38,0.5)]">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xs text-red-400">Ask AI</span>
-          </button>
-          <button
+<button
             onClick={() => navigate("/bookmarks")}
             className="flex flex-col items-center gap-1 text-gray-500"
           >

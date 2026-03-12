@@ -704,16 +704,14 @@ const ArticlePage = () => {
             <span className="text-xs">Discuss</span>
           </button>
           
-          {poll && (
-            <button 
-              onClick={() => setShowPoll(true)}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="poll-btn"
-            >
-              <BarChart2 className="w-5 h-5" />
-              <span className="text-xs">Poll</span>
-            </button>
-          )}
+          <button
+            onClick={() => { if (poll) setShowPoll(true); }}
+            className={`flex flex-col items-center gap-1 transition-colors ${poll ? 'text-gray-400 hover:text-white' : 'text-gray-700 cursor-default'}`}
+            data-testid="poll-btn"
+          >
+            <BarChart2 className="w-5 h-5" />
+            <span className="text-xs">Poll</span>
+          </button>
           
           <button 
             onClick={fetchOtherSide}
