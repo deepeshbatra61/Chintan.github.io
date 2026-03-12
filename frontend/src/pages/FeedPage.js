@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
-import { 
-  Search, Bell, User, Menu, Sun, CloudSun, Moon, 
+import {
+  Search, Bell, User, Menu, Sun, CloudSun, Moon,
   Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
@@ -122,7 +122,7 @@ const FeedPage = () => {
                 </button>
               </SheetTrigger>
               <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0">
-                <div className="p-6 border-b border-white/10">
+                <div className="p-6 border-b border-white/10" style={{ paddingTop: 'calc(var(--sat, 44px) + 24px)' }}>
                   <div className="flex items-center gap-3">
                     <SuryaLogo className="w-10 h-10" />
                     <div>
@@ -406,27 +406,27 @@ const FeedPage = () => {
       </main>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-6 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 md:hidden">
         <div className="flex items-center justify-around">
           <button className="flex flex-col items-center gap-1 text-red-500">
             <TrendingUp className="w-5 h-5" />
             <span className="text-xs">Feed</span>
           </button>
-          <button 
+          <button
             onClick={() => navigate(`/brief/${currentBrief.type}`)}
             className="flex flex-col items-center gap-1 text-gray-500"
           >
             <currentBrief.icon className="w-5 h-5" />
             <span className="text-xs">Brief</span>
           </button>
-          <button 
+<button
             onClick={() => navigate("/bookmarks")}
             className="flex flex-col items-center gap-1 text-gray-500"
           >
             <Bookmark className="w-5 h-5" />
             <span className="text-xs">Saved</span>
           </button>
-          <button 
+          <button
             onClick={() => navigate("/profile")}
             className="flex flex-col items-center gap-1 text-gray-500"
           >

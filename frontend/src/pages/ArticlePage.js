@@ -77,6 +77,13 @@ const getSectionLabel = (key, category) => {
   return labels[key]?.[category] || labels[key]?.default || key;
 };
 
+const truncateWords = (text, maxWords) => {
+  if (!text) return text;
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '…';
+};
+
 const ArticlePage = () => {
   const { articleId } = useParams();
   const navigate = useNavigate();
@@ -101,6 +108,15 @@ const ArticlePage = () => {
     context: false,
     impact: false
   });
+
+  // Parallax state
+  const [imageTranslate, setImageTranslate] = useState(0);
+
+  const handleScroll = (e) => {
+    const scrollY = e.target.scrollTop;
+    const maxTranslate = 288; // cap at hero image height (h-72 = 288px)
+    setImageTranslate(Math.min(scrollY * 0.5, maxTranslate));
+  };
 
   // Swipe navigation state - HORIZONTAL
   const [allArticles, setAllArticles] = useState([]);
@@ -526,11 +542,12 @@ const ArticlePage = () => {
       </header>
 
       {/* Hero Image */}
-      <div className="relative h-72 md:h-96">
-        <img 
-          src={article.image_url} 
+      <div className="relative h-72 md:h-96 overflow-hidden">
+        <img
+          src={article.image_url}
           alt={article.title}
           className="w-full h-full object-cover"
+          style={{ transform: `translateY(-${imageTranslate}px)`, willChange: 'transform' }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/50 to-transparent" />
         
@@ -551,10 +568,11 @@ const ArticlePage = () => {
       </div>
 
       {/* Content */}
-      <main className="px-6 pb-32 relative" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
+      <main className="px-6 pb-32 relative" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }} onScroll={handleScroll}>
         <article className="max-w-3xl mx-auto">
           <motion.h1
-            className="font-serif text-3xl md:text-4xl font-bold text-white mb-4 leading-tight"
+            className="font-serif font-bold text-white mb-4 leading-tight"
+            style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -562,7 +580,9 @@ const ArticlePage = () => {
           </motion.h1>
 
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 mb-6">
-            <span className="font-mono">{article.source}</span>
+            {(article.source || article.domain || article.publisher) && (
+              <span className="font-mono">{article.source || article.domain || article.publisher}</span>
+            )}
             {article.author && <span>• {article.author}</span>}
             {article.published_at && (
               <span>• {new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
@@ -571,7 +591,7 @@ const ArticlePage = () => {
 
           {article.what && (
             <p className="text-gray-300 mb-8 leading-relaxed">
-              {article.what}
+              {truncateWords(article.what, 60)}
             </p>
           )}
 
@@ -605,12 +625,12 @@ const ArticlePage = () => {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <motion.div 
+                  <motion.div
                     className="px-4 py-4 text-gray-400 leading-relaxed bg-white/[0.02] rounded-b-lg border-x border-b border-white/5"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
-                    {section.content}
+                    {truncateWords(section.content, 40)}
                   </motion.div>
                 </CollapsibleContent>
               </Collapsible>
@@ -636,7 +656,7 @@ const ArticlePage = () => {
                       className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
                       data-testid={`ai-question-${idx}`}
                     >
-                      {question}
+                      {truncateWords(question, 15)}
                     </button>
                   ))}
                 </div>
@@ -704,16 +724,14 @@ const ArticlePage = () => {
             <span className="text-xs">Discuss</span>
           </button>
           
-          {poll && (
-            <button 
-              onClick={() => setShowPoll(true)}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="poll-btn"
-            >
-              <BarChart2 className="w-5 h-5" />
-              <span className="text-xs">Poll</span>
-            </button>
-          )}
+          <button
+            onClick={() => setShowPoll(true)}
+            className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
+            data-testid="poll-btn"
+          >
+            <BarChart2 className="w-5 h-5" />
+            <span className="text-xs">Poll</span>
+          </button>
           
           <button 
             onClick={fetchOtherSide}
@@ -884,7 +902,7 @@ const ArticlePage = () => {
                         }}
                       >
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
-                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{point}</p>
+                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(point, 20)}</p>
                       </div>
                     ));
                   } catch {
@@ -902,7 +920,7 @@ const ArticlePage = () => {
                         }}
                       >
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
-                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{para}</p>
+                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(para, 20)}</p>
                       </div>
                     ));
                   }
