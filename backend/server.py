@@ -2222,18 +2222,36 @@ Return only 3 questions, one per line, no numbering or bullet points."""
 
 @api_router.get("/polls/{article_id}")
 async def get_poll(article_id: str):
-    """Get poll for article"""
+    """Get poll for article, generating one on-demand if it doesn't exist yet."""
     # Check DB first
     poll = await db.polls.find_one({"article_id": article_id}, {"_id": 0})
-    
-    if not poll:
-        # Check sample polls
-        for sample_poll in SAMPLE_POLLS:
-            if sample_poll["article_id"] == article_id:
-                await db.polls.insert_one({**sample_poll})
-                return sample_poll
+    if poll:
+        return poll
+
+    # Check sample polls
+    for sample_poll in SAMPLE_POLLS:
+        if sample_poll["article_id"] == article_id:
+            await db.polls.insert_one({**sample_poll})
+            return sample_poll
+
+    # On-demand generation: fetch article and generate poll synchronously
+    article = await db.articles.find_one(
+        {"article_id": article_id},
+        {"_id": 0, "article_id": 1, "title": 1, "description": 1},
+    )
+    if not article:
         return None
-    
+
+    try:
+        await asyncio.wait_for(_generate_poll_for_article(article), timeout=10.0)
+    except asyncio.TimeoutError:
+        logger.warning(f"On-demand poll generation timed out for {article_id}")
+        return None
+    except Exception as e:
+        logger.error(f"On-demand poll generation failed for {article_id}: {e}")
+        return None
+
+    poll = await db.polls.find_one({"article_id": article_id}, {"_id": 0})
     return poll
 
 @api_router.post("/polls/{poll_id}/vote")
