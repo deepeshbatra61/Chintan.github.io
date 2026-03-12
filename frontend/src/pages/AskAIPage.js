@@ -137,7 +137,7 @@ const AskAIPage = () => {
   return (
     <div className="fixed inset-0 bg-[#0A0A0A] flex flex-col" data-testid="ask-ai-page">
       {/* Header */}
-      <header className="glass-nav px-4 py-3 flex-shrink-0">
+      <header className="glass-nav px-4 flex-shrink-0" style={{ paddingTop: 'var(--sat, 44px)', paddingBottom: '12px' }}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button 
             onClick={() => navigate(-1)}

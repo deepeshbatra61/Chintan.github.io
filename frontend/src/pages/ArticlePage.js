@@ -110,13 +110,8 @@ const ArticlePage = () => {
   });
 
   // Parallax state
-  const [imageTranslate, setImageTranslate] = useState(0);
-
-  const handleScroll = (e) => {
-    const scrollY = e.target.scrollTop;
-    const maxTranslate = 288; // cap at hero image height (h-72 = 288px)
-    setImageTranslate(Math.min(scrollY * 0.5, maxTranslate));
-  };
+  const [scrollY, setScrollY] = useState(0);
+  const onScroll = (e) => setScrollY(e.target.scrollTop);
 
   // Swipe navigation state - HORIZONTAL
   const [allArticles, setAllArticles] = useState([]);
@@ -396,8 +391,8 @@ const ArticlePage = () => {
       const response = await axios.get(`${API}/ai/other-side/${articleId}`, { withCredentials: true });
       setOtherSideAnalysis(response.data.analysis);
     } catch (error) {
-      toast.error("Failed to load alternative perspective");
-      setShowOtherSide(false);
+      console.error("Other Side fetch error:", error);
+      // Keep modal open — fallback message renders when otherSideAnalysis is null
     } finally {
       setLoadingOtherSide(false);
     }
@@ -491,8 +486,8 @@ const ArticlePage = () => {
   if (!article) return null;
 
   return (
-    <div 
-      className="min-h-screen bg-[#0A0A0A]" 
+    <div
+      className="flex flex-col h-screen overflow-hidden bg-[#0A0A0A]"
       data-testid="article-page"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -542,52 +537,40 @@ const ArticlePage = () => {
       </header>
 
       {/* Hero Image */}
-      <div className="relative h-72 md:h-96 overflow-hidden">
+      <div className="relative flex-shrink-0 overflow-hidden" style={{ height: '220px' }}>
         <img
           src={article.image_url}
           alt={article.title}
           className="w-full h-full object-cover"
-          style={{ transform: `translateY(-${imageTranslate}px)`, willChange: 'transform' }}
+          style={{ transform: `translateY(${Math.min(scrollY * 0.4, 80)}px)`, transition: 'transform 0.1s linear', willChange: 'transform' }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/50 to-transparent" />
-        
-        <div className="absolute bottom-6 left-6 right-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="category-badge">{article.category}</span>
-            {article.is_breaking && (
-              <span className="live-indicator">
-                <span className="live-dot" />
-                Breaking
-              </span>
-            )}
-            {article.is_developing && !article.is_breaking && (
-              <span className="text-xs text-amber-500 font-medium">Developing</span>
-            )}
-          </div>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/30 to-transparent" />
       </div>
 
-      {/* Content */}
-      <main className="px-6 pb-32 relative" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }} onScroll={handleScroll}>
+      {/* Breadcrumb row: CATEGORY • SOURCE • DATE */}
+      <div className="flex-shrink-0 flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 font-mono" style={{ padding: '12px 16px' }}>
+        {article.category && <span className="text-red-500 uppercase tracking-wider">{article.category}</span>}
+        {article.is_breaking && <><span>•</span><span className="text-red-400">Breaking</span></>}
+        {article.is_developing && !article.is_breaking && <><span>•</span><span className="text-amber-500">Developing</span></>}
+        {(article.source || article.domain || article.publisher) && (
+          <><span>•</span><span>{article.source || article.domain || article.publisher}</span></>
+        )}
+        {article.published_at && (
+          <><span>•</span><span>{new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
+        )}
+      </div>
+
+      {/* Scrollable content */}
+      <main className="flex-1 overflow-y-auto pb-24 px-4" onScroll={onScroll}>
         <article className="max-w-3xl mx-auto">
           <motion.h1
-            className="font-serif font-bold text-white mb-4 leading-tight"
-            style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)' }}
+            className="font-serif font-bold text-white mb-6 leading-tight"
+            style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', padding: '8px 0' }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
             {article.title}
           </motion.h1>
-
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 mb-6">
-            {(article.source || article.domain || article.publisher) && (
-              <span className="font-mono">{article.source || article.domain || article.publisher}</span>
-            )}
-            {article.author && <span>• {article.author}</span>}
-            {article.published_at && (
-              <span>• {new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            )}
-          </div>
 
           {article.what && (
             <p className="text-gray-300 mb-8 leading-relaxed">
@@ -630,7 +613,7 @@ const ArticlePage = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
-                    {truncateWords(section.content, 40)}
+                    {truncateWords(section.content, 55)}
                   </motion.div>
                 </CollapsibleContent>
               </Collapsible>
@@ -649,14 +632,14 @@ const ArticlePage = () => {
               </button>
               {showThinkDeeper && (
                 <div className="space-y-3 mt-4">
-                  {aiQuestions.map((question, idx) => (
+                  {aiQuestions.slice(0, 2).map((question, idx) => (
                     <button
                       key={idx}
                       onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(question)}`)}
                       className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
                       data-testid={`ai-question-${idx}`}
                     >
-                      {truncateWords(question, 15)}
+                      {truncateWords(question, 20)}
                     </button>
                   ))}
                 </div>
@@ -826,15 +809,15 @@ const ArticlePage = () => {
 
       {/* Poll Dialog */}
       <Dialog open={showPoll} onOpenChange={setShowPoll}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg">
+        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg" style={{ minWidth: '300px', minHeight: '200px', padding: '24px' }}>
           <DialogHeader>
             <DialogTitle className="text-white">Poll</DialogTitle>
           </DialogHeader>
-          
-          {poll && (
+
+          {poll ? (
             <div className="space-y-4">
               <p className="text-white font-medium">{poll.question}</p>
-              
+
               <div className="space-y-2">
                 {poll.options.map(option => {
                   const percentage = getVotePercentage(option);
@@ -864,6 +847,8 @@ const ArticlePage = () => {
                 {getTotalVotes()} votes
               </p>
             </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No poll available for this article</p>
           )}
         </DialogContent>
       </Dialog>
@@ -930,7 +915,7 @@ const ArticlePage = () => {
                 </p>
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-8">Failed to load analysis</p>
+              <p className="text-gray-500 text-center py-8">Could not load alternative perspectives. Please try again.</p>
             )}
           </ScrollArea>
         </DialogContent>
