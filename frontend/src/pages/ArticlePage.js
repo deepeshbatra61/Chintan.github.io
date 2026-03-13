@@ -566,12 +566,22 @@ const ArticlePage = () => {
         }}
       >
         {/* Hero image — natural flow, no parallax */}
-        <div style={{ width: '100%', height: '260px', overflow: 'hidden', margin: 0, padding: 0 }}>
+        <div style={{ width: '100%', height: '260px', overflow: 'hidden', position: 'relative', margin: 0, padding: 0 }}>
           <img
             src={article.image_url}
             alt={article.title}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '60%',
+            background: 'linear-gradient(to bottom, transparent 0%, #000000 100%)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }} />
         </div>
 
         {/* Breadcrumb: CATEGORY • SOURCE • DATE */}
