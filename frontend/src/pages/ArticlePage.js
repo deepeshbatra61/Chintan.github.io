@@ -577,8 +577,8 @@ const ArticlePage = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            height: '60%',
-            background: 'linear-gradient(to bottom, transparent 0%, #000000 100%)',
+            height: '80%',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 40%, #000000 100%)',
             zIndex: 1,
             pointerEvents: 'none',
           }} />
@@ -620,6 +620,7 @@ const ArticlePage = () => {
             lineHeight: '1.35',
             color: '#ffffff',
             margin: 0,
+            fontFamily: "'Playfair Display', 'Georgia', serif",
           }}
         >
           {article.title}
@@ -639,35 +640,44 @@ const ArticlePage = () => {
                 open={expandedSections[section.key]}
                 onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [section.key]: open }))}
               >
-                <CollapsibleTrigger asChild>
-                  <button
-                    data-testid={`section-${section.key}`}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '14px 0',
-                      borderBottom: '1px solid rgba(255,255,255,0.08)',
-                      background: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      {getSectionLabel(section.key, article.category)}
-                    </span>
-                    {expandedSections[section.key] ? (
-                      <ChevronUp className="w-5 h-5 text-gray-500" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-500" />
-                    )}
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div style={{ padding: '16px 0', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px' }}>
-                    {truncateWords(section.content, 55)}
-                  </div>
-                </CollapsibleContent>
+                <div style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: '12px',
+                  marginBottom: '8px',
+                  marginLeft: '16px',
+                  marginRight: '16px',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  overflow: 'hidden',
+                }}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      data-testid={`section-${section.key}`}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '14px 16px',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        {getSectionLabel(section.key, article.category)}
+                      </span>
+                      {expandedSections[section.key] ? (
+                        <ChevronUp className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div style={{ padding: '0 16px 16px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px' }}>
+                      {truncateWords(section.content, 55)}
+                    </div>
+                  </CollapsibleContent>
+                </div>
               </Collapsible>
             ))}
           </div>
@@ -701,7 +711,6 @@ const ArticlePage = () => {
 
           {/* Feedback */}
           <div className="flex items-center justify-center gap-6 py-6 border-t border-white/10">
-            <span className="text-gray-500 text-sm">Was this helpful?</span>
             <button
               onClick={handleLike}
               className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
@@ -728,22 +737,6 @@ const ArticlePage = () => {
             </button>
           </div>
 
-          {/* Swipe hint */}
-          <div className="text-center py-4 md:hidden">
-            <div className="flex items-center justify-center gap-4 text-gray-600 text-xs">
-              {currentIndex > 0 && (
-                <button onClick={goToPrevArticle} className="flex items-center gap-1 hover:text-gray-400">
-                  <ChevronLeft className="w-4 h-4" /> Previous
-                </button>
-              )}
-              <span>Swipe left/right</span>
-              {currentIndex < allArticles.length - 1 && (
-                <button onClick={goToNextArticle} className="flex items-center gap-1 hover:text-gray-400">
-                  Next <ChevronRight className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </main>
 
