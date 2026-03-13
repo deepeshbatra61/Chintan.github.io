@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -500,73 +500,77 @@ const ArticlePage = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Sticky header — outside the scroll container */}
+      {/* Sticky header — outside scroll container */}
       <header
-        className="glass-nav px-4"
         style={{
           position: 'sticky',
           top: 0,
           paddingTop: 'var(--sat, 44px)',
           paddingBottom: '12px',
+          paddingLeft: '16px',
+          paddingRight: '16px',
           zIndex: 40,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}
       >
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+        <button
+          onClick={handleBack}
+          className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+          data-testid="back-btn"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <div className="flex items-center gap-1">
+          {allArticles.length > 0 && (
+            <span className="text-gray-500 text-xs font-mono">
+              {currentIndex + 1} / {allArticles.length}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleBack}
+            onClick={toggleBookmark}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            data-testid="back-btn"
+            data-testid="bookmark-btn"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-400" />
-          </button>
-
-          <div className="flex items-center gap-1">
-            {allArticles.length > 0 && (
-              <span className="text-gray-500 text-xs font-mono">
-                {currentIndex + 1} / {allArticles.length}
-              </span>
+            {isBookmarked ? (
+              <BookmarkCheck className="w-5 h-5 text-red-500" />
+            ) : (
+              <Bookmark className="w-5 h-5 text-gray-400" />
             )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleBookmark}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-              data-testid="bookmark-btn"
-            >
-              {isBookmarked ? (
-                <BookmarkCheck className="w-5 h-5 text-red-500" />
-              ) : (
-                <Bookmark className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-            <button
-              onClick={shareArticle}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-              data-testid="share-btn"
-            >
-              <Share2 className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
+          </button>
+          <button
+            onClick={shareArticle}
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            data-testid="share-btn"
+          >
+            <Share2 className="w-5 h-5 text-gray-400" />
+          </button>
         </div>
       </header>
 
       {/* Single unified scroll container — hero image scrolls with content */}
       <main
         style={{
-          paddingTop: 'calc(var(--sat, 44px) + 56px)',
-          height: '100vh',
+          height: 'calc(100vh - var(--sat, 44px) - 56px)',
           overflowY: 'auto',
           overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
           paddingBottom: '80px',
         }}
       >
         {/* Hero image — natural flow, no parallax */}
-        <div style={{ width: '100%', height: '220px', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '260px', overflow: 'hidden', margin: 0, padding: 0 }}>
           <img
             src={article.image_url}
             alt={article.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         </div>
 
@@ -575,9 +579,9 @@ const ArticlePage = () => {
           style={{
             padding: '10px 16px',
             fontSize: '11px',
-            color: '#888',
+            color: '#888888',
             display: 'flex',
-            gap: '8px',
+            gap: '6px',
             alignItems: 'center',
             flexWrap: 'wrap',
           }}
@@ -600,11 +604,12 @@ const ArticlePage = () => {
         {/* Headline */}
         <h1
           style={{
-            padding: '0 16px 12px',
-            fontSize: 'clamp(1.3rem, 4vw, 1.7rem)',
+            padding: '4px 16px 16px',
+            fontSize: 'clamp(1.3rem, 4vw, 1.75rem)',
             fontWeight: '700',
-            lineHeight: '1.3',
+            lineHeight: '1.35',
             color: '#ffffff',
+            margin: 0,
           }}
         >
           {article.title}
@@ -612,7 +617,7 @@ const ArticlePage = () => {
 
         <div className="px-4 max-w-3xl mx-auto">
           {/* Accordions — What, Why, Context, Impact */}
-          <div className="space-y-3 mb-8">
+          <div style={{ marginBottom: '32px' }}>
             {[
               { key: 'what', content: article.what },
               { key: 'why', content: article.why },
@@ -626,14 +631,21 @@ const ArticlePage = () => {
               >
                 <CollapsibleTrigger asChild>
                   <button
-                    className="collapsible-header w-full"
                     data-testid={`section-${section.key}`}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 0',
+                      borderBottom: '1px solid rgba(255,255,255,0.08)',
+                      background: 'none',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-red-500 font-mono text-xs uppercase tracking-wider">
-                        {getSectionLabel(section.key, article.category)}
-                      </span>
-                    </div>
+                    <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      {getSectionLabel(section.key, article.category)}
+                    </span>
                     {expandedSections[section.key] ? (
                       <ChevronUp className="w-5 h-5 text-gray-500" />
                     ) : (
@@ -642,7 +654,7 @@ const ArticlePage = () => {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="px-4 py-4 text-gray-400 leading-relaxed bg-white/[0.02] rounded-b-lg border-x border-b border-white/5">
+                  <div style={{ padding: '16px 0', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px' }}>
                     {truncateWords(section.content, 55)}
                   </div>
                 </CollapsibleContent>
