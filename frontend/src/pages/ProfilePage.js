@@ -472,15 +472,9 @@ const ProfilePage = () => {
               </div>
             ) : report ? (
               <div className="space-y-6 py-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="glass-card rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-white">{report.stats?.articlesRead || 0}</p>
-                    <p className="text-gray-500 text-xs">Articles</p>
-                  </div>
-                  <div className="glass-card rounded-lg p-3 text-center">
-                    <p className="text-lg font-bold text-white truncate">{report.stats?.topCategory || '-'}</p>
-                    <p className="text-gray-500 text-xs">Top Interest</p>
-                  </div>
+                <div className="glass-card rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-white truncate">{report.stats?.topCategory || '-'}</p>
+                  <p className="text-gray-500 text-xs">Top Interest</p>
                 </div>
 
                 <div className="glass-card rounded-xl p-5">

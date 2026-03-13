@@ -259,8 +259,9 @@ const FeedPage = () => {
         <div className="max-w-6xl mx-auto">
           {/* Developing Stories Banner */}
           {developingStories.length > 0 && (
-            <motion.div 
+            <motion.div
               className="mb-6"
+              style={{ marginTop: '-10px' }}
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
             >

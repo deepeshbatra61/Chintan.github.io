@@ -738,7 +738,7 @@ const ArticlePage = () => {
         triggerHaptic('medium');
       }
     } catch {
-      toast.error("Failed to update bookmark");
+      console.error("Failed to update bookmark");
     }
   };
 

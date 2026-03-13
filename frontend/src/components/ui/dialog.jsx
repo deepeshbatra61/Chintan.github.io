@@ -39,18 +39,18 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
           position: 'absolute',
           right: '16px',
           top: '16px',
-          background: '#dc2626',
+          background: 'transparent',
+          border: '2px solid #dc2626',
           borderRadius: '6px',
           width: '28px',
           height: '28px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: 'none',
           cursor: 'pointer',
           flexShrink: 0,
         }}>
-        <X size={16} color="white" />
+        <X size={16} color="#dc2626" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>

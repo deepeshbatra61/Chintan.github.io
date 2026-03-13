@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { ArrowLeft, Bookmark, Trash2, Clock, Eye } from "lucide-react";
-import { toast } from "sonner";
 import { SuryaLogo } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
@@ -34,9 +33,8 @@ const BookmarksPage = () => {
     try {
       await axios.delete(`${API}/bookmarks/${articleId}`, { withCredentials: true });
       setBookmarks(bookmarks.filter(b => b.article_id !== articleId));
-      toast.success("Removed from bookmarks");
     } catch (error) {
-      toast.error("Failed to remove bookmark");
+      console.error("Failed to remove bookmark:", error);
     }
   };
 
@@ -132,11 +130,13 @@ const BookmarksPage = () => {
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-gray-600 text-xs font-mono">{article.source}</span>
                           <button
-                            onClick={(e) => removeBookmark(article.article_id, e)}
-                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-gray-500 hover:text-red-500"
+                            onClick={(e) => { e.stopPropagation(); removeBookmark(article.article_id, e); }}
+                            style={{ padding: '8px', borderRadius: '8px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280', flexShrink: 0 }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; e.currentTarget.style.color = '#ef4444'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6b7280'; }}
                             data-testid={`remove-bookmark-${article.article_id}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 style={{ width: '16px', height: '16px' }} />
                           </button>
                         </div>
                       </div>
