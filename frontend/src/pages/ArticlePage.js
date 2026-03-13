@@ -3,10 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { toast } from "sonner";
-import { 
-  ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle, 
+import {
+  ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Send, ChevronLeft, ChevronRight
+  ThumbsUp, ThumbsDown, Send, ChevronLeft, ChevronRight, Clock, Loader2
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { 
@@ -94,6 +94,7 @@ const ArticlePage = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [userReaction, setUserReaction] = useState({ liked: false, disliked: false });
   const [poll, setPoll] = useState(null);
+  const [pollLoading, setPollLoading] = useState(false);
   const [userVoted, setUserVoted] = useState(false);
   const [comments, setComments] = useState([]);
   const [showComments, setShowComments] = useState(false);
@@ -184,13 +185,22 @@ const ArticlePage = () => {
   }, [articleId]);
 
   const fetchPoll = useCallback(async () => {
+    setPollLoading(true);
     try {
       const response = await axios.get(`${API}/polls/${articleId}`, { withCredentials: true });
+      console.log(`[Poll] GET /api/polls/${articleId} response:`, response.data);
       if (response.data) {
         setPoll(response.data);
       }
     } catch (error) {
-      console.error("Error fetching poll:", error);
+      if (error.response?.status === 404) {
+        console.log(`[Poll] No poll available for ${articleId} (404)`);
+        setPoll(null);
+      } else {
+        console.error("Error fetching poll:", error);
+      }
+    } finally {
+      setPollLoading(false);
     }
   }, [articleId]);
 
@@ -814,19 +824,25 @@ const ArticlePage = () => {
             <DialogTitle className="text-white">Poll</DialogTitle>
           </DialogHeader>
 
-          {poll ? (
+          {pollLoading ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+              <p className="text-gray-400 text-sm">Generating poll…</p>
+            </div>
+          ) : poll ? (
             <div className="space-y-4">
               <p className="text-white font-medium">{poll.question}</p>
 
               <div className="space-y-2">
                 {poll.options.map(option => {
                   const percentage = getVotePercentage(option);
+                  const isSelected = userVoted && option === poll.options.find(o => o === option);
                   return (
                     <button
                       key={option}
                       onClick={() => handleVote(option)}
                       disabled={userVoted}
-                      className={`poll-option w-full text-left ${userVoted ? "cursor-default" : ""}`}
+                      className={`poll-option w-full text-left ${userVoted ? "cursor-default" : "hover:border-red-500"}`}
                       data-testid={`poll-option-${option}`}
                     >
                       {userVoted && (
@@ -843,12 +859,18 @@ const ArticlePage = () => {
                 })}
               </div>
 
+              {!userVoted && (
+                <p className="text-gray-500 text-xs text-center">Tap an option to vote</p>
+              )}
               <p className="text-gray-500 text-sm text-center">
                 {getTotalVotes()} votes
               </p>
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8">No poll available for this article</p>
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Clock className="w-8 h-8 text-gray-500" />
+              <p className="text-gray-400 text-center">Poll coming soon for this article</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>

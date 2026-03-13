@@ -2242,14 +2242,15 @@ async def get_poll(article_id: str):
     if not article:
         return None
 
+    logger.info(f"On-demand poll generation starting for {article_id}")
     try:
         await asyncio.wait_for(_generate_poll_for_article(article), timeout=10.0)
     except asyncio.TimeoutError:
         logger.warning(f"On-demand poll generation timed out for {article_id}")
-        return None
+        raise HTTPException(status_code=404, detail="Poll generation failed")
     except Exception as e:
         logger.error(f"On-demand poll generation failed for {article_id}: {e}")
-        return None
+        raise HTTPException(status_code=404, detail="Poll generation failed")
 
     poll = await db.polls.find_one({"article_id": article_id}, {"_id": 0})
     return poll
