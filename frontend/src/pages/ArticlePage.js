@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import axios from "axios";
 import { toast } from "sonner";
 import {
   ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Send, ChevronLeft, ChevronRight, Clock, Loader2
+  ThumbsUp, ThumbsDown, Send, Clock, Loader2
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
 } from "../components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -20,7 +22,6 @@ import { ScrollArea } from "../components/ui/scroll-area";
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
-// Haptic feedback utility
 const triggerHaptic = (type = 'light') => {
   if ('vibrate' in navigator) {
     const patterns = {
@@ -28,13 +29,11 @@ const triggerHaptic = (type = 'light') => {
       medium: [20],
       heavy: [30],
       success: [10, 50, 10],
-      swipe: [15, 30, 15]
     };
     navigator.vibrate(patterns[type] || patterns.light);
   }
 };
 
-// Custom section labels based on content type
 const getSectionLabel = (key, category) => {
   const labels = {
     what: {
@@ -84,14 +83,17 @@ const truncateWords = (text, maxWords) => {
   return words.slice(0, maxWords).join(' ') + '…';
 };
 
-const ArticlePage = () => {
-  const { articleId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
-  const [article, setArticle] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isBookmarked, setIsBookmarked] = useState(false);
+// ─────────────────────────────────────────────────────────────────────────────
+// ArticleContent — self-contained per-article slide
+// ─────────────────────────────────────────────────────────────────────────────
+const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
+  const articleId = articleProp.article_id;
+  const hasFetched = useRef(false);
+
+  // Full article data (upgraded from list summary on activation)
+  const [article, setArticle] = useState(articleProp);
+
+  // Per-article interactive state
   const [userReaction, setUserReaction] = useState({ liked: false, disliked: false });
   const [poll, setPoll] = useState(null);
   const [pollLoading, setPollLoading] = useState(false);
@@ -105,208 +107,59 @@ const ArticlePage = () => {
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [expandedSections, setExpandedSections] = useState({
-    what: false,
-    why: false,
-    context: false,
-    impact: false,
+    what: false, why: false, context: false, impact: false,
   });
-
-  // Swipe navigation state - HORIZONTAL
-  const [allArticles, setAllArticles] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
-  const touchStartTime = useRef(0);
-  const isModalOpen = showComments || showPoll || showOtherSide;
   const [showThinkDeeper, setShowThinkDeeper] = useState(false);
 
-  const fetchArticle = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/articles/${articleId}`, { withCredentials: true });
-      setArticle(response.data);
-      
-      // Track view
-      await axios.post(`${API}/articles/${articleId}/interact`, 
-        { action: "view" }, 
-        { withCredentials: true }
-      );
-    } catch (error) {
-      console.error("Error fetching article:", error);
-      toast.error("Article not found");
-      navigate("/feed");
-    }
-  }, [articleId, navigate]);
-
-  const fetchAllArticles = useCallback(async () => {
-    try {
-      // Reuse the session-level ordered list so navigation order never changes
-      const stored = sessionStorage.getItem('articleList');
-      if (stored) {
-        const list = JSON.parse(stored);
-        setAllArticles(list);
-        const idx = list.findIndex(a => a.article_id === articleId);
-        if (idx !== -1) setCurrentIndex(idx);
-        return;
-      }
-      const response = await axios.get(`${API}/articles`, { withCredentials: true });
-      sessionStorage.setItem('articleList', JSON.stringify(response.data));
-      setAllArticles(response.data);
-      const idx = response.data.findIndex(a => a.article_id === articleId);
-      if (idx !== -1) setCurrentIndex(idx);
-    } catch (error) {
-      console.error("Error fetching articles:", error);
-    }
-  }, [articleId]);
-
-  const checkBookmark = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/bookmarks/check/${articleId}`, { withCredentials: true });
-      setIsBookmarked(response.data.bookmarked);
-    } catch (error) {
-      console.error("Error checking bookmark:", error);
-    }
-  }, [articleId]);
-
-  const fetchReaction = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/articles/${articleId}/reaction`, { withCredentials: true });
-      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
-      setArticle(prev => prev ? {
-        ...prev,
-        likes: response.data.likes_count,
-        dislikes: response.data.dislikes_count,
-      } : prev);
-    } catch (error) {
-      // Not authenticated or article not found — leave defaults
-    }
-  }, [articleId]);
-
-  const fetchPoll = useCallback(async () => {
-    setPollLoading(true);
-    try {
-      const response = await axios.get(`${API}/polls/${articleId}`, { withCredentials: true });
-      console.log(`[Poll] GET /api/polls/${articleId} response:`, response.data);
-      if (response.data) {
-        setPoll(response.data);
-      }
-    } catch (error) {
-      if (error.response?.status === 404) {
-        console.log(`[Poll] No poll available for ${articleId} (404)`);
-        setPoll(null);
-      } else {
-        console.error("Error fetching poll:", error);
-      }
-    } finally {
-      setPollLoading(false);
-    }
-  }, [articleId]);
-
-  const fetchComments = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/comments/${articleId}`, { withCredentials: true });
-      setComments(response.data);
-    } catch (error) {
-      console.error("Error fetching comments:", error);
-    }
-  }, [articleId]);
-
-  const fetchAIQuestions = useCallback(async () => {
-    try {
-      const response = await axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true });
-      setAiQuestions((response.data.questions || []).slice(0, 2));
-    } catch (error) {
-      console.error("Error fetching AI questions:", error);
-    }
-  }, [articleId]);
-
+  // Lazy-load all per-article data on first activation
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await fetchArticle();
-      await Promise.all([checkBookmark(), fetchReaction(), fetchPoll(), fetchComments(), fetchAIQuestions(), fetchAllArticles()]);
-      setLoading(false);
-    };
-    loadData();
-  }, [fetchArticle, checkBookmark, fetchReaction, fetchPoll, fetchComments, fetchAIQuestions, fetchAllArticles]);
+    if (!isActive || hasFetched.current) return;
+    hasFetched.current = true;
 
-  // HORIZONTAL swipe handlers for mobile navigation
-  const handleTouchStart = (e) => {
-    if (isModalOpen) return;
-    const y = e.touches[0].clientY;
-    if (y < window.innerHeight * 0.10) return;  // header dead zone
-    if (y > window.innerHeight * 0.70) return;  // action bar dead zone
-    touchStartX.current = e.touches[0].clientX;
-    touchStartTime.current = Date.now();
-  };
+    // Full article data
+    axios.get(`${API}/articles/${articleId}`, { withCredentials: true })
+      .then(r => setArticle(r.data))
+      .catch(e => console.error("Article fetch:", e));
 
-  const handleTouchMove = (e) => {
-    if (isModalOpen) return;
-    touchEndX.current = e.touches[0].clientX;
-  };
+    // Track view
+    axios.post(`${API}/articles/${articleId}/interact`, { action: "view" }, { withCredentials: true })
+      .catch(() => {});
 
-  const handleTouchEnd = () => {
-    if (isModalOpen) return;
-    const diffX = touchStartX.current - touchEndX.current;
-    const elapsed = Date.now() - touchStartTime.current;
+    // Reaction state
+    axios.get(`${API}/articles/${articleId}/reaction`, { withCredentials: true })
+      .then(r => {
+        setUserReaction({ liked: r.data.liked, disliked: r.data.disliked });
+        setArticle(prev => prev ? {
+          ...prev,
+          likes: r.data.likes_count,
+          dislikes: r.data.dislikes_count,
+        } : prev);
+      })
+      .catch(() => {});
 
-    if (Math.abs(diffX) > 50 && elapsed < 200) {
-      if (diffX > 0) {
-        // Swipe LEFT - next article
-        if (currentIndex < allArticles.length - 1) {
-          triggerHaptic('swipe');
-          const nextArticle = allArticles[currentIndex + 1];
-          navigate(`/article/${nextArticle.article_id}`, { replace: true });
-        }
-      } else {
-        // Swipe RIGHT - previous article
-        if (currentIndex > 0) {
-          triggerHaptic('swipe');
-          const prevArticle = allArticles[currentIndex - 1];
-          navigate(`/article/${prevArticle.article_id}`, { replace: true });
-        }
-      }
-    }
-  };
+    // Poll
+    setPollLoading(true);
+    axios.get(`${API}/polls/${articleId}`, { withCredentials: true })
+      .then(r => { if (r.data) setPoll(r.data); })
+      .catch(e => {
+        if (e.response?.status !== 404) console.error("Poll fetch:", e);
+      })
+      .finally(() => setPollLoading(false));
 
-  const goToNextArticle = () => {
-    if (currentIndex < allArticles.length - 1) {
-      triggerHaptic('swipe');
-      const nextArticle = allArticles[currentIndex + 1];
-      navigate(`/article/${nextArticle.article_id}`, { replace: true });
-    }
-  };
+    // Comments
+    axios.get(`${API}/comments/${articleId}`, { withCredentials: true })
+      .then(r => setComments(r.data))
+      .catch(e => console.error("Comments fetch:", e));
 
-  const goToPrevArticle = () => {
-    if (currentIndex > 0) {
-      triggerHaptic('swipe');
-      const prevArticle = allArticles[currentIndex - 1];
-      navigate(`/article/${prevArticle.article_id}`, { replace: true });
-    }
-  };
+    // AI questions
+    axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true })
+      .then(r => setAiQuestions((r.data.questions || []).slice(0, 2)))
+      .catch(e => console.error("AI questions fetch:", e));
+  }, [isActive, articleId]);
 
-  // Back button goes to FEED, not previous article
-  const handleBack = () => {
-    navigate('/feed');
-  };
-
-  const toggleBookmark = async () => {
-    try {
-      triggerHaptic('medium');
-      if (isBookmarked) {
-        await axios.delete(`${API}/bookmarks/${articleId}`, { withCredentials: true });
-        toast.success("Removed from bookmarks");
-      } else {
-        await axios.post(`${API}/bookmarks/${articleId}`, {}, { withCredentials: true });
-        toast.success("Added to bookmarks");
-      }
-      setIsBookmarked(!isBookmarked);
-    } catch (error) {
-      toast.error("Failed to update bookmark");
-    }
-  };
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleLike = async () => {
-    // Optimistic update
     const wasLiked = userReaction.liked;
     const wasDisliked = userReaction.disliked;
     setUserReaction({ liked: !wasLiked, disliked: false });
@@ -317,15 +170,10 @@ const ArticlePage = () => {
     }));
     try {
       triggerHaptic('success');
-      const response = await axios.post(
-        `${API}/articles/${articleId}/interact`,
-        { action: "like" },
-        { withCredentials: true }
-      );
-      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
-      setArticle(prev => ({ ...prev, likes: response.data.likes_count, dislikes: response.data.dislikes_count }));
-    } catch (error) {
-      // Revert on failure
+      const r = await axios.post(`${API}/articles/${articleId}/interact`, { action: "like" }, { withCredentials: true });
+      setUserReaction({ liked: r.data.liked, disliked: r.data.disliked });
+      setArticle(prev => ({ ...prev, likes: r.data.likes_count, dislikes: r.data.dislikes_count }));
+    } catch {
       setUserReaction({ liked: wasLiked, disliked: wasDisliked });
       setArticle(prev => ({
         ...prev,
@@ -337,7 +185,6 @@ const ArticlePage = () => {
   };
 
   const handleDislike = async () => {
-    // Optimistic update
     const wasDisliked = userReaction.disliked;
     const wasLiked = userReaction.liked;
     setUserReaction({ liked: false, disliked: !wasDisliked });
@@ -348,15 +195,10 @@ const ArticlePage = () => {
     }));
     try {
       triggerHaptic('light');
-      const response = await axios.post(
-        `${API}/articles/${articleId}/interact`,
-        { action: "dislike" },
-        { withCredentials: true }
-      );
-      setUserReaction({ liked: response.data.liked, disliked: response.data.disliked });
-      setArticle(prev => ({ ...prev, likes: response.data.likes_count, dislikes: response.data.dislikes_count }));
-    } catch (error) {
-      // Revert on failure
+      const r = await axios.post(`${API}/articles/${articleId}/interact`, { action: "dislike" }, { withCredentials: true });
+      setUserReaction({ liked: r.data.liked, disliked: r.data.disliked });
+      setArticle(prev => ({ ...prev, likes: r.data.likes_count, dislikes: r.data.dislikes_count }));
+    } catch {
       setUserReaction({ liked: wasLiked, disliked: wasDisliked });
       setArticle(prev => ({
         ...prev,
@@ -371,35 +213,25 @@ const ArticlePage = () => {
     if (userVoted || !poll) return;
     try {
       triggerHaptic('success');
-      const response = await axios.post(
-        `${API}/polls/${poll.poll_id}/vote`,
-        { option },
-        { withCredentials: true }
-      );
-      setPoll(response.data);
+      const r = await axios.post(`${API}/polls/${poll.poll_id}/vote`, { option }, { withCredentials: true });
+      setPoll(r.data);
       setUserVoted(true);
       toast.success("Vote recorded!");
     } catch (error) {
-      if (error.response?.data?.detail === "Already voted") {
-        setUserVoted(true);
-      }
+      if (error.response?.data?.detail === "Already voted") setUserVoted(true);
       toast.error(error.response?.data?.detail || "Failed to vote");
     }
   };
 
   const fetchOtherSide = async () => {
-    if (otherSideAnalysis) {
-      setShowOtherSide(true);
-      return;
-    }
+    if (otherSideAnalysis) { setShowOtherSide(true); return; }
     setLoadingOtherSide(true);
     setShowOtherSide(true);
     try {
-      const response = await axios.get(`${API}/ai/other-side/${articleId}`, { withCredentials: true });
-      setOtherSideAnalysis(response.data.analysis);
-    } catch (error) {
-      console.error("Other Side fetch error:", error);
-      // Keep modal open — fallback message renders when otherSideAnalysis is null
+      const r = await axios.get(`${API}/ai/other-side/${articleId}`, { withCredentials: true });
+      setOtherSideAnalysis(r.data.analysis);
+    } catch (e) {
+      console.error("Other Side fetch:", e);
     } finally {
       setLoadingOtherSide(false);
     }
@@ -409,15 +241,11 @@ const ArticlePage = () => {
     if (!newComment.trim()) return;
     try {
       triggerHaptic('medium');
-      const response = await axios.post(
-        `${API}/comments/${articleId}`,
-        { content: newComment, stance: "neutral" },
-        { withCredentials: true }
-      );
-      setComments([response.data, ...comments]);
+      const r = await axios.post(`${API}/comments/${articleId}`, { content: newComment, stance: "neutral" }, { withCredentials: true });
+      setComments([r.data, ...comments]);
       setNewComment("");
       toast.success("Comment posted!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to post comment");
     }
   };
@@ -434,30 +262,7 @@ const ArticlePage = () => {
         return c;
       }));
     } catch (error) {
-      if (error.response?.status === 400) {
-        toast.info("Already reacted");
-      } else {
-        console.error("Failed to react:", error);
-      }
-    }
-  };
-
-  const shareArticle = async () => {
-    const shareUrl = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: article.title,
-          text: article.description,
-          url: shareUrl
-        });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success("Link copied to clipboard!");
-      }
-    } catch (error) {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied to clipboard!");
+      if (error.response?.status === 400) toast.info("Already reacted");
     }
   };
 
@@ -482,80 +287,10 @@ const ArticlePage = () => {
       .trim();
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <SuryaLogo className="w-16 h-16 animate-spin-slow" />
-      </div>
-    );
-  }
-
-  if (!article) return null;
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div
-      data-testid="article-page"
-      style={{ background: '#0A0A0A' }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Sticky header — outside scroll container */}
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          paddingTop: 'var(--sat, 44px)',
-          paddingBottom: '12px',
-          paddingLeft: '16px',
-          paddingRight: '16px',
-          zIndex: 40,
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <button
-          onClick={handleBack}
-          className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-          data-testid="back-btn"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-400" />
-        </button>
-
-        <div className="flex items-center gap-1">
-          {allArticles.length > 0 && (
-            <span className="text-gray-500 text-xs font-mono">
-              {currentIndex + 1} / {allArticles.length}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleBookmark}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            data-testid="bookmark-btn"
-          >
-            {isBookmarked ? (
-              <BookmarkCheck className="w-5 h-5 text-red-500" />
-            ) : (
-              <Bookmark className="w-5 h-5 text-gray-400" />
-            )}
-          </button>
-          <button
-            onClick={shareArticle}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            data-testid="share-btn"
-          >
-            <Share2 className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
-      </header>
-
-      {/* Single unified scroll container — hero image scrolls with content */}
+    <>
+      {/* Scrollable article content */}
       <main
         style={{
           height: 'calc(100vh - var(--sat, 44px) - 56px)',
@@ -565,7 +300,7 @@ const ArticlePage = () => {
           paddingBottom: '80px',
         }}
       >
-        {/* Hero image — natural flow, no parallax */}
+        {/* Hero image */}
         <div style={{ width: '100%', height: '260px', overflow: 'hidden', position: 'relative', margin: 0, padding: 0 }}>
           <img
             src={article.image_url}
@@ -573,29 +308,18 @@ const ArticlePage = () => {
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
           <div style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
+            position: 'absolute', bottom: 0, left: 0, right: 0,
             height: '80%',
             background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 40%, #000000 100%)',
-            zIndex: 1,
-            pointerEvents: 'none',
+            zIndex: 1, pointerEvents: 'none',
           }} />
         </div>
 
-        {/* Breadcrumb: CATEGORY • SOURCE • DATE */}
-        <div
-          style={{
-            padding: '10px 16px',
-            fontSize: '11px',
-            color: '#888888',
-            display: 'flex',
-            gap: '6px',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
+        {/* Breadcrumb */}
+        <div style={{
+          padding: '10px 16px', fontSize: '11px', color: '#888888',
+          display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap',
+        }}>
           {article.category && (
             <span style={{ color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {article.category}
@@ -612,22 +336,20 @@ const ArticlePage = () => {
         </div>
 
         {/* Headline */}
-        <h1
-          style={{
-            padding: '4px 16px 16px',
-            fontSize: 'clamp(1.3rem, 4vw, 1.75rem)',
-            fontWeight: '700',
-            lineHeight: '1.35',
-            color: '#ffffff',
-            margin: 0,
-            fontFamily: "'Playfair Display', 'Georgia', serif",
-          }}
-        >
+        <h1 style={{
+          padding: '4px 16px 16px',
+          fontSize: 'clamp(1.3rem, 4vw, 1.75rem)',
+          fontWeight: '700',
+          lineHeight: '1.35',
+          color: '#ffffff',
+          margin: 0,
+          fontFamily: "'Playfair Display', 'Georgia', serif",
+        }}>
           {article.title}
         </h1>
 
         <div className="px-4 max-w-3xl mx-auto">
-          {/* Accordions — What, Why, Context, Impact */}
+          {/* Accordions */}
           <div style={{ marginBottom: '32px' }}>
             {[
               { key: 'what', content: article.what },
@@ -653,28 +375,21 @@ const ArticlePage = () => {
                     <button
                       data-testid={`section-${section.key}`}
                       style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '14px 16px',
-                        background: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'left',
+                        width: '100%', display: 'flex', alignItems: 'center',
+                        justifyContent: 'space-between', padding: '14px 16px',
+                        background: 'none', cursor: 'pointer', textAlign: 'left',
                       }}
                     >
                       <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                         {getSectionLabel(section.key, article.category)}
                       </span>
-                      {expandedSections[section.key] ? (
-                        <ChevronUp className="w-5 h-5 text-gray-500" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-500" />
-                      )}
+                      {expandedSections[section.key]
+                        ? <ChevronUp className="w-5 h-5 text-gray-500" />
+                        : <ChevronDown className="w-5 h-5 text-gray-500" />}
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div style={{ padding: '0 12px 16px', paddingLeft: '12px', paddingRight: '12px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px', textAlign: 'left' }}>
+                    <div style={{ padding: '0 12px 16px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px', textAlign: 'left' }}>
                       {truncateWords(section.content, 55)}
                     </div>
                   </CollapsibleContent>
@@ -683,7 +398,7 @@ const ArticlePage = () => {
             ))}
           </div>
 
-          {/* AI Questions (Think Deeper) */}
+          {/* Think Deeper */}
           {aiQuestions.length > 0 && (
             <div className="glass-card rounded-xl p-6 mb-8">
               <button
@@ -715,9 +430,7 @@ const ArticlePage = () => {
             <button
               onClick={handleLike}
               className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                userReaction.liked
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400"
+                userReaction.liked ? "bg-green-500/20 text-green-400" : "bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400"
               }`}
               data-testid="like-btn"
             >
@@ -727,9 +440,7 @@ const ArticlePage = () => {
             <button
               onClick={handleDislike}
               className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                userReaction.disliked
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                userReaction.disliked ? "bg-red-500/20 text-red-400" : "bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400"
               }`}
               data-testid="dislike-btn"
             >
@@ -737,50 +448,48 @@ const ArticlePage = () => {
               <span className="text-sm">{article.dislikes || 0}</span>
             </button>
           </div>
-
         </div>
       </main>
 
-      {/* Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 z-50">
-        <div className="max-w-3xl mx-auto flex items-center justify-around">
-          <button 
-            onClick={() => setShowComments(true)}
-            className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-            data-testid="discuss-btn"
-          >
-            <MessageCircle className="w-5 h-5" />
-            <span className="text-xs">Discuss</span>
-          </button>
-          
-          <button
-            onClick={() => setShowPoll(true)}
-            className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-            data-testid="poll-btn"
-          >
-            <BarChart2 className="w-5 h-5" />
-            <span className="text-xs">Poll</span>
-          </button>
-          
-          <button 
-            onClick={fetchOtherSide}
-            className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-            data-testid="other-side-btn"
-          >
-            <BrainCircuit className="w-5 h-5" />
-            <span className="text-xs">Other Side</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate(`/ask-ai/${articleId}`)}
-            className="flex flex-col items-center gap-1 text-red-500"
-            data-testid="ask-ai-btn"
-          >
-            <Sparkles className="w-5 h-5" />
-            <span className="text-xs">Ask AI</span>
-          </button>
+      {/* Action bar — only rendered for the active slide to avoid stacking */}
+      {isActive && (
+        <div className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 z-50">
+          <div className="max-w-3xl mx-auto flex items-center justify-around">
+            <button
+              onClick={() => setShowComments(true)}
+              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
+              data-testid="discuss-btn"
+            >
+              <MessageCircle className="w-5 h-5" />
+              <span className="text-xs">Discuss</span>
+            </button>
+            <button
+              onClick={() => setShowPoll(true)}
+              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
+              data-testid="poll-btn"
+            >
+              <BarChart2 className="w-5 h-5" />
+              <span className="text-xs">Poll</span>
+            </button>
+            <button
+              onClick={fetchOtherSide}
+              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
+              data-testid="other-side-btn"
+            >
+              <BrainCircuit className="w-5 h-5" />
+              <span className="text-xs">Other Side</span>
+            </button>
+            <button
+              onClick={() => navigate(`/ask-ai/${articleId}`)}
+              className="flex flex-col items-center gap-1 text-red-500"
+              data-testid="ask-ai-btn"
+            >
+              <Sparkles className="w-5 h-5" />
+              <span className="text-xs">Ask AI</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Comments Dialog */}
       <Dialog open={showComments} onOpenChange={setShowComments}>
@@ -788,7 +497,6 @@ const ArticlePage = () => {
           <DialogHeader>
             <DialogTitle className="text-white">Discussion</DialogTitle>
           </DialogHeader>
-          
           <div className="flex gap-2 mb-4">
             <input
               type="text"
@@ -798,7 +506,7 @@ const ArticlePage = () => {
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-red-500"
               data-testid="comment-input"
             />
-            <button 
+            <button
               onClick={submitComment}
               className="p-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               data-testid="submit-comment-btn"
@@ -806,7 +514,6 @@ const ArticlePage = () => {
               <Send className="w-5 h-5 text-white" />
             </button>
           </div>
-
           <ScrollArea className="h-[400px]">
             <div className="space-y-4">
               {comments.map(comment => (
@@ -821,12 +528,9 @@ const ArticlePage = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-white text-sm font-medium">{comment.user_name}</p>
-                    </div>
+                    <p className="text-white text-sm font-medium">{comment.user_name}</p>
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
-                  
                   <div className="flex items-center gap-3 pt-2 border-t border-white/5">
                     <button
                       onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
@@ -859,7 +563,6 @@ const ArticlePage = () => {
           <DialogHeader>
             <DialogTitle className="text-white">Poll</DialogTitle>
           </DialogHeader>
-
           {pollLoading ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
               <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
@@ -868,11 +571,9 @@ const ArticlePage = () => {
           ) : poll ? (
             <div className="space-y-4">
               <p className="text-white font-medium">{poll.question}</p>
-
               <div className="space-y-2">
                 {poll.options.map(option => {
                   const percentage = getVotePercentage(option);
-                  const isSelected = userVoted && option === poll.options.find(o => o === option);
                   return (
                     <button
                       key={option}
@@ -881,26 +582,17 @@ const ArticlePage = () => {
                       className={`poll-option w-full text-left ${userVoted ? "cursor-default" : "hover:border-red-500"}`}
                       data-testid={`poll-option-${option}`}
                     >
-                      {userVoted && (
-                        <div className="poll-bar" style={{ width: `${percentage}%` }} />
-                      )}
+                      {userVoted && <div className="poll-bar" style={{ width: `${percentage}%` }} />}
                       <div className="relative flex items-center justify-between">
                         <span className="text-gray-300">{option}</span>
-                        {userVoted && (
-                          <span className="text-gray-500 font-mono text-sm">{percentage}%</span>
-                        )}
+                        {userVoted && <span className="text-gray-500 font-mono text-sm">{percentage}%</span>}
                       </div>
                     </button>
                   );
                 })}
               </div>
-
-              {!userVoted && (
-                <p className="text-gray-500 text-xs text-center">Tap an option to vote</p>
-              )}
-              <p className="text-gray-500 text-sm text-center">
-                {getTotalVotes()} votes
-              </p>
+              {!userVoted && <p className="text-gray-500 text-xs text-center">Tap an option to vote</p>}
+              <p className="text-gray-500 text-sm text-center">{getTotalVotes()} votes</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -920,7 +612,6 @@ const ArticlePage = () => {
               The Other Side
             </DialogTitle>
           </DialogHeader>
-          
           <ScrollArea className="h-[500px]">
             {loadingOtherSide ? (
               <div className="flex items-center justify-center py-12">
@@ -932,36 +623,14 @@ const ArticlePage = () => {
                   try {
                     const parsed = JSON.parse(otherSideAnalysis);
                     return (parsed.points || []).slice(0, 3).map((point, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          background: '#1a1a1a',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: '12px',
-                          padding: '16px 18px',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '12px',
-                        }}
-                      >
+                      <div key={idx} style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
                         <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(point, 20)}</p>
                       </div>
                     ));
                   } catch {
                     return formatOtherSide(otherSideAnalysis).split('\n\n').filter(Boolean).slice(0, 3).map((para, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          background: '#1a1a1a',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: '12px',
-                          padding: '16px 18px',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '12px',
-                        }}
-                      >
+                      <div key={idx} style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
                         <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(para, 20)}</p>
                       </div>
@@ -978,6 +647,183 @@ const ArticlePage = () => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+    </>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ArticlePage — Swiper shell + sticky header
+// ─────────────────────────────────────────────────────────────────────────────
+const ArticlePage = () => {
+  const { articleId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [allArticles, setAllArticles] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Load article list and find initial index
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const stored = sessionStorage.getItem('articleList');
+        let list;
+        if (stored) {
+          list = JSON.parse(stored);
+        } else {
+          const r = await axios.get(`${API}/articles`, { withCredentials: true });
+          list = r.data;
+          sessionStorage.setItem('articleList', JSON.stringify(list));
+        }
+        setAllArticles(list);
+        const idx = list.findIndex(a => a.article_id === articleId);
+        if (idx !== -1) setCurrentIndex(idx);
+      } catch (e) {
+        console.error("Error loading articles:", e);
+        toast.error("Could not load articles");
+        navigate('/feed');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [articleId, navigate]);
+
+  // Fetch bookmark state for current article
+  useEffect(() => {
+    const id = allArticles[currentIndex]?.article_id;
+    if (!id) return;
+    axios.get(`${API}/bookmarks/check/${id}`, { withCredentials: true })
+      .then(r => setIsBookmarked(r.data.bookmarked))
+      .catch(() => {});
+  }, [currentIndex, allArticles]);
+
+  const toggleBookmark = async () => {
+    const id = allArticles[currentIndex]?.article_id;
+    if (!id) return;
+    try {
+      triggerHaptic('medium');
+      if (isBookmarked) {
+        await axios.delete(`${API}/bookmarks/${id}`, { withCredentials: true });
+        toast.success("Removed from bookmarks");
+      } else {
+        await axios.post(`${API}/bookmarks/${id}`, {}, { withCredentials: true });
+        toast.success("Added to bookmarks");
+      }
+      setIsBookmarked(!isBookmarked);
+    } catch {
+      toast.error("Failed to update bookmark");
+    }
+  };
+
+  const shareArticle = async () => {
+    const art = allArticles[currentIndex];
+    const shareUrl = `${window.location.origin}/article/${art?.article_id}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: art?.title, url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Link copied to clipboard!");
+    }
+  };
+
+  const handlePageChange = async (newIndex) => {
+    if (newIndex === currentIndex) return;
+    setCurrentIndex(newIndex);
+    if (window.Capacitor?.isNativePlatform()) {
+      try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <SuryaLogo className="w-16 h-16 animate-spin-slow" />
+      </div>
+    );
+  }
+
+  if (!allArticles.length) return null;
+
+  return (
+    <div data-testid="article-page" style={{ background: '#0A0A0A' }}>
+      {/* Sticky header — outside Swiper */}
+      <header
+        style={{
+          position: 'sticky',
+          top: 0,
+          paddingTop: 'var(--sat, 44px)',
+          paddingBottom: '12px',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          zIndex: 40,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <button
+          onClick={() => navigate('/feed')}
+          className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+          data-testid="back-btn"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <span className="text-gray-500 text-xs font-mono">
+          {currentIndex + 1} / {allArticles.length}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleBookmark}
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            data-testid="bookmark-btn"
+          >
+            {isBookmarked
+              ? <BookmarkCheck className="w-5 h-5 text-red-500" />
+              : <Bookmark className="w-5 h-5 text-gray-400" />}
+          </button>
+          <button
+            onClick={shareArticle}
+            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            data-testid="share-btn"
+          >
+            <Share2 className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+      </header>
+
+      {/* Horizontal pager */}
+      <Swiper
+        direction="horizontal"
+        slidesPerView={1}
+        initialSlide={currentIndex}
+        threshold={10}
+        touchStartPreventDefault={false}
+        nested={true}
+        onSlideChange={(swiper) => handlePageChange(swiper.activeIndex)}
+        style={{ height: 'calc(100vh - var(--sat, 44px) - 56px)' }}
+      >
+        {allArticles.map((art, idx) => (
+          <SwiperSlide key={art.article_id}>
+            <ArticleContent
+              article={art}
+              navigate={navigate}
+              isActive={idx === currentIndex}
+            />
+          </SwiperSlide>
+        ))}
+      </Swiper>
     </div>
   );
 };
