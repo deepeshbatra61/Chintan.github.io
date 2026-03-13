@@ -5,10 +5,11 @@ import 'swiper/css';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import axios from "axios";
 import { toast } from "sonner";
+import { Share } from '@capacitor/share';
 import {
-  ArrowLeft, Bookmark, BookmarkCheck, Share2, MessageCircle,
+  Home, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Send, Clock, Loader2
+  ThumbsUp, ThumbsDown, Send, Clock, Loader2, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import {
@@ -725,15 +726,17 @@ const ArticlePage = () => {
     const id = allArticles[currentIndex]?.article_id;
     if (!id) return;
     try {
-      triggerHaptic('medium');
       if (isBookmarked) {
         await axios.delete(`${API}/bookmarks/${id}`, { withCredentials: true });
-        toast.success("Removed from bookmarks");
       } else {
         await axios.post(`${API}/bookmarks/${id}`, {}, { withCredentials: true });
-        toast.success("Added to bookmarks");
       }
       setIsBookmarked(!isBookmarked);
+      if (window.Capacitor?.isNativePlatform()) {
+        try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+      } else {
+        triggerHaptic('medium');
+      }
     } catch {
       toast.error("Failed to update bookmark");
     }
@@ -741,17 +744,15 @@ const ArticlePage = () => {
 
   const shareArticle = async () => {
     const art = allArticles[currentIndex];
-    const shareUrl = `${window.location.origin}/article/${art?.article_id}`;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: art?.title, url: shareUrl });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success("Link copied to clipboard!");
-      }
+      await Share.share({
+        title: art?.title,
+        text: 'Check this News article on Chintan!',
+        url: `https://chintan-updated.vercel.app/article/${art?.article_id}`,
+        dialogTitle: 'Share via',
+      });
     } catch {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied to clipboard!");
+      // user dismissed or share not available — no feedback needed
     }
   };
 
@@ -797,7 +798,7 @@ const ArticlePage = () => {
           className="p-2 hover:bg-white/5 rounded-lg transition-colors"
           data-testid="back-btn"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-400" />
+          <Home className="w-5 h-5 text-gray-400" />
         </button>
 
         <span className="text-gray-500 text-xs font-mono">

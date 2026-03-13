@@ -219,9 +219,17 @@ const ProfilePage = () => {
                   </div>
                 )}
               </div>
-              <div>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <h1 className="font-serif text-2xl text-white mb-1">{user?.name}</h1>
-                <p className="text-gray-500 text-sm">{user?.email}</p>
+                <div style={{
+                  wordBreak: 'break-all',
+                  overflowWrap: 'anywhere',
+                  maxWidth: '100%',
+                  fontSize: '13px',
+                  color: '#888888',
+                }}>
+                  {user?.email}
+                </div>
               </div>
             </div>
           </motion.div>
@@ -449,9 +457,11 @@ const ProfilePage = () => {
       <Dialog open={showReport} onOpenChange={setShowReport}>
         <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <FileText className="w-5 h-5 text-red-500" />
-              Your Weekly Reading Report
+            <DialogTitle className="text-white flex items-center gap-2" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', gap: '12px', paddingRight: '40px' }}>
+              <span className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
+                Your Weekly Reading Report
+              </span>
             </DialogTitle>
           </DialogHeader>
           
