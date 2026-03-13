@@ -5,6 +5,7 @@ import { Toaster, toast } from "sonner";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import "./App.css";
+import WelcomeSplash from "./components/WelcomeSplash";
 
 // ── Global axios setup ────────────────────────────────────────────────────────
 // Always send cookies AND, when available, the session token as a Bearer header.
@@ -42,6 +43,8 @@ export const useAuth = () => useContext(AuthContext);
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeDest, setWelcomeDest] = useState("/feed");
 
   const checkAuth = async () => {
     try {
@@ -78,7 +81,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth, showWelcome, setShowWelcome, welcomeDest, setWelcomeDest }}>
       {children}
     </AuthContext.Provider>
   );
@@ -88,7 +91,7 @@ const AuthProvider = ({ children }) => {
 const AuthCallback = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, setShowWelcome, setWelcomeDest } = useAuth();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
@@ -126,13 +129,9 @@ const AuthCallback = () => {
         );
 
         login(response.data.user, response.data.session_token);
-        toast.success("Welcome to Chintan!");
-
-        if (!response.data.user.onboarding_completed) {
-          navigate("/onboarding", { replace: true });
-        } else {
-          navigate("/feed", { replace: true });
-        }
+        const dest = !response.data.user.onboarding_completed ? "/onboarding" : "/feed";
+        setWelcomeDest(dest);
+        setShowWelcome(true);
       } catch (err) {
         console.error("Auth error:", err);
         toast.error("Authentication failed");
@@ -221,7 +220,7 @@ export const SuryaLogo = ({ className = "w-10 h-10" }) => (
 // Google redirects to the backend relay, which redirects back here via
 // com.chintan.app://auth/callback?session_token=...&state=...
 const NativeAuthHandler = () => {
-  const { login } = useAuth();
+  const { login, setShowWelcome, setWelcomeDest } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -268,12 +267,9 @@ const NativeAuthHandler = () => {
         const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
         console.log("auth/me response: " + response.status);
         login(response.data, sessionToken);
-        toast.success("Welcome to Chintan!");
-        if (!response.data.onboarding_completed) {
-          navigate("/onboarding", { replace: true });
-        } else {
-          navigate("/feed", { replace: true });
-        }
+        const dest = !response.data.onboarding_completed ? "/onboarding" : "/feed";
+        setWelcomeDest(dest);
+        setShowWelcome(true);
       } catch (err) {
         console.error("Native auth error:", err);
         toast.error("Authentication failed");
@@ -298,7 +294,9 @@ const NativeAuthHandler = () => {
           localStorage.setItem("chintan_session_token", sessionToken);
           const meResp = await axios.get(`${API}/auth/me`);
           login(meResp.data, sessionToken);
-          navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
+          const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
+          setWelcomeDest(dest);
+          setShowWelcome(true);
         }
       } catch (e) {
         // Not logged in — user may have cancelled
@@ -315,8 +313,17 @@ const NativeAuthHandler = () => {
 
 // Main App Router
 function AppRouter() {
+  const { showWelcome, setShowWelcome, welcomeDest } = useAuth();
+  const navigate = useNavigate();
+
   return (
     <>
+      {showWelcome && (
+        <WelcomeSplash onComplete={() => {
+          setShowWelcome(false);
+          navigate(welcomeDest, { replace: true });
+        }} />
+      )}
       <NativeAuthHandler />
       <Routes>
       <Route path="/login" element={<LoginPage />} />

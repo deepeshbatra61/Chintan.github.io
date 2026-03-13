@@ -101,6 +101,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [comments, setComments] = useState([]);
   const [showComments, setShowComments] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [commentSubmitState, setCommentSubmitState] = useState('idle'); // 'idle'|'loading'|'success'
   const [showOtherSide, setShowOtherSide] = useState(false);
   const [otherSideAnalysis, setOtherSideAnalysis] = useState(null);
   const [loadingOtherSide, setLoadingOtherSide] = useState(false);
@@ -211,15 +213,19 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
   const handleVote = async (option) => {
     if (userVoted || !poll) return;
-    try {
+    setSelectedOption(option);
+    if (window.Capacitor?.isNativePlatform()) {
+      try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+    } else {
       triggerHaptic('success');
+    }
+    try {
       const r = await axios.post(`${API}/polls/${poll.poll_id}/vote`, { option }, { withCredentials: true });
       setPoll(r.data);
       setUserVoted(true);
-      toast.success("Vote recorded!");
     } catch (error) {
       if (error.response?.data?.detail === "Already voted") setUserVoted(true);
-      toast.error(error.response?.data?.detail || "Failed to vote");
+      else setSelectedOption(null);
     }
   };
 
@@ -238,14 +244,21 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const submitComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || commentSubmitState !== 'idle') return;
+    setCommentSubmitState('loading');
     try {
-      triggerHaptic('medium');
       const r = await axios.post(`${API}/comments/${articleId}`, { content: newComment, stance: "neutral" }, { withCredentials: true });
       setComments([r.data, ...comments]);
       setNewComment("");
-      toast.success("Comment posted!");
+      setCommentSubmitState('success');
+      if (window.Capacitor?.isNativePlatform()) {
+        try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+      } else {
+        triggerHaptic('medium');
+      }
+      setTimeout(() => setCommentSubmitState('idle'), 1500);
     } catch {
+      setCommentSubmitState('idle');
       toast.error("Failed to post comment");
     }
   };
@@ -508,10 +521,17 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             />
             <button
               onClick={submitComment}
-              className="p-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              disabled={commentSubmitState !== 'idle'}
+              className="p-2 bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
               data-testid="submit-comment-btn"
             >
-              <Send className="w-5 h-5 text-white" />
+              {commentSubmitState === 'loading' ? (
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
+              ) : commentSubmitState === 'success' ? (
+                <span className="text-white text-lg leading-none">✓</span>
+              ) : (
+                <Send className="w-5 h-5 text-white" />
+              )}
             </button>
           </div>
           <ScrollArea className="h-[400px]">
@@ -579,7 +599,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                       key={option}
                       onClick={() => handleVote(option)}
                       disabled={userVoted}
-                      className={`poll-option w-full text-left ${userVoted ? "cursor-default" : "hover:border-red-500"}`}
+                      className={`poll-option w-full text-left ${userVoted ? "cursor-default" : "hover:border-red-500"} ${selectedOption === option ? 'poll-option-pop' : ''}`}
+                      style={selectedOption === option ? { borderColor: '#DC2626', background: 'rgba(220,38,38,0.15)' } : {}}
                       data-testid={`poll-option-${option}`}
                     >
                       {userVoted && <div className="poll-bar" style={{ width: `${percentage}%` }} />}
