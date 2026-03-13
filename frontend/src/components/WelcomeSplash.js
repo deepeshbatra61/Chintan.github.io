@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from "react";
 
 const WelcomeSplash = ({ onComplete }) => {
+  const [fadeIn, setFadeIn] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [taglineVisible, setTaglineVisible] = useState(false);
 
   useEffect(() => {
+    const t0 = setTimeout(() => setFadeIn(true), 50);
     const t1 = setTimeout(() => setTaglineVisible(true), 500);
     const t2 = setTimeout(() => setFadeOut(true), 2200);
     const t3 = setTimeout(() => onComplete(), 2500);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [onComplete]);
 
   return (
@@ -21,14 +23,21 @@ const WelcomeSplash = ({ onComplete }) => {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 9999,
-      opacity: fadeOut ? 0 : 1,
-      transition: 'opacity 0.3s ease',
+      opacity: fadeIn && !fadeOut ? 1 : 0,
+      transition: 'opacity 0.6s ease',
     }}>
-      <img
-        src="/logo192.png"
-        alt="Chintan"
-        style={{ width: '80px', height: '80px', marginBottom: '24px' }}
-      />
+      <div style={{
+        width: '80px',
+        height: '80px',
+        marginBottom: '24px',
+        animation: 'logo-pulse-glow 2s ease-in-out infinite',
+      }}>
+        <img
+          src="/logo192.png"
+          alt="Chintan"
+          style={{ width: '100%', height: '100%' }}
+        />
+      </div>
       <h1 style={{
         fontFamily: "'Playfair Display', Georgia, serif",
         fontSize: '2rem',

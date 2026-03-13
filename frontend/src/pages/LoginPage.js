@@ -13,7 +13,7 @@ const API = "https://chintangithubio-production.up.railway.app/api";
 const isNative = () => !!window.Capacitor?.isNativePlatform();
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { login, setShowWelcome, setWelcomeDest } = useAuth();
   const navigate = useNavigate();
   const pollingRef = useRef(null);
 
@@ -38,8 +38,9 @@ const LoginPage = () => {
     try { await Browser.close(); } catch (_) {}
     const meResp = await axios.get(`${API}/auth/me`);
     login(meResp.data, sessionToken);
-    toast.success("Welcome to Chintan!");
-    navigate(meResp.data.onboarding_completed ? "/feed" : "/onboarding", { replace: true });
+    const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
+    setWelcomeDest(dest);
+    setShowWelcome(true);
   };
 
   const startNativePoll = (state) => {

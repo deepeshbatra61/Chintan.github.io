@@ -155,6 +155,11 @@ body {
   animation: pollOptionPop 200ms ease;
 }
 
+@keyframes logo-pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 12px rgba(220,38,38,0.8)) drop-shadow(0 0 24px rgba(220,38,38,0.4)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(220,38,38,1))   drop-shadow(0 0 40px rgba(220,38,38,0.6)); }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out;
 }
