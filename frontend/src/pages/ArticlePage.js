@@ -105,14 +105,11 @@ const ArticlePage = () => {
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [expandedSections, setExpandedSections] = useState({
+    what: false,
     why: false,
     context: false,
-    impact: false
+    impact: false,
   });
-
-  // Parallax state
-  const [scrollY, setScrollY] = useState(0);
-  const onScroll = (e) => setScrollY(e.target.scrollTop);
 
   // Swipe navigation state - HORIZONTAL
   const [allArticles, setAllArticles] = useState([]);
@@ -497,24 +494,32 @@ const ArticlePage = () => {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden bg-[#0A0A0A]"
       data-testid="article-page"
+      style={{ background: '#0A0A0A' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Header */}
-      <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat, 44px)', paddingBottom: '12px' }}>
+      {/* Sticky header — outside the scroll container */}
+      <header
+        className="glass-nav px-4"
+        style={{
+          position: 'sticky',
+          top: 0,
+          paddingTop: 'var(--sat, 44px)',
+          paddingBottom: '12px',
+          zIndex: 40,
+        }}
+      >
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <button 
+          <button
             onClick={handleBack}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors"
             data-testid="back-btn"
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </button>
-          
-          {/* Progress indicator */}
+
           <div className="flex items-center gap-1">
             {allArticles.length > 0 && (
               <span className="text-gray-500 text-xs font-mono">
@@ -522,9 +527,9 @@ const ArticlePage = () => {
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={toggleBookmark}
               className="p-2 hover:bg-white/5 rounded-lg transition-colors"
               data-testid="bookmark-btn"
@@ -535,7 +540,7 @@ const ArticlePage = () => {
                 <Bookmark className="w-5 h-5 text-gray-400" />
               )}
             </button>
-            <button 
+            <button
               onClick={shareArticle}
               className="p-2 hover:bg-white/5 rounded-lg transition-colors"
               data-testid="share-btn"
@@ -546,62 +551,81 @@ const ArticlePage = () => {
         </div>
       </header>
 
-      {/* Hero Image */}
-      <div className="relative flex-shrink-0 overflow-hidden" style={{ height: '220px' }}>
-        <img
-          src={article.image_url}
-          alt={article.title}
-          className="w-full h-full object-cover"
-          style={{ transform: `translateY(${Math.min(scrollY * 0.4, 80)}px)`, transition: 'transform 0.1s linear', willChange: 'transform' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/30 to-transparent" />
-      </div>
+      {/* Single unified scroll container — hero image scrolls with content */}
+      <main
+        style={{
+          paddingTop: 'calc(var(--sat, 44px) + 56px)',
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          paddingBottom: '80px',
+        }}
+      >
+        {/* Hero image — natural flow, no parallax */}
+        <div style={{ width: '100%', height: '220px', overflow: 'hidden' }}>
+          <img
+            src={article.image_url}
+            alt={article.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
 
-      {/* Breadcrumb row: CATEGORY • SOURCE • DATE */}
-      <div className="flex-shrink-0 flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 font-mono" style={{ padding: '12px 16px' }}>
-        {article.category && <span className="text-red-500 uppercase tracking-wider">{article.category}</span>}
-        {article.is_breaking && <><span>•</span><span className="text-red-400">Breaking</span></>}
-        {article.is_developing && !article.is_breaking && <><span>•</span><span className="text-amber-500">Developing</span></>}
-        {(article.source || article.domain || article.publisher) && (
-          <><span>•</span><span>{article.source || article.domain || article.publisher}</span></>
-        )}
-        {article.published_at && (
-          <><span>•</span><span>{new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
-        )}
-      </div>
-
-      {/* Scrollable content */}
-      <main className="flex-1 overflow-y-auto pb-24 px-4" onScroll={onScroll}>
-        <article className="max-w-3xl mx-auto">
-          <motion.h1
-            className="font-serif font-bold text-white mb-6 leading-tight"
-            style={{ fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', padding: '8px 0' }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {article.title}
-          </motion.h1>
-
-          {article.what && (
-            <p className="text-gray-300 mb-8 leading-relaxed">
-              {truncateWords(article.what, 60)}
-            </p>
+        {/* Breadcrumb: CATEGORY • SOURCE • DATE */}
+        <div
+          style={{
+            padding: '10px 16px',
+            fontSize: '11px',
+            color: '#888',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          {article.category && (
+            <span style={{ color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {article.category}
+            </span>
           )}
+          {article.is_breaking && <><span>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
+          {article.is_developing && !article.is_breaking && <><span>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
+          {(article.source || article.domain || article.publisher) && (
+            <><span>•</span><span>{article.source || article.domain || article.publisher}</span></>
+          )}
+          {article.published_at && (
+            <><span>•</span><span>{new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
+          )}
+        </div>
 
-          {/* Collapsible Sections */}
+        {/* Headline */}
+        <h1
+          style={{
+            padding: '0 16px 12px',
+            fontSize: 'clamp(1.3rem, 4vw, 1.7rem)',
+            fontWeight: '700',
+            lineHeight: '1.3',
+            color: '#ffffff',
+          }}
+        >
+          {article.title}
+        </h1>
+
+        <div className="px-4 max-w-3xl mx-auto">
+          {/* Accordions — What, Why, Context, Impact */}
           <div className="space-y-3 mb-8">
             {[
-              { key: "why", content: article.why },
-              { key: "context", content: article.context },
-              { key: "impact", content: article.impact }
-            ].map(section => (
-              <Collapsible 
+              { key: 'what', content: article.what },
+              { key: 'why', content: article.why },
+              { key: 'context', content: article.context },
+              { key: 'impact', content: article.impact },
+            ].filter(s => s.content).map(section => (
+              <Collapsible
                 key={section.key}
                 open={expandedSections[section.key]}
                 onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [section.key]: open }))}
               >
                 <CollapsibleTrigger asChild>
-                  <button 
+                  <button
                     className="collapsible-header w-full"
                     data-testid={`section-${section.key}`}
                   >
@@ -618,19 +642,15 @@ const ArticlePage = () => {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <motion.div
-                    className="px-4 py-4 text-gray-400 leading-relaxed bg-white/[0.02] rounded-b-lg border-x border-b border-white/5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
+                  <div className="px-4 py-4 text-gray-400 leading-relaxed bg-white/[0.02] rounded-b-lg border-x border-b border-white/5">
                     {truncateWords(section.content, 55)}
-                  </motion.div>
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             ))}
           </div>
 
-          {/* AI Questions */}
+          {/* AI Questions (Think Deeper) */}
           {aiQuestions.length > 0 && (
             <div className="glass-card rounded-xl p-6 mb-8">
               <button
@@ -686,7 +706,7 @@ const ArticlePage = () => {
             </button>
           </div>
 
-          {/* Swipe hint for mobile - HORIZONTAL */}
+          {/* Swipe hint */}
           <div className="text-center py-4 md:hidden">
             <div className="flex items-center justify-center gap-4 text-gray-600 text-xs">
               {currentIndex > 0 && (
@@ -702,7 +722,7 @@ const ArticlePage = () => {
               )}
             </div>
           </div>
-        </article>
+        </div>
       </main>
 
       {/* Action Bar */}
