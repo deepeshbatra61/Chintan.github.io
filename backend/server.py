@@ -2178,28 +2178,27 @@ async def get_ai_questions(article_id: str):
     if not ANTHROPIC_API_KEY:
         # Return default questions
         return {"questions": [
-            f"What are the immediate implications of this?",
+            "What are the immediate implications of this?",
             "Who benefits and who loses from this development?",
-            "What should we watch for in the coming weeks?"
         ]}
 
     try:
-        prompt = f"""Generate exactly 3 smart questions for this article that encourage deep thinking:
+        prompt = f"""Generate exactly 2 smart questions for this article that encourage deep thinking. Each question must be 15 words or fewer.
 
 Title: {article['title']}
 Summary: {article['description']}
 Impact: {article['impact']}
 
-Return only 3 questions, one per line, no numbering or bullet points."""
+Return only 2 questions, one per line, no numbering or bullet points."""
 
         response = await _llm(
-            system="Generate 3 thought-provoking questions that encourage critical thinking about news articles. Questions should be concise and engaging. No numbering or bullet points.",
+            system="Generate 2 thought-provoking questions that encourage critical thinking about news articles. Each question must be 15 words or fewer. No numbering or bullet points.",
             user_content=prompt,
-            max_tokens=256,
+            max_tokens=128,
         )
-        
-        questions = [q.strip().lstrip('0123456789.-) ') for q in response.strip().split('\n') if q.strip()][:3]
-        
+
+        questions = [q.strip().lstrip('0123456789.-) ') for q in response.strip().split('\n') if q.strip()][:2]
+
         # Cache result
         cache_doc = {
             "article_id": article_id,
@@ -2207,15 +2206,14 @@ Return only 3 questions, one per line, no numbering or bullet points."""
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.ai_questions_cache.insert_one(cache_doc)
-        
+
         return {"questions": questions}
-    
+
     except Exception as e:
         logger.error(f"AI error: {e}")
         return {"questions": [
             "What are the key takeaways from this?",
             "How might this affect you personally?",
-            "What happens next?"
         ]}
 
 # ===================== POLLS ROUTES =====================

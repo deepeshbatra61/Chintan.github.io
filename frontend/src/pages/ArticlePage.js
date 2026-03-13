@@ -213,7 +213,7 @@ const ArticlePage = () => {
   const fetchAIQuestions = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true });
-      setAiQuestions((response.data.questions || []).slice(0, 3));
+      setAiQuestions((response.data.questions || []).slice(0, 2));
     } catch (error) {
       console.error("Error fetching AI questions:", error);
     }
@@ -644,8 +644,8 @@ const ArticlePage = () => {
                   background: 'rgba(255,255,255,0.05)',
                   borderRadius: '12px',
                   marginBottom: '8px',
-                  marginLeft: '16px',
-                  marginRight: '16px',
+                  marginLeft: '8px',
+                  marginRight: '8px',
                   border: '1px solid rgba(255,255,255,0.08)',
                   overflow: 'hidden',
                 }}>
@@ -660,6 +660,7 @@ const ArticlePage = () => {
                         padding: '14px 16px',
                         background: 'none',
                         cursor: 'pointer',
+                        textAlign: 'left',
                       }}
                     >
                       <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -673,7 +674,7 @@ const ArticlePage = () => {
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div style={{ padding: '0 16px 16px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px' }}>
+                    <div style={{ padding: '0 12px 16px', paddingLeft: '12px', paddingRight: '12px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px', textAlign: 'left' }}>
                       {truncateWords(section.content, 55)}
                     </div>
                   </CollapsibleContent>
@@ -701,7 +702,7 @@ const ArticlePage = () => {
                       className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
                       data-testid={`ai-question-${idx}`}
                     >
-                      {truncateWords(question, 20)}
+                      {truncateWords(question, 15)}
                     </button>
                   ))}
                 </div>
