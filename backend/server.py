@@ -2890,6 +2890,13 @@ async def admin_test_newsapi():
         ],
     }
 
+@api_router.post("/admin/trigger-ingest")
+async def admin_trigger_ingest():
+    """Manually trigger one ingest cycle immediately (runs in background)."""
+    asyncio.create_task(_run_ingest_cycle())
+    return {"status": "ingest cycle started"}
+
+
 @api_router.post("/admin/reset-summarization")
 async def admin_reset_summarization(body: dict):
     """Reset claude_summarized and remove sections on N articles for re-processing."""
