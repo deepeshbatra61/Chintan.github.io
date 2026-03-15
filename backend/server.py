@@ -21,6 +21,7 @@ import re
 import httpx
 import redis.asyncio as aioredis
 import anthropic
+import pytz
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -104,177 +105,244 @@ async def _generate_poll_for_article(article: dict) -> None:
     logger.info(f"Auto-generated poll for {article_id}: {data['question']}")
 
 
+_CREDIT_EXHAUSTED_MSG = "credit balance is too low"
+
+def _is_credit_exhausted(err) -> bool:
+    return _CREDIT_EXHAUSTED_MSG in str(err).lower()
+
+
+async def _run_ingest_cycle() -> None:
+    """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
+    # ── 0. Distributed lock (Redis only) ────────────────────────────────────
+    if _redis:
+        acquired = await _redis.set("ingestion:lock", "1", nx=True, ex=4 * 60 * 60)
+        if not acquired:
+            logger.info("Ingest cycle: lock held by another instance, skipping")
+            return
+
+    # ── 1. Fetch & upsert articles ───────────────────────────────────────────
+    api_articles = await fetch_from_newsapi()
+    if api_articles:
+        new_count = 0
+        updated_count = 0
+        for article in api_articles:
+            existing = await db.articles.find_one({"article_id": article["article_id"]})
+            if not existing:
+                await db.articles.insert_one(article)
+                new_count += 1
+            else:
+                await db.articles.update_one(
+                    {"article_id": article["article_id"]},
+                    {"$set": {
+                        "title": article["title"],
+                        "description": article["description"],
+                        "content": article["content"],
+                        "image_url": article["image_url"],
+                        "published_at": article["published_at"],
+                        "is_developing": article["is_developing"],
+                        "is_breaking": article["is_breaking"],
+                    }},
+                )
+                updated_count += 1
+        logger.info(
+            f"Background ingestor: {new_count} new, {updated_count} updated "
+            f"(total fetched: {len(api_articles)})"
+        )
+    else:
+        logger.warning("Background ingestor: fetch_from_newsapi returned 0 articles")
+
+    # ── 2. Poll generation removed — handled on-demand only ─────────────────
+
+    # ── 3. Claude categorization (Haiku — cheap, good enough) ───────────────
+    if ANTHROPIC_API_KEY:
+        _valid_cats = {"Technology", "Politics", "Business", "Sports", "Entertainment", "Health", "Science", "World"}
+        to_categorize = await db.articles.find(
+            {"claude_categorized": {"$ne": True}, "claude_skip": {"$ne": True}},
+            {"_id": 0, "article_id": 1, "title": 1},
+        ).limit(30).to_list(30)
+
+        for art in to_categorize:
+            try:
+                msg = await _anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=20,
+                    system="You categorize news articles. Return only the category name, nothing else.",
+                    messages=[{"role": "user", "content": (
+                        "Categorize this news article into exactly one of these categories: "
+                        "Technology, Politics, Business, Sports, Entertainment, Health, Science, World. "
+                        f"Article title: {art['title']}. Return only the category name, nothing else."
+                    )}],
+                )
+                cat = msg.content[0].text.strip()
+                if cat in _valid_cats:
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"category": cat, "claude_categorized": True}},
+                    )
+            except Exception as cat_err:
+                if _is_credit_exhausted(cat_err):
+                    logger.warning("Credits exhausted — stopping ingest cycle")
+                    return
+                logger.error(f"Claude categorization error for {art['article_id']}: {cat_err}")
+                result = await db.articles.find_one_and_update(
+                    {"article_id": art["article_id"]},
+                    {"$inc": {"claude_fail_count": 1}},
+                    return_document=True,
+                    projection={"_id": 0, "claude_fail_count": 1},
+                )
+                if result and result.get("claude_fail_count", 0) >= 3:
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"claude_skip": True}},
+                    )
+                    logger.info(f"Marked claude_skip=True for {art['article_id']} after 3 failures")
+
+    # ── 4. Claude summarization (Sonnet) ────────────────────────────────────
+    if ANTHROPIC_API_KEY:
+        to_summarize = await db.articles.find(
+            {"claude_summarized": {"$ne": True}, "claude_skip": {"$ne": True}},
+            {"_id": 0, "article_id": 1, "title": 1, "content": 1},
+        ).limit(30).to_list(30)
+
+        for art in to_summarize:
+            try:
+                raw = await _llm(
+                    system="You summarize news articles into structured sections. Return only valid JSON.",
+                    user_content=(
+                        "You are summarizing a news article for the Chintan app. "
+                        "Generate four distinct sections for this article. "
+                        "Return as JSON only with keys: what, why, context, impact. "
+                        "Each value must be 40-80 words, maximum 6 lines, specific to this article only, not generic. "
+                        f"Article title: {art['title']}. "
+                        f"Article content: {art.get('content', '')}"
+                    ),
+                    max_tokens=512,
+                )
+                raw_s = raw.strip()
+                if raw_s.startswith("```"):
+                    raw_s = raw_s.split("```")[1]
+                    if raw_s.startswith("json"):
+                        raw_s = raw_s[4:]
+                    raw_s = raw_s.strip()
+                start = raw_s.find("{")
+                end = raw_s.rfind("}") + 1
+                if start >= 0 and end > start:
+                    data = json.loads(raw_s[start:end])
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {
+                            "what": str(data.get("what", ""))[:500],
+                            "why": str(data.get("why", ""))[:500],
+                            "context": str(data.get("context", ""))[:500],
+                            "impact": str(data.get("impact", ""))[:500],
+                            "claude_summarized": True,
+                        }},
+                    )
+            except Exception as sum_err:
+                if _is_credit_exhausted(sum_err):
+                    logger.warning("Credits exhausted — stopping ingest cycle")
+                    return
+                logger.error(f"Claude summarization error for {art['article_id']}: {sum_err}")
+                result = await db.articles.find_one_and_update(
+                    {"article_id": art["article_id"]},
+                    {"$inc": {"claude_fail_count": 1}},
+                    return_document=True,
+                    projection={"_id": 0, "claude_fail_count": 1},
+                )
+                if result and result.get("claude_fail_count", 0) >= 3:
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"claude_skip": True}},
+                    )
+                    logger.info(f"Marked claude_skip=True for {art['article_id']} after 3 failures")
+
+    # ── 5. Tag new articles to watched developing stories ────────────────────
+    if api_articles:
+        watched = await db.developing_stories.find(
+            {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1}
+        ).to_list(100)
+        for topic in watched:
+            keywords = topic.get("keywords", [])
+            matched_ids = []
+            for article in api_articles:
+                haystack = (
+                    article.get("title", "") + " " + article.get("description", "")
+                ).lower()
+                if any(kw.lower() in haystack for kw in keywords):
+                    matched_ids.append(article["article_id"])
+            if matched_ids:
+                await db.developing_stories.update_one(
+                    {"story_id": topic["story_id"]},
+                    {
+                        "$addToSet": {"article_ids": {"$each": matched_ids}},
+                        "$set": {"last_updated": datetime.now(timezone.utc).isoformat()},
+                    },
+                )
+                logger.info(f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}")
+
+
+async def _run_cleanup_cycle() -> None:
+    """Delete stale documents per retention policy."""
+    now = datetime.now(timezone.utc)
+    articles_cutoff = (now - timedelta(days=7)).isoformat()
+    polls_cutoff    = (now - timedelta(days=30)).isoformat()
+    cache_cutoff    = (now - timedelta(days=7)).isoformat()
+
+    a_res  = await db.articles.delete_many({"published_at": {"$lt": articles_cutoff}})
+    p_res  = await db.polls.delete_many({"created_at": {"$lt": polls_cutoff}})
+    os_res = await db.other_side_cache.delete_many({"created_at": {"$lt": cache_cutoff}})
+    aq_res = await db.ai_questions_cache.delete_many({"created_at": {"$lt": cache_cutoff}})
+    logger.info(
+        f"Cleanup: {a_res.deleted_count} articles, {p_res.deleted_count} polls, "
+        f"{os_res.deleted_count} other-side, {aq_res.deleted_count} ai-questions deleted"
+    )
+
+
 async def _background_news_ingestor() -> None:
-    """Fetch news + generate missing polls every 30 min. Never crashes the app."""
+    """IST time-based scheduler: ingest at 6 AM, 1 PM, 8 PM; cleanup at 3 AM."""
+    IST = pytz.timezone("Asia/Kolkata")
+    INGEST_HOURS  = [6, 13, 20]
+    CLEANUP_HOUR  = 3
+    ALL_RUN_HOURS = sorted(INGEST_HOURS + [CLEANUP_HOUR])  # [3, 6, 13, 20]
+
+    # Run one ingest immediately on startup to populate fresh content
+    try:
+        logger.info("Ingestor: running initial ingest cycle on startup")
+        await _run_ingest_cycle()
+    except Exception as exc:
+        logger.error(f"Ingestor startup cycle error: {exc}")
+
     while True:
         try:
-            # ── 0. Distributed lock (Redis only) — skip if another instance is running ─
-            if _redis:
-                acquired = await _redis.set(
-                    "ingestion:lock", "1", nx=True, ex=25 * 60
-                )
-                if not acquired:
-                    logger.info(
-                        "Background ingestor: lock held by another instance, skipping"
-                    )
-                    await asyncio.sleep(30 * 60)
-                    continue
+            now = datetime.now(IST)
+            next_hour = next((h for h in ALL_RUN_HOURS if now.hour < h), None)
 
-            # ── 1. Fetch & upsert articles ────────────────────────────────
-            api_articles = await fetch_from_newsapi()
-            if api_articles:
-                new_count = 0
-                updated_count = 0
-                for article in api_articles:
-                    existing = await db.articles.find_one(
-                        {"article_id": article["article_id"]}
-                    )
-                    if not existing:
-                        await db.articles.insert_one(article)
-                        new_count += 1
-                    else:
-                        await db.articles.update_one(
-                            {"article_id": article["article_id"]},
-                            {"$set": {
-                                "title": article["title"],
-                                "description": article["description"],
-                                "content": article["content"],
-                                "image_url": article["image_url"],
-                                "published_at": article["published_at"],
-                                "is_developing": article["is_developing"],
-                                "is_breaking": article["is_breaking"],
-                            }},
-                        )
-                        updated_count += 1
-                logger.info(
-                    f"Background ingestor: {new_count} new, {updated_count} updated "
-                    f"(total fetched: {len(api_articles)})"
+            if next_hour is None:
+                # Past 8 PM — sleep until 3 AM tomorrow
+                tomorrow = (now + timedelta(days=1)).replace(
+                    hour=3, minute=0, second=0, microsecond=0
                 )
+                sleep_seconds = (tomorrow - now).total_seconds()
+                next_hour = 3
             else:
-                logger.warning("Background ingestor: fetch_from_newsapi returned 0 articles")
+                next_run = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
+                sleep_seconds = (next_run - now).total_seconds()
 
-            # ── 2. Auto-generate polls for articles that lack one ─────────
-            if ANTHROPIC_API_KEY:
-                covered = set(await db.polls.distinct("article_id"))
-                needing = await db.articles.find(
-                    {"article_id": {"$nin": list(covered)}},
-                    {"_id": 0, "article_id": 1, "title": 1, "description": 1},
-                ).sort("published_at", -1).limit(10).to_list(10)
+            logger.info(f"Ingestor: next run at {next_hour:02d}:00 IST in {sleep_seconds/3600:.1f}h")
+            await asyncio.sleep(sleep_seconds)
 
-                for article in needing:
-                    try:
-                        await _generate_poll_for_article(article)
-                    except Exception as poll_err:
-                        logger.error(
-                            f"Poll generation failed for "
-                            f"{article['article_id']}: {poll_err}"
-                        )
+            now_run = datetime.now(IST)
+            if now_run.hour == CLEANUP_HOUR:
+                await _run_cleanup_cycle()
+            else:
+                await _run_ingest_cycle()
 
-            # ── 3. Claude categorization for uncategorized articles ───────
-            if ANTHROPIC_API_KEY:
-                _valid_cats = {"Technology", "Politics", "Business", "Sports", "Entertainment", "Health", "Science", "World"}
-                to_categorize = await db.articles.find(
-                    {"claude_categorized": {"$ne": True}},
-                    {"_id": 0, "article_id": 1, "title": 1},
-                ).limit(30).to_list(30)
-
-                for art in to_categorize:
-                    try:
-                        raw = await _llm(
-                            system="You categorize news articles. Return only the category name, nothing else.",
-                            user_content=(
-                                "Categorize this news article into exactly one of these categories: "
-                                "Technology, Politics, Business, Sports, Entertainment, Health, Science, World. "
-                                f"Article title: {art['title']}. Return only the category name, nothing else."
-                            ),
-                            max_tokens=20,
-                        )
-                        cat = raw.strip()
-                        if cat in _valid_cats:
-                            await db.articles.update_one(
-                                {"article_id": art["article_id"]},
-                                {"$set": {"category": cat, "claude_categorized": True}},
-                            )
-                    except Exception as cat_err:
-                        logger.error(f"Claude categorization error for {art['article_id']}: {cat_err}")
-
-            # ── 4. Claude summarization for unsummarized articles ─────────
-            if ANTHROPIC_API_KEY:
-                to_summarize = await db.articles.find(
-                    {"claude_summarized": {"$ne": True}},
-                    {"_id": 0, "article_id": 1, "title": 1, "content": 1},
-                ).limit(30).to_list(30)
-
-                for art in to_summarize:
-                    try:
-                        raw = await _llm(
-                            system="You summarize news articles into structured sections. Return only valid JSON.",
-                            user_content=(
-                                "You are summarizing a news article for the Chintan app. "
-                                "Generate four distinct sections for this article. "
-                                "Return as JSON only with keys: what, why, context, impact. "
-                                "Each value must be 40-80 words, maximum 6 lines, specific to this article only, not generic. "
-                                f"Article title: {art['title']}. "
-                                f"Article content: {art.get('content', '')}"
-                            ),
-                            max_tokens=512,
-                        )
-                        raw_s = raw.strip()
-                        if raw_s.startswith("```"):
-                            raw_s = raw_s.split("```")[1]
-                            if raw_s.startswith("json"):
-                                raw_s = raw_s[4:]
-                            raw_s = raw_s.strip()
-                        start = raw_s.find("{")
-                        end = raw_s.rfind("}") + 1
-                        if start >= 0 and end > start:
-                            data = json.loads(raw_s[start:end])
-                            await db.articles.update_one(
-                                {"article_id": art["article_id"]},
-                                {"$set": {
-                                    "what": str(data.get("what", ""))[:500],
-                                    "why": str(data.get("why", ""))[:500],
-                                    "context": str(data.get("context", ""))[:500],
-                                    "impact": str(data.get("impact", ""))[:500],
-                                    "claude_summarized": True,
-                                }},
-                            )
-                    except Exception as sum_err:
-                        logger.error(f"Claude summarization error for {art['article_id']}: {sum_err}")
-
-            # ── 5. Tag new articles to watched developing stories ─────────
-            if api_articles:
-                watched = await db.developing_stories.find(
-                    {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1}
-                ).to_list(100)
-                for topic in watched:
-                    keywords = topic.get("keywords", [])
-                    matched_ids = []
-                    for article in api_articles:
-                        haystack = (
-                            article.get("title", "") + " " + article.get("description", "")
-                        ).lower()
-                        if any(kw.lower() in haystack for kw in keywords):
-                            matched_ids.append(article["article_id"])
-                    if matched_ids:
-                        await db.developing_stories.update_one(
-                            {"story_id": topic["story_id"]},
-                            {
-                                "$addToSet": {"article_ids": {"$each": matched_ids}},
-                                "$set": {"last_updated": datetime.now(timezone.utc).isoformat()},
-                            },
-                        )
-                        logger.info(
-                            f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}"
-                        )
-
-            await asyncio.sleep(30 * 60)  # 30-minute cadence; cancellable
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
-            raise                          # allow clean shutdown
+            raise
         except Exception as exc:
             logger.error(f"Background news ingestor error: {exc}")
-            await asyncio.sleep(30 * 60)  # wait before retry
+            await asyncio.sleep(3600)  # 1h back-off on unexpected error
 
 
 @asynccontextmanager
@@ -1510,7 +1578,7 @@ async def fetch_from_newsapi() -> list:
                     "q": _q,
                     "language": "en",
                     "sortBy": "publishedAt",
-                    "pageSize": 30,
+                    "pageSize": 100,
                     "apiKey": NEWSAPI_KEY,
                 },
             )
@@ -1532,9 +1600,9 @@ async def fetch_from_newsapi() -> list:
             resp = await client.get(
                 "https://newsapi.org/v2/everything",
                 params={
-                    "domains": "thehindu.com,livemint.com,indianexpress.com",
+                    "domains": "thehindu.com,livemint.com,indianexpress.com,ndtv.com,hindustantimes.com,timesofindia.indiatimes.com,business-standard.com,financialexpress.com,scroll.in,thewire.in,deccanherald.com,telegraphindia.com,theprint.in,firstpost.com,outlookindia.com",
                     "sortBy": "publishedAt",
-                    "pageSize": 30,
+                    "pageSize": 100,
                     "apiKey": NEWSAPI_KEY,
                 },
             )
@@ -1552,7 +1620,7 @@ async def fetch_from_newsapi() -> list:
             logger.error(f"NewsAPI everything?domains error: {e}")
 
     results = []
-    for url, a in list(seen.items())[:30]:
+    for url, a in list(seen.items())[:200]:
         title = clean_newsapi_text((a.get("title") or "").strip())
         description = clean_newsapi_text((a.get("description") or "").strip())
         raw_content = clean_newsapi_text((a.get("content") or description).strip())
@@ -1634,11 +1702,13 @@ async def get_articles(
     subcategory: Optional[str] = None,
     developing: Optional[bool] = None,
     limit: int = 20,
-    skip: int = 0,
+    page: int = 1,
     request: Request = None,
     refresh: bool = False
 ):
     """Get articles from DB with personalised scoring."""
+
+    skip = (page - 1) * limit
 
     # Explicit query-param filters (always applied at DB level)
     query: dict = {}
@@ -1649,6 +1719,10 @@ async def get_articles(
     if developing is not None:
         query["is_developing"] = developing
 
+    # Only return articles from the last 7 days
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    query["published_at"] = {"$gte": seven_days_ago.isoformat()}
+
     user = await get_current_user(request) if request else None
     user_interests: List[str] = user.get("interests", []) if user else []
 
@@ -1658,8 +1732,8 @@ async def get_articles(
             "published_at", -1
         ).skip(skip).limit(limit).to_list(limit)
 
-    # ── Authenticated path: fetch 50 candidates, score, return top 10 ─────────
-    CANDIDATE_LIMIT = 50
+    # ── Authenticated path: fetch candidates, score, paginate ─────────────────
+    CANDIDATE_LIMIT = max(200, skip + limit + 50)
     candidates = await db.articles.find(query, {"_id": 0}).sort(
         "published_at", -1
     ).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT)
@@ -1713,7 +1787,7 @@ async def get_articles(
         for a in candidates
     ]
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [a for _, a in scored[:10]]
+    return [a for _, a in scored[skip:skip + limit]]
 
 @api_router.get("/articles/developing")
 async def get_developing_stories():
