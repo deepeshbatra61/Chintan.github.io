@@ -111,6 +111,47 @@ def _is_credit_exhausted(err) -> bool:
     return _CREDIT_EXHAUSTED_MSG in str(err).lower()
 
 
+def _strip_html(text: str) -> str:
+    """Remove HTML tags and NewsAPI junk patterns from article text."""
+    if not text:
+        return ""
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    clean = re.sub(r'\s+', ' ', clean)
+    clean = re.sub(r'\[.*?\]', '', clean)
+    return clean.strip()
+
+
+def _validate_sections(sections: list) -> bool:
+    """Return True only if every section content is 35-55 words."""
+    if not isinstance(sections, list) or len(sections) != 3:
+        return False
+    for section in sections:
+        word_count = len(str(section.get("content", "")).split())
+        if word_count < 35 or word_count > 55:
+            return False
+    return True
+
+
+def _parse_sections(raw: str) -> list | None:
+    """Extract and parse the sections array from a raw LLM response string."""
+    raw_s = raw.strip()
+    if raw_s.startswith("```"):
+        raw_s = raw_s.split("```")[1]
+        if raw_s.startswith("json"):
+            raw_s = raw_s[4:]
+        raw_s = raw_s.strip()
+    start = raw_s.find("{")
+    end = raw_s.rfind("}") + 1
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(raw_s[start:end])
+        sections = data.get("sections", [])
+        return sections if isinstance(sections, list) and len(sections) == 3 else None
+    except json.JSONDecodeError:
+        return None
+
+
 async def _run_ingest_cycle() -> None:
     """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
     # ── 0. Distributed lock (Redis only) ────────────────────────────────────
@@ -201,66 +242,89 @@ async def _run_ingest_cycle() -> None:
     if ANTHROPIC_API_KEY:
         to_summarize = await db.articles.find(
             {"claude_summarized": {"$ne": True}, "claude_skip": {"$ne": True}},
-            {"_id": 0, "article_id": 1, "title": 1, "content": 1},
+            {"_id": 0, "article_id": 1, "title": 1, "content": 1, "description": 1},
         ).limit(30).to_list(30)
+
+        _SUM_SYSTEM = (
+            "You are the Chief Editor for a premium news app called Chintan. "
+            "Distill raw news articles into exactly three concise, impactful "
+            "sub-sections. Respond with ONLY valid JSON, no explanation, "
+            "no markdown, no preamble."
+        )
+        _SUM_USER_TEMPLATE = (
+            "{retry_prefix}"
+            "Create three editorial sub-sections for this news article.\n\n"
+            "STRICT RULES:\n"
+            "1. Each subtext MUST be strictly between 40 and 50 words. Count before outputting.\n"
+            "2. Zero jargon - clear, elegant, accessible English only\n"
+            "3. Clean prose only - no hashtags, emojis, asterisks, bullets, markdown\n"
+            "4. No filler phrases like 'This article discusses...'\n"
+            "5. Each heading: maximum 5 words\n\n"
+            "The three sections must tell an incremental story:\n"
+            "- Section 1 'Core Context': What actually happened and why it matters right now\n"
+            "- Section 2 'Critical Detail': The most important data point, quote, or underlying factor\n"
+            "- Section 3 'Broader Impact': What happens next, market effect, or future outlook\n\n"
+            "Return ONLY this JSON:\n"
+            "{{\n"
+            "  \"sections\": [\n"
+            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}},\n"
+            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}},\n"
+            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}}\n"
+            "  ]\n"
+            "}}\n\n"
+            "Article Title: {title}\n"
+            "Article Content: {content}"
+        )
+        _RETRY_PREFIX = (
+            "IMPORTANT: Your previous response had incorrect word counts. "
+            "Each section content MUST be between 40-50 words. Count carefully.\n\n"
+        )
 
         for art in to_summarize:
             try:
-                raw = await _llm(
-                    model="claude-haiku-4-5-20251001",
-                    system=(
-                        "You are the Chief Editor for a premium news app called Chintan. "
-                        "Distill raw news articles into exactly three concise, impactful "
-                        "sub-sections. Respond with ONLY valid JSON, no explanation, "
-                        "no markdown, no preamble."
-                    ),
-                    user_content=(
-                        "Create three editorial sub-sections for this news article.\n\n"
-                        "STRICT RULES:\n"
-                        "1. Each subtext MUST be strictly between 40 and 50 words. Count before outputting.\n"
-                        "2. Zero jargon - clear, elegant, accessible English only\n"
-                        "3. Clean prose only - no hashtags, emojis, asterisks, bullets, markdown\n"
-                        "4. No filler phrases like 'This article discusses...'\n"
-                        "5. Each heading: maximum 5 words\n\n"
-                        "The three sections must tell an incremental story:\n"
-                        "- Section 1 'Core Context': What actually happened and why it matters right now\n"
-                        "- Section 2 'Critical Detail': The most important data point, quote, or underlying factor\n"
-                        "- Section 3 'Broader Impact': What happens next, market effect, or future outlook\n\n"
-                        "Return ONLY this JSON:\n"
-                        "{\n"
-                        "  \"sections\": [\n"
-                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"},\n"
-                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"},\n"
-                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}\n"
-                        "  ]\n"
-                        "}\n\n"
-                        f"Article Title: {art['title']}\n"
-                        f"Article Content: {art.get('content', '')}"
-                    ),
-                    max_tokens=600,
-                )
-                raw_s = raw.strip()
-                if raw_s.startswith("```"):
-                    raw_s = raw_s.split("```")[1]
-                    if raw_s.startswith("json"):
-                        raw_s = raw_s[4:]
-                    raw_s = raw_s.strip()
-                start = raw_s.find("{")
-                end = raw_s.rfind("}") + 1
-                if start >= 0 and end > start:
-                    data = json.loads(raw_s[start:end])
-                    sections = data.get("sections", [])
-                    if isinstance(sections, list) and len(sections) == 3:
-                        await db.articles.update_one(
-                            {"article_id": art["article_id"]},
-                            {"$set": {
-                                "sections": [
-                                    {"heading": str(s.get("heading", ""))[:80], "content": str(s.get("content", ""))[:400]}
-                                    for s in sections
-                                ],
-                                "claude_summarized": True,
-                            }},
-                        )
+                clean_content = _strip_html(art.get("content", ""))
+                clean_desc = _strip_html(art.get("description", ""))
+                article_text = clean_content if clean_content else clean_desc
+
+                sections = None
+                for attempt in range(3):  # initial + 2 retries
+                    retry_prefix = _RETRY_PREFIX if attempt > 0 else ""
+                    raw = await _llm(
+                        model="claude-haiku-4-5-20251001",
+                        system=_SUM_SYSTEM,
+                        user_content=_SUM_USER_TEMPLATE.format(
+                            retry_prefix=retry_prefix,
+                            title=art["title"],
+                            content=article_text,
+                        ),
+                        max_tokens=600,
+                    )
+                    parsed = _parse_sections(raw)
+                    if parsed is not None and _validate_sections(parsed):
+                        sections = parsed
+                        break
+                    logger.warning(
+                        f"Summarization attempt {attempt + 1} failed validation for {art['article_id']}"
+                        + (f" (word counts: {[len(s.get('content','').split()) for s in (parsed or [])]})" if parsed else " (parse error)")
+                    )
+
+                if sections is not None:
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {
+                            "sections": [
+                                {"heading": str(s.get("heading", ""))[:80], "content": str(s.get("content", ""))[:400]}
+                                for s in sections
+                            ],
+                            "claude_summarized": True,
+                        }},
+                    )
+                else:
+                    logger.error(f"Summarization failed after 3 attempts for {art['article_id']} — marking summarization_failed")
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"summarization_failed": True, "claude_summarized": True}},
+                    )
             except Exception as sum_err:
                 if _is_credit_exhausted(sum_err):
                     logger.warning("Credits exhausted — stopping ingest cycle")
