@@ -2890,6 +2890,20 @@ async def admin_test_newsapi():
         ],
     }
 
+@api_router.post("/admin/reset-summarization")
+async def admin_reset_summarization(body: dict):
+    """Reset claude_summarized and remove sections on N articles for re-processing."""
+    limit = max(1, min(int(body.get("limit", 5)), 200))
+    articles = await db.articles.find(
+        {}, {"_id": 0, "article_id": 1}
+    ).limit(limit).to_list(limit)
+    ids = [a["article_id"] for a in articles]
+    result = await db.articles.update_many(
+        {"article_id": {"$in": ids}},
+        {"$set": {"claude_summarized": False}, "$unset": {"sections": "", "summarization_failed": ""}},
+    )
+    return {"reset_count": result.modified_count, "article_ids": ids}
+
 # ===================== DEVELOPING STORIES =====================
 
 @api_router.get("/developing-stories")
