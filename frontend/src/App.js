@@ -140,7 +140,7 @@ const AuthCallback = () => {
     };
 
     processAuth();
-  }, [location, login, navigate]);
+  }, [location, login, navigate, setShowWelcome, setWelcomeDest]);
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
@@ -306,7 +306,7 @@ const NativeAuthHandler = () => {
     CapApp.addListener("appUrlOpen", handleUrl);
     CapApp.addListener("browserFinished", handleBrowserFinished);
     return () => { CapApp.removeAllListeners(); };
-  }, [login, navigate]);
+  }, [login, navigate, setShowWelcome, setWelcomeDest]);
 
   return null;
 };
