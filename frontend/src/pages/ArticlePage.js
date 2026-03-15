@@ -35,46 +35,17 @@ const triggerHaptic = (type = 'light') => {
   }
 };
 
-const getSectionLabel = (key, category) => {
-  const labels = {
-    what: {
-      default: "The Story",
-      Science: "Discovery",
-      Politics: "Decision",
-      Sports: "Match Update",
-      Business: "Development",
-      Technology: "Innovation",
-      Entertainment: "Premiere"
-    },
-    why: {
-      default: "Significance",
-      Science: "Implications",
-      Politics: "Stakes",
-      Sports: "Impact",
-      Business: "Market Effect",
-      Technology: "Disruption",
-      Entertainment: "Cultural Shift"
-    },
-    context: {
-      default: "Background",
-      Science: "Research Trail",
-      Politics: "Political Landscape",
-      Sports: "Season Context",
-      Business: "Industry View",
-      Technology: "Tech Evolution",
-      Entertainment: "Industry Backdrop"
-    },
-    impact: {
-      default: "What's Next",
-      Science: "Future Path",
-      Politics: "Consequences",
-      Sports: "Season Outlook",
-      Business: "Market Forecast",
-      Technology: "Adoption Curve",
-      Entertainment: "Box Office Forecast"
-    }
-  };
-  return labels[key]?.[category] || labels[key]?.default || key;
+const getArticleSections = (article) => {
+  if (Array.isArray(article.sections) && article.sections.length > 0) {
+    return article.sections;
+  }
+  // Fallback: build sections from old what/why/context/impact fields
+  const fallback = [
+    { heading: "Core Context", content: article.what },
+    { heading: "Critical Detail", content: article.why },
+    { heading: "Broader Impact", content: article.context || article.impact },
+  ].filter(s => s.content);
+  return fallback;
 };
 
 const truncateWords = (text, maxWords) => {
@@ -109,9 +80,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [loadingOtherSide, setLoadingOtherSide] = useState(false);
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [expandedSections, setExpandedSections] = useState({
-    what: false, why: false, context: false, impact: false,
-  });
+  const [expandedSections, setExpandedSections] = useState([false, false, false]);
   const [showThinkDeeper, setShowThinkDeeper] = useState(false);
 
   // Lazy-load all per-article data on first activation
@@ -365,16 +334,15 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
         <div className="px-4 max-w-3xl mx-auto">
           {/* Accordions */}
           <div style={{ marginBottom: '32px' }}>
-            {[
-              { key: 'what', content: article.what },
-              { key: 'why', content: article.why },
-              { key: 'context', content: article.context },
-              { key: 'impact', content: article.impact },
-            ].filter(s => s.content).map(section => (
+            {getArticleSections(article).map((section, idx) => (
               <Collapsible
-                key={section.key}
-                open={expandedSections[section.key]}
-                onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [section.key]: open }))}
+                key={idx}
+                open={expandedSections[idx]}
+                onOpenChange={(open) => setExpandedSections(prev => {
+                  const next = [...prev];
+                  next[idx] = open;
+                  return next;
+                })}
               >
                 <div style={{
                   background: 'rgba(255,255,255,0.05)',
@@ -387,7 +355,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 }}>
                   <CollapsibleTrigger asChild>
                     <button
-                      data-testid={`section-${section.key}`}
+                      data-testid={`section-${idx}`}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center',
                         justifyContent: 'space-between', padding: '14px 16px',
@@ -395,16 +363,16 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                       }}
                     >
                       <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        {getSectionLabel(section.key, article.category)}
+                        {section.heading}
                       </span>
-                      {expandedSections[section.key]
+                      {expandedSections[idx]
                         ? <ChevronUp className="w-5 h-5 text-gray-500" />
                         : <ChevronDown className="w-5 h-5 text-gray-500" />}
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div style={{ padding: '0 12px 16px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px', textAlign: 'left' }}>
-                      {truncateWords(section.content, 55)}
+                      {section.content}
                     </div>
                   </CollapsibleContent>
                 </div>

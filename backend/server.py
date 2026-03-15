@@ -55,10 +55,10 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
-async def _llm(system: str, user_content: str, max_tokens: int = 1024) -> str:
+async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: str = "claude-sonnet-4-5-20250929") -> str:
     """Single-turn Anthropic API call. Returns the text of the first content block."""
     msg = await _anthropic_client.messages.create(
-        model="claude-sonnet-4-5-20250929",
+        model=model,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
@@ -197,7 +197,7 @@ async def _run_ingest_cycle() -> None:
                     )
                     logger.info(f"Marked claude_skip=True for {art['article_id']} after 3 failures")
 
-    # ── 4. Claude summarization (Sonnet) ────────────────────────────────────
+    # ── 4. Claude summarization (Haiku) ─────────────────────────────────────
     if ANTHROPIC_API_KEY:
         to_summarize = await db.articles.find(
             {"claude_summarized": {"$ne": True}, "claude_skip": {"$ne": True}},
@@ -207,16 +207,37 @@ async def _run_ingest_cycle() -> None:
         for art in to_summarize:
             try:
                 raw = await _llm(
-                    system="You summarize news articles into structured sections. Return only valid JSON.",
-                    user_content=(
-                        "You are summarizing a news article for the Chintan app. "
-                        "Generate four distinct sections for this article. "
-                        "Return as JSON only with keys: what, why, context, impact. "
-                        "Each value must be 40-80 words, maximum 6 lines, specific to this article only, not generic. "
-                        f"Article title: {art['title']}. "
-                        f"Article content: {art.get('content', '')}"
+                    model="claude-haiku-4-5-20251001",
+                    system=(
+                        "You are the Chief Editor for a premium news app called Chintan. "
+                        "Distill raw news articles into exactly three concise, impactful "
+                        "sub-sections. Respond with ONLY valid JSON, no explanation, "
+                        "no markdown, no preamble."
                     ),
-                    max_tokens=512,
+                    user_content=(
+                        "Create three editorial sub-sections for this news article.\n\n"
+                        "STRICT RULES:\n"
+                        "1. Each subtext MUST be strictly between 40 and 50 words. Count before outputting.\n"
+                        "2. Zero jargon - clear, elegant, accessible English only\n"
+                        "3. Clean prose only - no hashtags, emojis, asterisks, bullets, markdown\n"
+                        "4. No filler phrases like 'This article discusses...'\n"
+                        "5. Each heading: maximum 5 words\n\n"
+                        "The three sections must tell an incremental story:\n"
+                        "- Section 1 'Core Context': What actually happened and why it matters right now\n"
+                        "- Section 2 'Critical Detail': The most important data point, quote, or underlying factor\n"
+                        "- Section 3 'Broader Impact': What happens next, market effect, or future outlook\n\n"
+                        "Return ONLY this JSON:\n"
+                        "{\n"
+                        "  \"sections\": [\n"
+                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"},\n"
+                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"},\n"
+                        "    {\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}\n"
+                        "  ]\n"
+                        "}\n\n"
+                        f"Article Title: {art['title']}\n"
+                        f"Article Content: {art.get('content', '')}"
+                    ),
+                    max_tokens=600,
                 )
                 raw_s = raw.strip()
                 if raw_s.startswith("```"):
@@ -228,16 +249,18 @@ async def _run_ingest_cycle() -> None:
                 end = raw_s.rfind("}") + 1
                 if start >= 0 and end > start:
                     data = json.loads(raw_s[start:end])
-                    await db.articles.update_one(
-                        {"article_id": art["article_id"]},
-                        {"$set": {
-                            "what": str(data.get("what", ""))[:500],
-                            "why": str(data.get("why", ""))[:500],
-                            "context": str(data.get("context", ""))[:500],
-                            "impact": str(data.get("impact", ""))[:500],
-                            "claude_summarized": True,
-                        }},
-                    )
+                    sections = data.get("sections", [])
+                    if isinstance(sections, list) and len(sections) == 3:
+                        await db.articles.update_one(
+                            {"article_id": art["article_id"]},
+                            {"$set": {
+                                "sections": [
+                                    {"heading": str(s.get("heading", ""))[:80], "content": str(s.get("content", ""))[:400]}
+                                    for s in sections
+                                ],
+                                "claude_summarized": True,
+                            }},
+                        )
             except Exception as sum_err:
                 if _is_credit_exhausted(sum_err):
                     logger.warning("Credits exhausted — stopping ingest cycle")
@@ -394,6 +417,13 @@ async def lifespan(app: FastAPI):
             upsert=True,
         )
     logger.info(f"Developing stories: upserted {len(WATCHED_TOPICS)} watched topics")
+
+    # Reset claude_summarized on articles that don't have the new sections format
+    migration_result = await db.articles.update_many(
+        {"sections": {"$exists": False}},
+        {"$set": {"claude_summarized": False}},
+    )
+    logger.info(f"Migration: reset claude_summarized=False on {migration_result.modified_count} articles without sections")
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
