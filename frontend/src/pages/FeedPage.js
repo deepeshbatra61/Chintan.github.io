@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -25,14 +25,26 @@ const FeedPage = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef(null);
 
+  const PAGE_LIMIT = 20;
   const categories = ["All", "Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
 
-  const fetchArticles = useCallback(async (category = null) => {
+  const fetchArticles = useCallback(async (category = null, pageNum = 1, append = false) => {
     try {
-      const params = category && category !== "All" ? `?category=${category}` : "";
-      const response = await axios.get(`${API}/articles${params}`, { withCredentials: true });
-      setArticles(response.data);
+      const params = new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT });
+      if (category && category !== "All") params.set("category", category);
+      const response = await axios.get(`${API}/articles?${params}`, { withCredentials: true });
+      const data = response.data;
+      if (append) {
+        setArticles(prev => [...prev, ...data]);
+      } else {
+        setArticles(data);
+      }
+      setHasMore(data.length === PAGE_LIMIT);
     } catch (error) {
       console.error("Error fetching articles:", error);
     }
@@ -67,9 +79,30 @@ const FeedPage = () => {
   }, [fetchArticles, fetchDevelopingStories, fetchNotifications]);
 
   const handleCategoryChange = (category) => {
-    setActiveCategory(category === "All" ? null : category);
-    fetchArticles(category);
+    const cat = category === "All" ? null : category;
+    setActiveCategory(cat);
+    setPage(1);
+    setHasMore(true);
+    fetchArticles(cat, 1, false);
   };
+
+  // Infinite scroll: load next page when sentinel enters viewport
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          setLoadingMore(true);
+          fetchArticles(activeCategory, nextPage, true).finally(() => setLoadingMore(false));
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, activeCategory, fetchArticles]);
 
   const getCurrentBrief = () => {
     const hour = new Date().getHours();
@@ -401,6 +434,15 @@ const FeedPage = () => {
           {articles.length === 0 && (
             <div className="text-center py-20">
               <p className="text-gray-500">No articles found</p>
+            </div>
+          )}
+
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {loadingMore && (
+            <div className="flex justify-center py-6">
+              <SuryaLogo className="w-8 h-8 animate-spin-slow" />
             </div>
           )}
         </div>
