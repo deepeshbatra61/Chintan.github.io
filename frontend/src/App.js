@@ -6,10 +6,12 @@ import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import "./App.css";
 import WelcomeSplash from "./components/WelcomeSplash";
-import { loadToken, getCachedToken, setToken, clearToken } from "./lib/tokenStore";
+import { loadToken, getCachedToken, getRefreshToken, setTokens, clearToken } from "./lib/tokenStore";
+
+const REFRESH_URL = "https://chintangithubio-production.up.railway.app/api/auth/refresh";
 
 // ── Global axios setup ────────────────────────────────────────────────────────
-// Always send cookies AND, when available, the session token as a Bearer header.
+// Always send cookies AND, when available, the access token as a Bearer header.
 // This dual approach handles browsers that drop cross-origin Set-Cookie headers.
 // The token comes from the in-memory mirror of the secure vault (see tokenStore),
 // not localStorage — so WebView JS can no longer read it off an open shelf.
@@ -21,6 +23,46 @@ axios.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Silent refresh: when a request 401s, use the refresh token to mint a new
+// access token once, then replay the original request. Concurrent 401s share a
+// single in-flight refresh so we don't stampede /auth/refresh.
+let _refreshPromise = null;
+axios.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    const status = error.response?.status;
+    const refreshToken = getRefreshToken();
+
+    if (
+      status === 401 &&
+      refreshToken &&
+      original &&
+      !original._retried &&
+      !String(original.url || "").includes("/auth/refresh")
+    ) {
+      original._retried = true;
+      try {
+        if (!_refreshPromise) {
+          _refreshPromise = axios
+            .post(REFRESH_URL, { refresh_token: refreshToken })
+            .finally(() => { _refreshPromise = null; });
+        }
+        const resp = await _refreshPromise;
+        await setTokens(resp.data.session_token, resp.data.refresh_token);
+        original.headers = original.headers || {};
+        original.headers["Authorization"] = `Bearer ${resp.data.session_token}`;
+        return axios(original);
+      } catch (e) {
+        // Refresh failed — token is dead. Clear it so the app falls back to login.
+        await clearToken();
+        return Promise.reject(error);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Pages
 import LoginPage from "./pages/LoginPage";
@@ -71,16 +113,20 @@ const AuthProvider = ({ children }) => {
     })();
   }, []);
 
-  const login = async (userData, token = null) => {
+  const login = async (userData, access = null, refresh = null) => {
     setUser(userData);
-    if (token) {
-      await setToken(token);
+    if (access) {
+      await setTokens(access, refresh);
     }
   };
 
   const logout = async () => {
     try {
-      await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
+      await axios.post(
+        `${API}/auth/logout`,
+        { refresh_token: getRefreshToken() },
+        { withCredentials: true }
+      );
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -136,7 +182,7 @@ const AuthCallback = () => {
           { withCredentials: true }
         );
 
-        await login(response.data.user, response.data.session_token);
+        await login(response.data.user, response.data.session_token, response.data.refresh_token);
         const dest = !response.data.user.onboarding_completed ? "/onboarding" : "/feed";
         setWelcomeDest(dest);
         setShowWelcome(true);
@@ -246,6 +292,7 @@ const NativeAuthHandler = () => {
 
       const params = new URLSearchParams(url.split("?")[1] || "");
       const sessionToken = params.get("session_token");
+      const refreshToken = params.get("refresh_token");
       const state = params.get("state");
       const error = params.get("error");
 
@@ -268,13 +315,13 @@ const NativeAuthHandler = () => {
 
       // Mark auth as complete so the LoginPage polling stops
       sessionStorage.removeItem("native_auth_pending");
-      // Store token in the secure vault so the axios interceptor can attach it
-      await setToken(sessionToken);
+      // Store tokens in the secure vault so the axios interceptor can attach them
+      await setTokens(sessionToken, refreshToken);
 
       try {
         const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
         console.log("auth/me response: " + response.status);
-        await login(response.data, sessionToken);
+        await login(response.data, sessionToken, refreshToken);
         const dest = !response.data.onboarding_completed ? "/onboarding" : "/feed";
         setWelcomeDest(dest);
         setShowWelcome(true);
@@ -299,9 +346,10 @@ const NativeAuthHandler = () => {
           sessionStorage.removeItem("native_auth_pending");
           sessionStorage.removeItem("oauth_state");
           const sessionToken = resp.data.session_token;
-          await setToken(sessionToken);
+          const refreshToken = resp.data.refresh_token;
+          await setTokens(sessionToken, refreshToken);
           const meResp = await axios.get(`${API}/auth/me`);
-          await login(meResp.data, sessionToken);
+          await login(meResp.data, sessionToken, refreshToken);
           const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
           setWelcomeDest(dest);
           setShowWelcome(true);

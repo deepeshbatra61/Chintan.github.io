@@ -489,6 +489,8 @@ async def lifespan(app: FastAPI):
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     # Session lookups run on every authenticated request — index the token.
     await db.user_sessions.create_index("session_token")
+    # Refresh-token lookups happen on every /auth/refresh — index the hash.
+    await db.refresh_tokens.create_index("token_hash")
     # Feed hot path: range-filter + sort on published_at, optionally by category.
     await db.articles.create_index([("published_at", -1)])
     await db.articles.create_index([("category", 1), ("published_at", -1)])
@@ -1228,6 +1230,53 @@ async def require_admin(user: dict = Depends(require_auth)) -> dict:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+# ── Token lifetimes ──────────────────────────────────────────────────────────
+# Access token is short-lived and sent on every request, so a leaked one dies
+# fast. Refresh token is long-lived, stored only as a hash, and used solely at
+# /auth/refresh to mint a new access token.
+ACCESS_TOKEN_TTL = timedelta(hours=1)
+REFRESH_TOKEN_TTL = timedelta(days=30)
+SESSION_COOKIE_MAX_AGE = int(ACCESS_TOKEN_TTL.total_seconds())
+
+
+def _hash_token(token: str) -> str:
+    """SHA-256 a refresh token so the DB never stores a usable secret."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _issue_tokens(user_id: str) -> tuple:
+    """Create a short-lived access session and a long-lived (hashed) refresh
+    token. Returns (access_token, refresh_token) in plaintext for the client."""
+    now = datetime.now(timezone.utc)
+    access_token = f"st_{uuid.uuid4().hex}"
+    refresh_token = f"rt_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": access_token,
+        "expires_at": (now + ACCESS_TOKEN_TTL).isoformat(),
+        "created_at": now.isoformat(),
+    })
+    await db.refresh_tokens.insert_one({
+        "user_id": user_id,
+        "token_hash": _hash_token(refresh_token),
+        "expires_at": (now + REFRESH_TOKEN_TTL).isoformat(),
+        "created_at": now.isoformat(),
+    })
+    return access_token, refresh_token
+
+
+def _set_session_cookie(response: Response, access_token: str) -> None:
+    """Set the access token as an httpOnly session cookie (web clients)."""
+    response.set_cookie(
+        key="session_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=SESSION_COOKIE_MAX_AGE,
+    )
+
 # ===================== AUTH ROUTES =====================
 
 @api_router.post("/auth/google")
@@ -1274,8 +1323,6 @@ async def google_auth(request: Request, response: Response):
         google_user = userinfo_resp.json()
 
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    session_token = f"st_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
     # Upsert user — match on verified Google email
     existing_user = await db.users.find_one(
@@ -1304,26 +1351,11 @@ async def google_auth(request: Request, response: Response):
         }
         await db.users.insert_one(new_user)
 
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.user_sessions.insert_one(session_doc)
-
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7 * 24 * 60 * 60,
-    )
+    app_access, app_refresh = await _issue_tokens(user_id)
+    _set_session_cookie(response, app_access)
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": user, "session_token": session_token}
+    return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 _NATIVE_REDIRECT_URI = "https://chintangithubio-production.up.railway.app/api/auth/native-callback"
 _NATIVE_APP_SCHEME  = "com.chintan.app://auth/callback"
@@ -1390,8 +1422,6 @@ async def google_native_callback(
             return RedirectResponse(url=f"{_NATIVE_APP_SCHEME}?error=no_email")
 
         user_id = f"user_{uuid.uuid4().hex[:12]}"
-        session_token = f"st_{uuid.uuid4().hex}"
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
         existing_user = await db.users.find_one({"email": email}, {"_id": 0})
         if existing_user:
@@ -1411,18 +1441,14 @@ async def google_native_callback(
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-        await db.user_sessions.insert_one({
-            "user_id": user_id,
-            "session_token": session_token,
-            "expires_at": expires_at.isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        app_access, app_refresh = await _issue_tokens(user_id)
 
-        # Store session_token in memory cache keyed by state so the app can poll for it.
+        # Store tokens in memory cache keyed by state so the app can poll for them.
         # This is the fallback path when the deep link redirect doesn't fire.
         if state:
             _native_auth_cache[state] = {
-                "session_token": session_token,
+                "session_token": app_access,
+                "refresh_token": app_refresh,
                 "expires_at": time.time() + 300,  # 5-minute TTL
             }
 
@@ -1430,7 +1456,7 @@ async def google_native_callback(
         # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
         state_param = f"&state={state}" if state else ""
         return RedirectResponse(
-            url=f"{_NATIVE_APP_SCHEME}?session_token={session_token}{state_param}"
+            url=f"{_NATIVE_APP_SCHEME}?session_token={app_access}&refresh_token={app_refresh}{state_param}"
         )
 
     except Exception as e:
@@ -1457,7 +1483,7 @@ async def native_poll(state: str = None):
     if not entry:
         raise HTTPException(status_code=404, detail="not ready")
     _native_auth_cache.pop(state, None)  # one-time use
-    return {"session_token": entry["session_token"]}
+    return {"session_token": entry["session_token"], "refresh_token": entry.get("refresh_token")}
 
 
 @api_router.get("/auth/me")
@@ -1470,13 +1496,57 @@ async def get_me(request: Request):
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
-    """Logout user"""
+    """Logout user — revoke the access session and the refresh token."""
     session = await get_session_from_request(request)
     if session:
         await db.user_sessions.delete_one({"session_token": session["session_token"]})
-    
+
+    # Revoke the refresh token too, if the client sent one
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    refresh_token = (body or {}).get("refresh_token")
+    if refresh_token:
+        await db.refresh_tokens.delete_one({"token_hash": _hash_token(refresh_token)})
+
     response.delete_cookie(key="session_token", path="/")
     return {"message": "Logged out"}
+
+
+@api_router.post("/auth/refresh")
+@limiter.limit("30/minute")
+async def refresh_session(request: Request, response: Response):
+    """Exchange a valid refresh token for a new access token. The refresh token
+    is rotated (the old one is consumed) so a stolen refresh token is detectable
+    and short-lived in practice."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    refresh_token = (body or {}).get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="refresh_token required")
+
+    token_hash = _hash_token(refresh_token)
+    doc = await db.refresh_tokens.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    expires_at = doc["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        await db.refresh_tokens.delete_one({"token_hash": token_hash})
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    # Rotate: consume the old refresh token, issue a fresh access+refresh pair
+    await db.refresh_tokens.delete_one({"token_hash": token_hash})
+    app_access, app_refresh = await _issue_tokens(doc["user_id"])
+    _set_session_cookie(response, app_access)
+    return {"session_token": app_access, "refresh_token": app_refresh}
 
 # ===================== USER ROUTES =====================
 

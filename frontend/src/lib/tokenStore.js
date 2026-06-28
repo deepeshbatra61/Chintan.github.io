@@ -1,58 +1,72 @@
 // Session token store.
 //
-// The session token used to live in localStorage, which any JavaScript running
-// in the WebView (including injected/malicious code) can read. We now keep it in
-// @capacitor/preferences, which on native maps to app-private storage reachable
-// only through the Capacitor bridge — not readable by WebView JS or other apps.
+// Holds two tokens in @capacitor/preferences (app-private native storage,
+// reachable only through the Capacitor bridge — not by WebView JS or other apps):
+//   - access token:  short-lived, sent on every request as Bearer
+//   - refresh token: long-lived, used only to mint a new access token on 401
 //
-// Preferences is async, but axios request interceptors need a synchronous read,
-// so we mirror the token in memory (`cached`). Call loadToken() once at startup
-// (before the first authenticated request) to populate the mirror; setToken()
-// and clearToken() keep the mirror and the vault in sync.
+// Preferences is async, but the axios request interceptor needs a synchronous
+// read, so we mirror the access token in memory (`cachedAccess`). Call loadToken()
+// once at startup (before the first authenticated request) to populate the mirror.
 
 import { Preferences } from "@capacitor/preferences";
 
-const KEY = "chintan_session_token";
-let cached = null;
+const ACCESS_KEY = "chintan_session_token";
+const REFRESH_KEY = "chintan_refresh_token";
+
+let cachedAccess = null;
+let cachedRefresh = null;
 
 /**
- * Load the token from the vault into the in-memory mirror. Migrates any legacy
- * token still sitting in localStorage into the vault, then scrubs localStorage
- * so the old open-shelf copy stops existing. Call once before checkAuth().
+ * Load both tokens from the vault into the in-memory mirrors. Migrates any
+ * legacy access token still sitting in localStorage into the vault, then scrubs
+ * localStorage so the old open-shelf copy stops existing. Call once before checkAuth().
  */
 export async function loadToken() {
-  const { value } = await Preferences.get({ key: KEY });
-  let token = value || null;
+  const { value: access } = await Preferences.get({ key: ACCESS_KEY });
+  const { value: refresh } = await Preferences.get({ key: REFRESH_KEY });
 
-  if (!token && typeof localStorage !== "undefined") {
-    const legacy = localStorage.getItem(KEY);
+  let accessToken = access || null;
+  if (!accessToken && typeof localStorage !== "undefined") {
+    const legacy = localStorage.getItem(ACCESS_KEY);
     if (legacy) {
-      token = legacy;
-      await Preferences.set({ key: KEY, value: legacy });
+      accessToken = legacy;
+      await Preferences.set({ key: ACCESS_KEY, value: legacy });
     }
   }
-  if (typeof localStorage !== "undefined") localStorage.removeItem(KEY);
+  if (typeof localStorage !== "undefined") localStorage.removeItem(ACCESS_KEY);
 
-  cached = token;
-  return token;
+  cachedAccess = accessToken;
+  cachedRefresh = refresh || null;
+  return cachedAccess;
 }
 
-/** Synchronous read of the in-memory mirror (used by the axios interceptor). */
+/** Synchronous read of the access token (used by the axios request interceptor). */
 export function getCachedToken() {
-  return cached;
+  return cachedAccess;
 }
 
-/** Persist the token to the vault and update the in-memory mirror. */
-export async function setToken(token) {
-  cached = token || null;
-  if (token) {
-    await Preferences.set({ key: KEY, value: token });
+/** Synchronous read of the refresh token (used by the 401 refresh interceptor). */
+export function getRefreshToken() {
+  return cachedRefresh;
+}
+
+/** Persist both tokens to the vault and update the in-memory mirrors. */
+export async function setTokens(access, refresh) {
+  cachedAccess = access || null;
+  if (access) await Preferences.set({ key: ACCESS_KEY, value: access });
+  // The backend rotates refresh tokens, so only overwrite when a new one is given.
+  if (refresh) {
+    cachedRefresh = refresh;
+    await Preferences.set({ key: REFRESH_KEY, value: refresh });
   }
 }
 
-/** Remove the token from the vault, the mirror, and any legacy localStorage copy. */
+/** Remove both tokens from the vault, the mirrors, and any legacy localStorage copy. */
 export async function clearToken() {
-  cached = null;
-  await Preferences.remove({ key: KEY });
-  if (typeof localStorage !== "undefined") localStorage.removeItem(KEY);
+  cachedAccess = null;
+  cachedRefresh = null;
+  await Preferences.remove({ key: ACCESS_KEY });
+  await Preferences.remove({ key: REFRESH_KEY });
+  if (typeof localStorage !== "undefined") localStorage.removeItem(ACCESS_KEY);
 }

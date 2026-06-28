@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { SuryaLogo, useAuth } from "../App";
 import { Browser } from "@capacitor/browser";
-import { setToken } from "../lib/tokenStore";
+import { setTokens } from "../lib/tokenStore";
 
 const NATIVE_REDIRECT_URI =
   "https://chintangithubio-production.up.railway.app/api/auth/native-callback";
@@ -33,12 +33,12 @@ const LoginPage = () => {
     sessionStorage.removeItem("native_auth_pending");
   };
 
-  const finishNativeAuth = async (sessionToken) => {
+  const finishNativeAuth = async (sessionToken, refreshToken) => {
     stopPolling();
-    await setToken(sessionToken);
+    await setTokens(sessionToken, refreshToken);
     try { await Browser.close(); } catch (_) {}
     const meResp = await axios.get(`${API}/auth/me`);
-    await login(meResp.data, sessionToken);
+    await login(meResp.data, sessionToken, refreshToken);
     const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
     setWelcomeDest(dest);
     setShowWelcome(true);
@@ -63,7 +63,7 @@ const LoginPage = () => {
         const resp = await axios.get(`${API}/auth/native-poll?state=${state}`);
         if (resp.data?.session_token) {
           console.log("native-poll: session_token received");
-          await finishNativeAuth(resp.data.session_token);
+          await finishNativeAuth(resp.data.session_token, resp.data.refresh_token);
         }
       } catch (e) {
         // 404 = backend hasn't received the code yet — keep polling
