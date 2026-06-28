@@ -22,12 +22,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep link: catches com.chintan.app://auth/callback?... from the OAuth relay -->
+            <!-- Deep link: catches com.chintan.app://auth/callback?... (error fallback) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.chintan.app" android:host="auth" />
+            </intent-filter>
+
+            <!-- Verified App Link: catches https://<domain>/auth/callback?... from the
+                 OAuth relay. autoVerify makes Android check /.well-known/assetlinks.json
+                 so only this app (matching the signing cert) can claim the URL. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="chintangithubio-production.up.railway.app"
+                      android:pathPrefix="/auth/callback" />
             </intent-filter>
 
         </activity>

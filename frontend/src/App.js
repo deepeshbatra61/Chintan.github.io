@@ -283,7 +283,11 @@ const NativeAuthHandler = () => {
 
     const handleUrl = async ({ url }) => {
       console.log("appUrlOpen fired with url: " + url);
-      if (!url.startsWith("com.chintan.app://auth/callback")) return;
+      // Accept both the verified App Link (https) and the custom scheme (error fallback)
+      const isCallback =
+        url.startsWith("com.chintan.app://auth/callback") ||
+        url.startsWith("https://chintangithubio-production.up.railway.app/auth/callback");
+      if (!isCallback) return;
       // Bail if polling or browserFinished already completed auth
       if (!sessionStorage.getItem("native_auth_pending")) return;
 

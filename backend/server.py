@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Response, Request, Depends
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1359,6 +1359,10 @@ async def google_auth(request: Request, response: Response):
 
 _NATIVE_REDIRECT_URI = "https://chintangithubio-production.up.railway.app/api/auth/native-callback"
 _NATIVE_APP_SCHEME  = "com.chintan.app://auth/callback"
+# Verified Android App Link — only an app whose signing cert matches assetlinks.json
+# can claim this https URL, so the token-bearing success redirect can't be hijacked
+# by another app the way the custom scheme can. Errors (no token) stay on the scheme.
+_NATIVE_APP_LINK = "https://chintangithubio-production.up.railway.app/auth/callback"
 # In-memory cache: state → {session_token, expires_at}  (5-min TTL, cleared on retrieval)
 _native_auth_cache: dict = {}
 
@@ -1456,7 +1460,7 @@ async def google_native_callback(
         # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
         state_param = f"&state={state}" if state else ""
         return RedirectResponse(
-            url=f"{_NATIVE_APP_SCHEME}?session_token={app_access}&refresh_token={app_refresh}{state_param}"
+            url=f"{_NATIVE_APP_LINK}?session_token={app_access}&refresh_token={app_refresh}{state_param}"
         )
 
     except Exception as e:
@@ -3108,6 +3112,41 @@ async def health():
     return {"status": "healthy"}
 
 # Include the router in the main app
+# ── Android App Links ─────────────────────────────────────────────────────────
+# assetlinks.json lets Android verify (by signing-cert fingerprint) that THIS app
+# owns https://<domain>/auth/callback, so the OAuth success redirect can't be
+# claimed by a malicious app. Served at the domain root (NOT under /api) because
+# Android fetches it from https://<domain>/.well-known/assetlinks.json exactly.
+_ANDROID_PACKAGE = "com.chintan.app"
+_ANDROID_CERT_SHA256 = os.environ.get(
+    "ANDROID_CERT_SHA256",
+    "A4:6E:20:25:A3:CB:BE:4B:58:07:68:B7:4C:4B:F2:B1:2E:FF:33:D1:7B:DD:22:48:35:46:AD:B6:2B:97:BD:5A",
+)
+
+
+@app.get("/.well-known/assetlinks.json")
+async def assetlinks():
+    return [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": _ANDROID_PACKAGE,
+            "sha256_cert_fingerprints": [_ANDROID_CERT_SHA256],
+        },
+    }]
+
+
+@app.get("/auth/callback")
+async def auth_callback_landing():
+    """Browser fallback for the App Link. Normally the app intercepts this URL
+    directly; if a browser lands here (verification not yet applied), the in-app
+    poll has already completed login, so just reassure the user."""
+    return HTMLResponse(
+        "<html><body style='font-family:sans-serif;text-align:center;padding-top:3rem'>"
+        "<h3>You're signed in</h3><p>You can return to the Chintan app.</p></body></html>"
+    )
+
+
 app.include_router(api_router)
 
 app.add_middleware(
