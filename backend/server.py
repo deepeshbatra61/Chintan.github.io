@@ -55,6 +55,10 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
+# Admin allowlist — comma-separated emails in ADMIN_EMAILS env var. Only these
+# users may call /admin/* routes. Empty set => admin routes are locked to nobody.
+ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
+
 async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: str = "claude-sonnet-4-5-20250929") -> str:
     """Single-turn Anthropic API call. Returns the text of the first content block."""
     msg = await _anthropic_client.messages.create(
@@ -459,6 +463,11 @@ async def lifespan(app: FastAPI):
         [("user_id", 1), ("article_id", 1)], unique=True
     )
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    # Session lookups run on every authenticated request — index the token.
+    await db.user_sessions.create_index("session_token")
+    # Feed hot path: range-filter + sort on published_at, optionally by category.
+    await db.articles.create_index([("published_at", -1)])
+    await db.articles.create_index([("category", 1), ("published_at", -1)])
     await db.developing_stories.create_index("story_id", unique=True)
     logger.info("MongoDB indexes created")
 
@@ -1169,6 +1178,12 @@ async def require_auth(request: Request) -> dict:
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+async def require_admin(user: dict = Depends(require_auth)) -> dict:
+    """Dependency that requires the authenticated user to be on the admin allowlist."""
+    if not ADMIN_EMAILS or str(user.get("email", "")).lower() not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 # ===================== AUTH ROUTES =====================
@@ -2743,7 +2758,7 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
 # ===================== ADMIN ROUTES =====================
 
 @api_router.post("/admin/recategorize")
-async def admin_recategorize():
+async def admin_recategorize(admin: dict = Depends(require_admin)):
     """One-time migration: run Claude categorization on all uncategorized articles."""
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=503, detail="Anthropic API key not configured")
@@ -2790,7 +2805,7 @@ async def admin_recategorize():
     return {"updated": total_updated}
 
 @api_router.post("/admin/cleanup-truncated")
-async def admin_cleanup_truncated():
+async def admin_cleanup_truncated(admin: dict = Depends(require_admin)):
     """Clean '[+N chars]' truncation from title/description/content on ALL articles."""
     all_articles = await db.articles.find(
         {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
@@ -2823,13 +2838,13 @@ async def admin_cleanup_truncated():
     return {"cleaned": updated}
 
 @api_router.post("/admin/clear-other-side-cache")
-async def admin_clear_other_side_cache():
+async def admin_clear_other_side_cache(admin: dict = Depends(require_admin)):
     """One-time: clear cached other-side analyses so they regenerate with new prompt."""
     result = await db.other_side_cache.delete_many({})
     return {"deleted": result.deleted_count}
 
 @api_router.delete("/admin/purge-blacklisted-domains")
-async def admin_purge_blacklisted_domains():
+async def admin_purge_blacklisted_domains(admin: dict = Depends(require_admin)):
     """One-shot: delete all articles whose URL domain is in _BLACKLISTED_DOMAINS."""
     all_articles = await db.articles.find(
         {"url": {"$exists": True}},
@@ -2857,7 +2872,7 @@ async def admin_purge_blacklisted_domains():
     return {"deleted": deleted, "domains": domain_counts}
 
 @api_router.get("/admin/test-newsapi")
-async def admin_test_newsapi():
+async def admin_test_newsapi(admin: dict = Depends(require_admin)):
     """Trigger fetch_from_newsapi() immediately and return diagnostic info."""
     if not NEWSAPI_KEY:
         return {"error": "NEWSAPI_KEY is not set in environment variables", "articles": []}
@@ -2891,14 +2906,14 @@ async def admin_test_newsapi():
     }
 
 @api_router.post("/admin/trigger-ingest")
-async def admin_trigger_ingest():
+async def admin_trigger_ingest(admin: dict = Depends(require_admin)):
     """Manually trigger one ingest cycle immediately (runs in background)."""
     asyncio.create_task(_run_ingest_cycle())
     return {"status": "ingest cycle started"}
 
 
 @api_router.post("/admin/reset-summarization")
-async def admin_reset_summarization(body: dict):
+async def admin_reset_summarization(body: dict, admin: dict = Depends(require_admin)):
     """Reset claude_summarized and remove sections on N articles for re-processing."""
     limit = max(1, min(int(body.get("limit", 5)), 200))
     articles = await db.articles.find(
