@@ -530,23 +530,31 @@ async def lifespan(app: FastAPI):
     )
     logger.info(f"Migration: reset claude_summarized=False on {migration_result.modified_count} articles without sections")
 
-    # One-time re-categorization with the fixed keyword classifier. The old
-    # detect_category mislabeled almost everything (substring + first-match bugs),
-    # so re-run over every existing article once and bump the migration version.
-    _CATEGORY_MIGRATION_VERSION = 2
+    # One-time fix-up of existing articles: re-categorize with the fixed keyword
+    # classifier AND strip the fabricated what/why/context/impact filler, replacing
+    # it with the publisher's real description as an honest summary.
+    _CATEGORY_MIGRATION_VERSION = 3
     _cat_meta = await db.app_meta.find_one({"_id": "category_migration"})
     if not _cat_meta or _cat_meta.get("version", 0) < _CATEGORY_MIGRATION_VERSION:
         _recat = 0
         async for art in db.articles.find(
             {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
         ):
-            cat, sub = detect_category(
-                art.get("title", ""),
-                (art.get("description") or "") + " " + (art.get("content") or ""),
-            )
+            _desc = (art.get("description") or "").strip()
+            _body = (art.get("content") or "").strip()
+            cat, sub = detect_category(art.get("title", ""), _desc + " " + _body)
+            _summary = (_desc or _body[:400] or art.get("title", "")).strip()
             await db.articles.update_one(
                 {"article_id": art["article_id"]},
-                {"$set": {"category": cat, "subcategory": sub}},
+                {"$set": {
+                    "category": cat,
+                    "subcategory": sub,
+                    "summary": _summary[:600],
+                    "what": _summary[:500],
+                    "why": "",
+                    "context": "",
+                    "impact": "",
+                }},
             )
             _recat += 1
         await db.app_meta.update_one(
@@ -554,7 +562,7 @@ async def lifespan(app: FastAPI):
             {"$set": {"version": _CATEGORY_MIGRATION_VERSION}},
             upsert=True,
         )
-        logger.info(f"Migration: re-categorized {_recat} articles with the fixed classifier")
+        logger.info(f"Migration: re-categorized + cleaned summaries on {_recat} articles")
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
@@ -1973,11 +1981,16 @@ async def fetch_from_newsapi() -> list:
         article_id = "article_" + hashlib.md5(url.encode()).hexdigest()[:12]
         category, subcategory = detect_category(title, description + " " + raw_content)
 
-        sentences = (description + " " + raw_content).split(". ")
-        what = (sentences[0] + ".") if sentences else title
-        why = (sentences[1] + ".") if len(sentences) > 1 else f"An important development in {category.lower()}."
-        context = (sentences[2] + ".") if len(sentences) > 2 else "This story reflects recent trends in the sector."
-        impact = (sentences[3] + ".") if len(sentences) > 3 else "The implications may affect stakeholders across multiple domains."
+        # Honest summary: use the publisher's real description (or the content
+        # snippet when there's none). We do NOT fabricate what/why/context/impact —
+        # NewsAPI returns ~200 chars of content, so slicing it into 4 "analytical"
+        # sections produced nonsense + canned filler. Real multi-section analysis
+        # returns when the LLM summariser is enabled.
+        summary = (description or raw_content[:400] or title).strip()
+        what = summary
+        why = ""
+        context = ""
+        impact = ""
 
         content = raw_content[:1500] + "..." if len(raw_content) > 1500 else raw_content
 
@@ -1996,10 +2009,11 @@ async def fetch_from_newsapi() -> list:
             "title": title,
             "description": description[:300] + "..." if len(description) > 300 else description,
             "content": content,
+            "summary": summary[:600],
             "what": what[:500],
-            "why": why[:500],
-            "context": context[:500],
-            "impact": impact[:500],
+            "why": why,
+            "context": context,
+            "impact": impact,
             "category": category,
             "subcategory": subcategory,
             "source": source_name,

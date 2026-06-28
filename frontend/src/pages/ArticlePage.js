@@ -39,13 +39,12 @@ const getArticleSections = (article) => {
   if (Array.isArray(article.sections) && article.sections.length > 0) {
     return article.sections;
   }
-  // Fallback: build sections from old what/why/context/impact fields
-  const fallback = [
-    { heading: "Core Context", content: article.what },
-    { heading: "Critical Detail", content: article.why },
-    { heading: "Broader Impact", content: article.context || article.impact },
-  ].filter(s => s.content);
-  return fallback;
+  // No AI summary yet — show the publisher's real summary as a single honest
+  // section instead of fabricating "Core Context / Critical Detail / Broader
+  // Impact" headings from sentence slices. Real multi-section analysis returns
+  // when the LLM summariser is enabled.
+  const summary = article.summary || article.what || article.description;
+  return summary ? [{ heading: "Summary", content: summary }] : [];
 };
 
 const truncateWords = (text, maxWords) => {
