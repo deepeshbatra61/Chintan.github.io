@@ -466,6 +466,51 @@ async def _background_news_ingestor() -> None:
             await asyncio.sleep(3600)  # 1h back-off on unexpected error
 
 
+_CATEGORY_MIGRATION_VERSION = 3
+
+
+async def _run_category_migration() -> None:
+    """One-time fix-up: re-categorize with the fixed classifier and strip the
+    fabricated what/why/context/impact filler. Runs in the BACKGROUND so it can
+    never block or crash app startup; fully guarded so a bad doc can't kill it."""
+    try:
+        meta = await db.app_meta.find_one({"_id": "category_migration"})
+        if meta and meta.get("version", 0) >= _CATEGORY_MIGRATION_VERSION:
+            return
+        recat = 0
+        async for art in db.articles.find(
+            {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
+        ):
+            try:
+                desc = (art.get("description") or "").strip()
+                body = (art.get("content") or "").strip()
+                cat, sub = detect_category(art.get("title", ""), desc + " " + body)
+                summary = (desc or body[:400] or art.get("title", "")).strip()
+                await db.articles.update_one(
+                    {"article_id": art["article_id"]},
+                    {"$set": {
+                        "category": cat,
+                        "subcategory": sub,
+                        "summary": summary[:600],
+                        "what": summary[:500],
+                        "why": "",
+                        "context": "",
+                        "impact": "",
+                    }},
+                )
+                recat += 1
+            except Exception as one_err:
+                logger.error(f"Category migration: skipped {art.get('article_id')}: {one_err}")
+        await db.app_meta.update_one(
+            {"_id": "category_migration"},
+            {"$set": {"version": _CATEGORY_MIGRATION_VERSION}},
+            upsert=True,
+        )
+        logger.info(f"Migration: re-categorized + cleaned summaries on {recat} articles")
+    except Exception:
+        logger.error(f"Category migration failed: {traceback.format_exc()}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
@@ -530,39 +575,9 @@ async def lifespan(app: FastAPI):
     )
     logger.info(f"Migration: reset claude_summarized=False on {migration_result.modified_count} articles without sections")
 
-    # One-time fix-up of existing articles: re-categorize with the fixed keyword
-    # classifier AND strip the fabricated what/why/context/impact filler, replacing
-    # it with the publisher's real description as an honest summary.
-    _CATEGORY_MIGRATION_VERSION = 3
-    _cat_meta = await db.app_meta.find_one({"_id": "category_migration"})
-    if not _cat_meta or _cat_meta.get("version", 0) < _CATEGORY_MIGRATION_VERSION:
-        _recat = 0
-        async for art in db.articles.find(
-            {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
-        ):
-            _desc = (art.get("description") or "").strip()
-            _body = (art.get("content") or "").strip()
-            cat, sub = detect_category(art.get("title", ""), _desc + " " + _body)
-            _summary = (_desc or _body[:400] or art.get("title", "")).strip()
-            await db.articles.update_one(
-                {"article_id": art["article_id"]},
-                {"$set": {
-                    "category": cat,
-                    "subcategory": sub,
-                    "summary": _summary[:600],
-                    "what": _summary[:500],
-                    "why": "",
-                    "context": "",
-                    "impact": "",
-                }},
-            )
-            _recat += 1
-        await db.app_meta.update_one(
-            {"_id": "category_migration"},
-            {"$set": {"version": _CATEGORY_MIGRATION_VERSION}},
-            upsert=True,
-        )
-        logger.info(f"Migration: re-categorized + cleaned summaries on {_recat} articles")
+    # Re-categorize + clean existing articles in the BACKGROUND so the app starts
+    # serving immediately (this previously ran inline and blocked startup).
+    asyncio.create_task(_run_category_migration())
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
