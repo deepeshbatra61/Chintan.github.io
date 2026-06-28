@@ -62,6 +62,11 @@ _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 # users may call /admin/* routes. Empty set => admin routes are locked to nobody.
 ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 
+# Categorization: the keyword classifier (detect_category) is the source of truth.
+# The title-only Haiku pass is off by default — it mislabeled articles and only
+# adds cost. Set LLM_CATEGORIZATION_ENABLED=true to re-enable (with a better prompt).
+LLM_CATEGORIZATION_ENABLED = os.environ.get("LLM_CATEGORIZATION_ENABLED", "false").lower() == "true"
+
 def _extract_text(msg) -> str:
     """Safely pull text from an Anthropic message. Returns '' if the response has
     no content or the first block isn't text (refusal, empty, odd shape) instead
@@ -222,8 +227,9 @@ async def _run_ingest_cycle() -> None:
 
     # ── 2. Poll generation removed — handled on-demand only ─────────────────
 
-    # ── 3. Claude categorization (Haiku — cheap, good enough) ───────────────
-    if ANTHROPIC_API_KEY:
+    # ── 3. Claude categorization (off by default — keyword classifier is the
+    #       source of truth; title-only Haiku mislabeled and cost credits) ──────
+    if ANTHROPIC_API_KEY and LLM_CATEGORIZATION_ENABLED:
         _valid_cats = {"Technology", "Politics", "Business", "Sports", "Entertainment", "Health", "Science", "World"}
         to_categorize = await db.articles.find(
             {"claude_categorized": {"$ne": True}, "claude_skip": {"$ne": True}},
@@ -523,6 +529,32 @@ async def lifespan(app: FastAPI):
         {"$set": {"claude_summarized": False}},
     )
     logger.info(f"Migration: reset claude_summarized=False on {migration_result.modified_count} articles without sections")
+
+    # One-time re-categorization with the fixed keyword classifier. The old
+    # detect_category mislabeled almost everything (substring + first-match bugs),
+    # so re-run over every existing article once and bump the migration version.
+    _CATEGORY_MIGRATION_VERSION = 2
+    _cat_meta = await db.app_meta.find_one({"_id": "category_migration"})
+    if not _cat_meta or _cat_meta.get("version", 0) < _CATEGORY_MIGRATION_VERSION:
+        _recat = 0
+        async for art in db.articles.find(
+            {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
+        ):
+            cat, sub = detect_category(
+                art.get("title", ""),
+                (art.get("description") or "") + " " + (art.get("content") or ""),
+            )
+            await db.articles.update_one(
+                {"article_id": art["article_id"]},
+                {"$set": {"category": cat, "subcategory": sub}},
+            )
+            _recat += 1
+        await db.app_meta.update_one(
+            {"_id": "category_migration"},
+            {"$set": {"version": _CATEGORY_MIGRATION_VERSION}},
+            upsert=True,
+        )
+        logger.info(f"Migration: re-categorized {_recat} articles with the fixed classifier")
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
@@ -1672,26 +1704,93 @@ async def get_interest_categories():
 # ===================== NEWS API CONFIG =====================
 
 # Category mapping based on keywords in title/body
+# Category → keyword list. Scored by weighted matches (title hits count double);
+# the highest-scoring category wins. India-news tuned and kept specific to avoid
+# the cross-topic bleed that mislabeled almost everything. Only the 7 categories
+# the feed filter shows are emitted (Health/Lifestyle fold into Science/Entertainment).
+_CATEGORY_KEYWORDS = {
+    "Politics": [
+        "election", "elections", "minister", "parliament", "lok sabha", "rajya sabha",
+        "policy", "vote", "votes", "voter", "bjp", "congress", "aap", "modi",
+        "rahul gandhi", "amit shah", "kejriwal", "mamata", "yogi", "government",
+        "cabinet", "opposition", "coalition", "ordinance", "supreme court",
+        "high court", "cbi", "governor", "chief minister", "prime minister",
+        "manifesto", "poll", "assembly", "mla", "bypoll", "lokpal", "rally",
+    ],
+    "Business": [
+        "market", "markets", "stock", "stocks", "sensex", "nifty", "economy",
+        "economic", "gdp", "inflation", "rbi", "sebi", "rupee", "investment",
+        "investor", "ipo", "revenue", "profit", "earnings", "merger", "fintech",
+        "acquisition", "bank", "banking", "loan", "gst", "budget", "valuation",
+        "adani", "ambani", "reliance", "infosys", "tcs", "wipro", "funding",
+        "trade", "tariff", "export", "import", "shares", "mutual fund",
+    ],
+    "Technology": [
+        "artificial intelligence", "machine learning", "software", "smartphone",
+        "gadget", "chip", "semiconductor", "cyber", "data breach", "cloud computing",
+        "5g", "google", "apple", "microsoft", "openai", "chatgpt", "android",
+        "ios", "app", "startup", "robotics", "electric vehicle",
+        "coding", "developer", "hardware", "laptop", "processor", "gpu", "ai model",
+    ],
+    "Sports": [
+        "cricket", "ipl", "bcci", "world cup", "football", "tennis", "hockey",
+        "kabaddi", "olympic", "olympics", "match", "tournament", "wicket",
+        "batsman", "bowler", "virat", "kohli", "rohit sharma", "dhoni", "bumrah",
+        "medal", "championship", "league", "fifa", "odi", "t20", "test series",
+        "stadium", "athlete", "innings", "captain",
+    ],
+    "Entertainment": [
+        "bollywood", "film", "movie", "actor", "actress", "cinema", "box office",
+        "ott", "netflix", "song", "music", "album", "concert", "celebrity",
+        "trailer", "web series", "director", "shah rukh", "salman khan",
+        "deepika", "singer", "tollywood", "teaser", "biopic", "filmmaker",
+    ],
+    "Science": [
+        "isro", "chandrayaan", "gaganyaan", "satellite", "space", "nasa",
+        "research", "scientist", "vaccine", "climate", "discovery", "experiment",
+        "astronomy", "physics", "biology", "genome", "hospital", "aiims",
+        "disease", "covid", "dengue", "cancer", "medicine", "health",
+    ],
+    "World": [
+        "united nations", "g20", "brics", "pakistan", "china", "russia",
+        "ukraine", "united states", "europe", "ceasefire", "foreign",
+        "embassy", "bilateral", "trump", "putin", "biden", "gaza", "israel",
+        "diplomatic", "treaty", "summit",
+    ],
+}
+
+
+def _kw_pattern(kw: str):
+    """Word-boundary regex for single words; plain (escaped) regex for phrases.
+    Word boundaries stop short keywords like 'ev' or 'app' from matching inside
+    unrelated words (the old 'ai in text' bug matched said/again/main/campaign)."""
+    if " " in kw:
+        return re.compile(re.escape(kw), re.IGNORECASE)
+    return re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
+
+
+_CATEGORY_PATTERNS = {
+    cat: [_kw_pattern(kw) for kw in kws] for cat, kws in _CATEGORY_KEYWORDS.items()
+}
+
+
 def detect_category(title: str, body: str) -> tuple:
-    """Detect category from article content"""
-    text = (title + " " + body).lower()
-    
-    category_keywords = {
-        "Technology": ["tech", "ai", "software", "app", "digital", "computer", "startup", "innovation", "gadget", "smartphone", "internet", "cyber", "data", "cloud", "robot"],
-        "Business": ["market", "stock", "economy", "finance", "investment", "company", "trade", "business", "revenue", "profit", "bank", "startup", "corporate", "ceo"],
-        "Politics": ["government", "election", "minister", "parliament", "policy", "vote", "political", "congress", "senate", "law", "legislation", "president", "prime minister"],
-        "Sports": ["cricket", "football", "tennis", "match", "player", "tournament", "team", "score", "championship", "olympic", "sports", "game", "league"],
-        "Entertainment": ["movie", "film", "actor", "actress", "music", "singer", "celebrity", "bollywood", "hollywood", "show", "concert", "album", "award"],
-        "Science": ["research", "scientist", "study", "discovery", "space", "nasa", "climate", "environment", "health", "medical", "vaccine", "experiment"],
-        "World": ["international", "global", "foreign", "country", "nation", "war", "diplomatic", "united nations", "europe", "asia", "america"],
-        "Lifestyle": ["food", "travel", "fashion", "wellness", "fitness", "recipe", "restaurant", "vacation", "style", "beauty", "home"]
-    }
-    
-    for category, keywords in category_keywords.items():
-        if any(kw in text for kw in keywords):
-            return category, None
-    
-    return "World", None  # Default fallback
+    """Score every category by weighted keyword matches (title hits count double)
+    and return the highest scorer. Beats the old first-match-wins + substring
+    approach that dumped nearly everything into Technology."""
+    title_s = title or ""
+    body_s = body or ""
+    best_cat, best_score = "World", 0
+    for cat, patterns in _CATEGORY_PATTERNS.items():
+        score = 0
+        for pat in patterns:
+            if pat.search(title_s):
+                score += 2
+            if pat.search(body_s):
+                score += 1
+        if score > best_score:
+            best_cat, best_score = cat, score
+    return best_cat, None
 
 def clean_newsapi_text(text: str) -> str:
     """Strip NewsAPI truncation artifacts like '[+1234 chars]' and anything after."""
