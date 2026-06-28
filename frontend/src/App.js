@@ -6,13 +6,16 @@ import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import "./App.css";
 import WelcomeSplash from "./components/WelcomeSplash";
+import { loadToken, getCachedToken, setToken, clearToken } from "./lib/tokenStore";
 
 // ── Global axios setup ────────────────────────────────────────────────────────
 // Always send cookies AND, when available, the session token as a Bearer header.
 // This dual approach handles browsers that drop cross-origin Set-Cookie headers.
+// The token comes from the in-memory mirror of the secure vault (see tokenStore),
+// not localStorage — so WebView JS can no longer read it off an open shelf.
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("chintan_session_token");
+  const token = getCachedToken();
   if (token && !config.headers["Authorization"]) {
     config.headers["Authorization"] = `Bearer ${token}`;
   }
@@ -60,13 +63,18 @@ const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    checkAuth();
+    // Load the token from the secure vault into the in-memory mirror BEFORE the
+    // first authenticated request, so the axios interceptor can attach it.
+    (async () => {
+      await loadToken();
+      await checkAuth();
+    })();
   }, []);
 
-  const login = (userData, token = null) => {
+  const login = async (userData, token = null) => {
     setUser(userData);
     if (token) {
-      localStorage.setItem("chintan_session_token", token);
+      await setToken(token);
     }
   };
 
@@ -76,7 +84,7 @@ const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Logout error:", error);
     }
-    localStorage.removeItem("chintan_session_token");
+    await clearToken();
     setUser(null);
   };
 
@@ -128,7 +136,7 @@ const AuthCallback = () => {
           { withCredentials: true }
         );
 
-        login(response.data.user, response.data.session_token);
+        await login(response.data.user, response.data.session_token);
         const dest = !response.data.user.onboarding_completed ? "/onboarding" : "/feed";
         setWelcomeDest(dest);
         setShowWelcome(true);
@@ -260,13 +268,13 @@ const NativeAuthHandler = () => {
 
       // Mark auth as complete so the LoginPage polling stops
       sessionStorage.removeItem("native_auth_pending");
-      // Store token so the axios interceptor sends it as Bearer on every request
-      localStorage.setItem("chintan_session_token", sessionToken);
+      // Store token in the secure vault so the axios interceptor can attach it
+      await setToken(sessionToken);
 
       try {
         const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
         console.log("auth/me response: " + response.status);
-        login(response.data, sessionToken);
+        await login(response.data, sessionToken);
         const dest = !response.data.onboarding_completed ? "/onboarding" : "/feed";
         setWelcomeDest(dest);
         setShowWelcome(true);
@@ -291,9 +299,9 @@ const NativeAuthHandler = () => {
           sessionStorage.removeItem("native_auth_pending");
           sessionStorage.removeItem("oauth_state");
           const sessionToken = resp.data.session_token;
-          localStorage.setItem("chintan_session_token", sessionToken);
+          await setToken(sessionToken);
           const meResp = await axios.get(`${API}/auth/me`);
-          login(meResp.data, sessionToken);
+          await login(meResp.data, sessionToken);
           const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
           setWelcomeDest(dest);
           setShowWelcome(true);

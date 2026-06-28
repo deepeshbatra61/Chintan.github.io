@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { SuryaLogo, useAuth } from "../App";
 import { Browser } from "@capacitor/browser";
+import { setToken } from "../lib/tokenStore";
 
 const NATIVE_REDIRECT_URI =
   "https://chintangithubio-production.up.railway.app/api/auth/native-callback";
@@ -34,10 +35,10 @@ const LoginPage = () => {
 
   const finishNativeAuth = async (sessionToken) => {
     stopPolling();
-    localStorage.setItem("chintan_session_token", sessionToken);
+    await setToken(sessionToken);
     try { await Browser.close(); } catch (_) {}
     const meResp = await axios.get(`${API}/auth/me`);
-    login(meResp.data, sessionToken);
+    await login(meResp.data, sessionToken);
     const dest = meResp.data.onboarding_completed ? "/feed" : "/onboarding";
     setWelcomeDest(dest);
     setShowWelcome(true);
