@@ -22,6 +22,9 @@ import httpx
 import redis.asyncio as aioredis
 import anthropic
 import pytz
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -59,6 +62,19 @@ _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 # users may call /admin/* routes. Empty set => admin routes are locked to nobody.
 ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 
+def _extract_text(msg) -> str:
+    """Safely pull text from an Anthropic message. Returns '' if the response has
+    no content or the first block isn't text (refusal, empty, odd shape) instead
+    of raising IndexError/AttributeError on msg.content[0].text."""
+    try:
+        for block in (msg.content or []):
+            if getattr(block, "type", None) == "text":
+                return block.text or ""
+    except (AttributeError, TypeError):
+        pass
+    return ""
+
+
 async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: str = "claude-sonnet-4-5-20250929") -> str:
     """Single-turn Anthropic API call. Returns the text of the first content block."""
     msg = await _anthropic_client.messages.create(
@@ -67,7 +83,7 @@ async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: st
         system=system,
         messages=[{"role": "user", "content": user_content}],
     )
-    return msg.content[0].text
+    return _extract_text(msg)
 
 
 async def _generate_poll_for_article(article: dict) -> None:
@@ -92,21 +108,29 @@ async def _generate_poll_for_article(article: dict) -> None:
         if raw.startswith("json"):
             raw = raw[4:]
         raw = raw.strip()
-    # Locate the JSON object
+    # Locate and parse the JSON object — skip poll generation on bad/empty output
     start, end = raw.find("{"), raw.rfind("}") + 1
-    data = json.loads(raw[start:end])
+    if start < 0 or end <= start:
+        logger.warning(f"Poll generation: no JSON object in LLM output for {article_id}")
+        return
+    try:
+        data = json.loads(raw[start:end])
+        options = data["options"][:4]
+        question = data["question"]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning(f"Poll generation: bad JSON for {article_id}: {e}")
+        return
 
-    options = data["options"][:4]
     poll_doc = {
         "poll_id": f"poll_{uuid.uuid4().hex[:12]}",
         "article_id": article_id,
-        "question": data["question"],
+        "question": question,
         "options": options,
         "votes": {opt: 0 for opt in options},
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.polls.insert_one(poll_doc)
-    logger.info(f"Auto-generated poll for {article_id}: {data['question']}")
+    logger.info(f"Auto-generated poll for {article_id}: {question}")
 
 
 _CREDIT_EXHAUSTED_MSG = "credit balance is too low"
@@ -218,7 +242,7 @@ async def _run_ingest_cycle() -> None:
                         f"Article title: {art['title']}. Return only the category name, nothing else."
                     )}],
                 )
-                cat = msg.content[0].text.strip()
+                cat = _extract_text(msg).strip()
                 if cat in _valid_cats:
                     await db.articles.update_one(
                         {"article_id": art["article_id"]},
@@ -518,6 +542,24 @@ async def lifespan(app: FastAPI):
 
 # Create the main app
 app = FastAPI(lifespan=lifespan)
+
+
+def _rate_limit_key(request: Request) -> str:
+    """Rate-limit per session token when logged in (reliable per-user even behind
+    Railway's proxy), else per client IP. IP needs uvicorn --proxy-headers to be real."""
+    token = request.cookies.get("session_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth.split(" ", 1)[1]
+    return f"session:{token}" if token else get_remote_address(request)
+
+
+# In-memory limiter (single Railway instance). Per-route limits live on the
+# expensive Anthropic endpoints; normal feed/scroll traffic is never capped.
+limiter = Limiter(key_func=_rate_limit_key)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -2163,7 +2205,7 @@ async def get_brief(brief_type: str, request: Request = None):
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
-        summary = msg.content[0].text.strip()
+        summary = _extract_text(msg).strip()
     except Exception as e:
         logger.error(f"Brief Claude call failed: {e}")
         fallback_parts = []
@@ -2204,7 +2246,8 @@ async def get_brief(brief_type: str, request: Request = None):
 # ===================== AI ROUTES =====================
 
 @api_router.post("/ai/ask")
-async def ask_ai(ask_request: AskAIRequest, user: dict = Depends(require_auth)):
+@limiter.limit("20/minute")
+async def ask_ai(request: Request, ask_request: AskAIRequest, user: dict = Depends(require_auth)):
     """Ask AI about an article"""
     article = await db.articles.find_one({"article_id": ask_request.article_id}, {"_id": 0})
     if not article:
@@ -2248,8 +2291,11 @@ async def ask_ai(ask_request: AskAIRequest, user: dict = Depends(require_auth)):
             system=context,
             messages=api_messages,
         )
-        response = msg.content[0].text
-        
+        response = _extract_text(msg)
+        if not response:
+            logger.warning("ask_ai: empty/non-text LLM response, not saving")
+            raise HTTPException(status_code=502, detail="AI returned an empty response")
+
         # Save messages to DB
         user_msg_doc = {
             "message_id": f"msg_{uuid.uuid4().hex[:12]}",
