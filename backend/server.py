@@ -577,7 +577,9 @@ async def lifespan(app: FastAPI):
 
     # Re-categorize + clean existing articles in the BACKGROUND so the app starts
     # serving immediately (this previously ran inline and blocked startup).
-    asyncio.create_task(_run_category_migration())
+    # Keep a reference — a fire-and-forget create_task() can be GC'd mid-flight.
+    migration_task = asyncio.create_task(_run_category_migration())
+    app.state._migration_task = migration_task
 
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
