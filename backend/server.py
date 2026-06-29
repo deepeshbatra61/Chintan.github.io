@@ -67,6 +67,34 @@ ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").sp
 # adds cost. Set LLM_CATEGORIZATION_ENABLED=true to re-enable (with a better prompt).
 LLM_CATEGORIZATION_ENABLED = os.environ.get("LLM_CATEGORIZATION_ENABLED", "false").lower() == "true"
 
+
+def _int_env(name: str, default: int) -> int:
+    """Parse an int env var; fall back to default on missing/garbage so a bad
+    value can never crash startup."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+# ── Cost controls (all reversible via Railway env; production-safe defaults) ──
+# For a low-cost testing week set: INGEST_FETCH_LIMIT=15, INGEST_SUMMARIZE_LIMIT=8,
+# INGEST_SCHEDULE_ENABLED=false, AI_MODEL=sonnet. Volume is the real cost lever;
+# the model is a rounding error at single-tester volume.
+INGEST_FETCH_LIMIT = _int_env("INGEST_FETCH_LIMIT", 200)         # max articles stored per cycle
+INGEST_SUMMARIZE_LIMIT = _int_env("INGEST_SUMMARIZE_LIMIT", 30)  # max LLM summaries per cycle
+INGEST_SCHEDULE_ENABLED = os.environ.get("INGEST_SCHEDULE_ENABLED", "true").lower() != "false"
+
+# AI model used for summaries + on-demand features (Ask AI, Other Side, Think
+# Deeper, polls). Default haiku — cheap and safe if AI_MODEL is unset in prod.
+# Set AI_MODEL=sonnet during testing to judge prompt quality at the ceiling.
+_MODEL_ALIASES = {
+    "sonnet": "claude-sonnet-4-5-20250929",
+    "haiku": "claude-haiku-4-5-20251001",
+}
+_AI_MODEL_RAW = os.environ.get("AI_MODEL", "haiku").strip()
+AI_MODEL = _MODEL_ALIASES.get(_AI_MODEL_RAW.lower(), _AI_MODEL_RAW)
+
 def _extract_text(msg) -> str:
     """Safely pull text from an Anthropic message. Returns '' if the response has
     no content or the first block isn't text (refusal, empty, odd shape) instead
@@ -80,10 +108,11 @@ def _extract_text(msg) -> str:
     return ""
 
 
-async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: str = "claude-sonnet-4-5-20250929") -> str:
-    """Single-turn Anthropic API call. Returns the text of the first content block."""
+async def _llm(system: str, user_content: str, max_tokens: int = 1024, model: str = None) -> str:
+    """Single-turn Anthropic API call. Returns the text of the first content block.
+    Defaults to the configured AI_MODEL (so poll/Other Side/Think Deeper follow it)."""
     msg = await _anthropic_client.messages.create(
-        model=model,
+        model=model or AI_MODEL,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_content}],
@@ -311,7 +340,7 @@ async def _run_ingest_cycle() -> None:
         to_summarize = await db.articles.find(
             {"claude_summarized": {"$ne": True}, "claude_skip": {"$ne": True}},
             {"_id": 0, "article_id": 1, "title": 1, "content": 1, "description": 1},
-        ).limit(30).to_list(30)
+        ).limit(INGEST_SUMMARIZE_LIMIT).to_list(INGEST_SUMMARIZE_LIMIT)
 
         _SUM_SYSTEM = (
             "You are the writer for Chintan, a contemplative Indian news app "
@@ -353,7 +382,6 @@ async def _run_ingest_cycle() -> None:
                 for attempt in range(2):  # initial + 1 retry
                     retry_prefix = _RETRY_PREFIX if attempt > 0 else ""
                     raw = await _llm(
-                        model="claude-haiku-4-5-20251001",
                         system=_SUM_SYSTEM,
                         user_content=_SUM_USER_TEMPLATE.format(
                             retry_prefix=retry_prefix,
@@ -455,6 +483,12 @@ async def _background_news_ingestor() -> None:
         await _run_ingest_cycle()
     except Exception as exc:
         logger.error(f"Ingestor startup cycle error: {exc}")
+
+    # Cost control: when the recurring schedule is off, do the one startup ingest
+    # and stop — no repeated re-fetch/re-summarize. Trigger more via /admin/trigger-ingest.
+    if not INGEST_SCHEDULE_ENABLED:
+        logger.info("Ingestor: recurring schedule disabled (INGEST_SCHEDULE_ENABLED=false) — startup ingest only")
+        return
 
     while True:
         try:
@@ -1993,7 +2027,7 @@ async def fetch_from_newsapi() -> list:
             logger.error(f"NewsAPI everything?domains error: {e}")
 
     results = []
-    for url, a in list(seen.items())[:200]:
+    for url, a in list(seen.items())[:INGEST_FETCH_LIMIT]:
         title = clean_newsapi_text((a.get("title") or "").strip())
         description = clean_newsapi_text((a.get("description") or "").strip())
         raw_content = clean_newsapi_text((a.get("content") or description).strip())
@@ -2429,7 +2463,7 @@ async def get_brief(brief_type: str, request: Request = None):
     summary = ""
     try:
         msg = await _anthropic_client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=AI_MODEL,
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -2514,7 +2548,7 @@ async def ask_ai(request: Request, ask_request: AskAIRequest, user: dict = Depen
         api_messages.append({"role": "user", "content": ask_request.message})
 
         msg = await _anthropic_client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=AI_MODEL,
             max_tokens=300,
             system=context,
             messages=api_messages,
