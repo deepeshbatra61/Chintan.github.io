@@ -1541,7 +1541,7 @@ async def google_native_callback(
         # Pass state back so the app can verify the CSRF nonce it stored in sessionStorage
         state_param = f"&state={state}" if state else ""
         return RedirectResponse(
-            url=f"{_NATIVE_APP_LINK}?session_token={app_access}&refresh_token={app_refresh}{state_param}"
+            url=f"{_NATIVE_APP_SCHEME}?session_token={app_access}&refresh_token={app_refresh}{state_param}"
         )
 
     except Exception as e:
