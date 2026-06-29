@@ -185,6 +185,40 @@ def _parse_sections(raw: str) -> list | None:
         return None
 
 
+def _parse_contemplation(raw: str) -> dict | None:
+    """Extract the contemplative read {beats: [{hook, body}], question} from a raw
+    LLM response. Returns None if the JSON is missing or has no usable beats."""
+    raw_s = raw.strip()
+    if raw_s.startswith("```"):
+        raw_s = raw_s.split("```")[1]
+        if raw_s.startswith("json"):
+            raw_s = raw_s[4:]
+        raw_s = raw_s.strip()
+    start = raw_s.find("{")
+    end = raw_s.rfind("}") + 1
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(raw_s[start:end])
+    except json.JSONDecodeError:
+        return None
+    beats_in = data.get("beats", [])
+    if not isinstance(beats_in, list) or not beats_in:
+        return None
+    beats = []
+    for b in beats_in[:4]:
+        if not isinstance(b, dict):
+            continue
+        hook = str(b.get("hook", "")).strip()
+        body = str(b.get("body", "")).strip()
+        if hook or body:
+            beats.append({"hook": hook[:160], "body": body[:600]})
+    if not beats:
+        return None
+    question = str(data.get("question", "")).strip()
+    return {"beats": beats, "question": question[:300]}
+
+
 async def _run_ingest_cycle() -> None:
     """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
     # ── 0. Distributed lock (Redis only) ────────────────────────────────────
@@ -280,38 +314,33 @@ async def _run_ingest_cycle() -> None:
         ).limit(30).to_list(30)
 
         _SUM_SYSTEM = (
-            "You are the Chief Editor for a premium news app called Chintan. "
-            "Distill raw news articles into exactly three concise, impactful "
-            "sub-sections. Respond with ONLY valid JSON, no explanation, "
-            "no markdown, no preamble."
+            "You are the writer for Chintan, a contemplative Indian news app "
+            "(\"Don't just consume. Contemplate.\"). You do NOT summarize — you stage "
+            "a small act of thinking. Respond with ONLY valid JSON, no markdown, no preamble."
         )
         _SUM_USER_TEMPLATE = (
             "{retry_prefix}"
-            "Create three editorial sub-sections for this news article.\n\n"
-            "STRICT RULES:\n"
-            "1. Each subtext MUST be strictly between 40 and 50 words. Count before outputting.\n"
-            "2. Zero jargon - clear, elegant, accessible English only\n"
-            "3. Clean prose only - no hashtags, emojis, asterisks, bullets, markdown\n"
-            "4. No filler phrases like 'This article discusses...'\n"
-            "5. Each heading: maximum 5 words\n\n"
-            "The three sections must tell an incremental story:\n"
-            "- Section 1 'Core Context': What actually happened and why it matters right now\n"
-            "- Section 2 'Critical Detail': The most important data point, quote, or underlying factor\n"
-            "- Section 3 'Broader Impact': What happens next, market effect, or future outlook\n\n"
-            "Return ONLY this JSON:\n"
+            "Turn this news article into a contemplative read. Return ONLY this JSON:\n"
             "{{\n"
-            "  \"sections\": [\n"
-            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}},\n"
-            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}},\n"
-            "    {{\"heading\": \"max 5 words\", \"content\": \"40-50 words of clean prose\"}}\n"
-            "  ]\n"
+            "  \"beats\": [\n"
+            "    {{\"hook\": \"a compelling standalone one-liner, <=12 words\", \"body\": \"2-3 sentences of real, specific detail expanding the hook\"}},\n"
+            "    {{\"hook\": \"...\", \"body\": \"...\"}},\n"
+            "    {{\"hook\": \"...\", \"body\": \"...\"}}\n"
+            "  ],\n"
+            "  \"question\": \"one open, personal question with no clean answer\"\n"
             "}}\n\n"
+            "RULES:\n"
+            "1. 2 to 4 beats. Each hook is a punchy line that makes the reader want to open it; each body is 2-3 sentences of concrete detail (never just repeat the hook).\n"
+            "2. Move the beats from the stakes -> the bigger pattern this connects to -> a concrete detail or number.\n"
+            "3. Plain, vivid English. Zero jargon, no 'stakeholders', no filler, no markdown.\n"
+            "4. The question must be genuinely open and personal ('you'/'we') — a tension with no clean answer. Never yes/no.\n"
+            "5. Indian context where relevant.\n\n"
             "Article Title: {title}\n"
             "Article Content: {content}"
         )
         _RETRY_PREFIX = (
-            "IMPORTANT: Your previous response had incorrect word counts. "
-            "Each section content MUST be between 40-50 words. Count carefully.\n\n"
+            "Your previous reply was not valid JSON in the required shape. "
+            "Return ONLY the JSON object with 'beats' and 'question'.\n\n"
         )
 
         for art in to_summarize:
@@ -320,8 +349,8 @@ async def _run_ingest_cycle() -> None:
                 clean_desc = _strip_html(art.get("description", ""))
                 article_text = clean_content if clean_content else clean_desc
 
-                sections = None
-                for attempt in range(3):  # initial + 2 retries
+                result = None
+                for attempt in range(2):  # initial + 1 retry
                     retry_prefix = _RETRY_PREFIX if attempt > 0 else ""
                     raw = await _llm(
                         model="claude-haiku-4-5-20251001",
@@ -331,30 +360,24 @@ async def _run_ingest_cycle() -> None:
                             title=art["title"],
                             content=article_text,
                         ),
-                        max_tokens=600,
+                        max_tokens=700,
                     )
-                    parsed = _parse_sections(raw)
-                    if parsed is not None and _validate_sections(parsed):
-                        sections = parsed
+                    result = _parse_contemplation(raw)
+                    if result is not None:
                         break
-                    logger.warning(
-                        f"Summarization attempt {attempt + 1} failed validation for {art['article_id']}"
-                        + (f" (word counts: {[len(s.get('content','').split()) for s in (parsed or [])]})" if parsed else " (parse error)")
-                    )
+                    logger.warning(f"Contemplation parse failed (attempt {attempt + 1}) for {art['article_id']}")
 
-                if sections is not None:
+                if result is not None:
                     await db.articles.update_one(
                         {"article_id": art["article_id"]},
                         {"$set": {
-                            "sections": [
-                                {"heading": str(s.get("heading", ""))[:80], "content": str(s.get("content", ""))[:400]}
-                                for s in sections
-                            ],
+                            "beats": result["beats"],
+                            "question": result["question"],
                             "claude_summarized": True,
                         }},
                     )
                 else:
-                    logger.error(f"Summarization failed after 3 attempts for {art['article_id']} — marking summarization_failed")
+                    logger.error(f"Summarization failed after retries for {art['article_id']} — marking summarization_failed")
                     await db.articles.update_one(
                         {"article_id": art["article_id"]},
                         {"$set": {"summarization_failed": True, "claude_summarized": True}},
@@ -568,9 +591,10 @@ async def lifespan(app: FastAPI):
         )
     logger.info(f"Developing stories: upserted {len(WATCHED_TOPICS)} watched topics")
 
-    # Reset claude_summarized on articles that don't have the new sections format
+    # Reset claude_summarized on articles that don't yet have the contemplation
+    # model (beats), so they re-summarize with the new prompt when credits return.
     migration_result = await db.articles.update_many(
-        {"sections": {"$exists": False}},
+        {"beats": {"$exists": False}},
         {"$set": {"claude_summarized": False}},
     )
     logger.info(f"Migration: reset claude_summarized=False on {migration_result.modified_count} articles without sections")

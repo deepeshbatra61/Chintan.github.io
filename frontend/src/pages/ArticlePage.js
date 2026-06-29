@@ -35,16 +35,22 @@ const triggerHaptic = (type = 'light') => {
   }
 };
 
-const getArticleSections = (article) => {
-  if (Array.isArray(article.sections) && article.sections.length > 0) {
-    return article.sections;
+// Deeper expandable layers below the Gist. The contemplation model produces
+// `beats` ([{hook, body}]); each tile leads with the hook and reveals the body.
+// Falls back to any legacy {heading, content} sections. Empty until the LLM
+// summariser runs — the always-visible Gist carries the article on its own.
+const getBeats = (article) => {
+  if (Array.isArray(article.beats) && article.beats.length > 0) {
+    return article.beats
+      .map(b => ({ hook: (b.hook || "").trim(), body: (b.body || "").trim() }))
+      .filter(b => b.hook || b.body);
   }
-  // No AI summary yet — show the publisher's real summary as a single honest
-  // section instead of fabricating "Core Context / Critical Detail / Broader
-  // Impact" headings from sentence slices. Real multi-section analysis returns
-  // when the LLM summariser is enabled.
-  const summary = article.summary || article.what || article.description;
-  return summary ? [{ heading: "Summary", content: summary }] : [];
+  if (Array.isArray(article.sections) && article.sections.length > 0) {
+    return article.sections
+      .map(s => ({ hook: (s.heading || "").trim(), body: (s.content || "").trim() }))
+      .filter(b => b.body);
+  }
+  return [];
 };
 
 const truncateWords = (text, maxWords) => {
@@ -79,7 +85,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [loadingOtherSide, setLoadingOtherSide] = useState(false);
   const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [expandedSections, setExpandedSections] = useState([false, false, false]);
+  const [expandedSections, setExpandedSections] = useState({});
   const [showThinkDeeper, setShowThinkDeeper] = useState(false);
 
   // Lazy-load all per-article data on first activation
@@ -303,7 +309,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap',
         }}>
           {article.category && (
-            <span style={{ color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ color: '#82828A', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'monospace' }}>
               {article.category}
             </span>
           )}
@@ -331,53 +337,81 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
         </h1>
 
         <div className="px-4 max-w-3xl mx-auto">
-          {/* Accordions */}
-          <div style={{ marginBottom: '32px' }}>
-            {getArticleSections(article).map((section, idx) => (
+          {/* Gist — always visible, enough to grasp the story at a glance */}
+          {(() => {
+            const gist = article.gist || article.summary || article.what || article.description;
+            return gist ? (
+              <p style={{
+                padding: '0 8px 18px', margin: 0, color: '#C4C4CA',
+                fontFamily: "'Manrope', 'Georgia', sans-serif",
+                fontSize: '15px', lineHeight: 1.6, fontWeight: 300,
+              }}>
+                {gist}
+              </p>
+            ) : null;
+          })()}
+
+          {/* Expandable beats — the hook leads, depth folds away until tapped */}
+          <div style={{ marginBottom: getBeats(article).length ? '12px' : 0 }}>
+            {getBeats(article).map((beat, idx) => (
               <Collapsible
                 key={idx}
-                open={expandedSections[idx]}
-                onOpenChange={(open) => setExpandedSections(prev => {
-                  const next = [...prev];
-                  next[idx] = open;
-                  return next;
-                })}
+                open={!!expandedSections[idx]}
+                onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [idx]: open }))}
               >
                 <div style={{
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'rgba(255,255,255,0.022)',
                   borderRadius: '12px',
-                  marginBottom: '8px',
+                  marginBottom: '10px',
                   marginLeft: '8px',
                   marginRight: '8px',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.06)',
                   overflow: 'hidden',
                 }}>
                   <CollapsibleTrigger asChild>
                     <button
                       data-testid={`section-${idx}`}
                       style={{
-                        width: '100%', display: 'flex', alignItems: 'center',
-                        justifyContent: 'space-between', padding: '14px 16px',
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                        justifyContent: 'space-between', padding: '15px 14px',
                         background: 'none', cursor: 'pointer', textAlign: 'left',
                       }}
                     >
-                      <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        {section.heading}
+                      <span style={{ color: '#DEDEE4', fontFamily: "'Manrope', sans-serif", fontSize: '16px', fontWeight: 400, lineHeight: 1.35, flex: 1 }}>
+                        {beat.hook || beat.body}
                       </span>
                       {expandedSections[idx]
-                        ? <ChevronUp className="w-5 h-5 text-gray-500" />
-                        : <ChevronDown className="w-5 h-5 text-gray-500" />}
+                        ? <ChevronUp className="w-5 h-5 text-gray-500" style={{ flexShrink: 0 }} />
+                        : <ChevronDown className="w-5 h-5 text-gray-500" style={{ flexShrink: 0 }} />}
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div style={{ padding: '0 12px 16px', color: '#9ca3af', lineHeight: '1.65', fontSize: '14px', textAlign: 'left' }}>
-                      {section.content}
+                    <div style={{ padding: '2px 14px 15px', color: '#9A9AA2', lineHeight: 1.62, fontSize: '13.5px', fontWeight: 300, textAlign: 'left' }}>
+                      {beat.body}
                     </div>
                   </CollapsibleContent>
                 </div>
               </Collapsible>
             ))}
           </div>
+
+          {/* The Question — label-free contemplative close */}
+          {article.question && (
+            <div style={{
+              borderRadius: '16px', padding: '26px 22px', textAlign: 'center',
+              margin: '14px 8px 30px',
+              background: '#0C0A0B',
+              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(220,38,38,0.07) 0%, rgba(10,10,10,0) 70%)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <p style={{
+                fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic',
+                fontWeight: 500, fontSize: '20px', lineHeight: 1.36, color: '#EDEDED', margin: 0,
+              }}>
+                {article.question}
+              </p>
+            </div>
+          )}
 
           {/* Think Deeper */}
           {aiQuestions.length > 0 && (
@@ -386,7 +420,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 className="flex items-center justify-between w-full gap-2"
                 onClick={() => setShowThinkDeeper(prev => !prev)}
               >
-                <span className="text-red-500 font-mono text-xs uppercase tracking-wider">Think Deeper</span>
+                <span className="text-gray-400 font-mono text-xs uppercase tracking-wider">Think Deeper</span>
                 <span className="text-gray-500 text-xs">{showThinkDeeper ? '▲' : '▼'}</span>
               </button>
               {showThinkDeeper && (
@@ -462,7 +496,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             </button>
             <button
               onClick={() => navigate(`/ask-ai/${articleId}`)}
-              className="flex flex-col items-center gap-1 text-red-500"
+              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
               data-testid="ask-ai-btn"
             >
               <Sparkles className="w-5 h-5" />
