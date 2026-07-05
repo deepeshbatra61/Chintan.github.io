@@ -259,14 +259,14 @@ _SUM_USER_TEMPLATE = (
     "Turn this news article into a contemplative read. Return ONLY this JSON:\n"
     "{{\n"
     "  \"beats\": [\n"
-    "    {{\"hook\": \"a compelling standalone one-liner, <=12 words\", \"body\": \"2-3 sentences of real, specific detail expanding the hook\"}},\n"
+    "    {{\"hook\": \"a punchy, provocative line (<=10 words) that creates curiosity or names a tension\", \"body\": \"2-3 sentences of real, specific detail expanding the hook\"}},\n"
     "    {{\"hook\": \"...\", \"body\": \"...\"}},\n"
     "    {{\"hook\": \"...\", \"body\": \"...\"}}\n"
     "  ],\n"
     "  \"question\": \"one open, personal question with no clean answer\"\n"
     "}}\n\n"
     "RULES:\n"
-    "1. 2 to 4 beats. Each hook is a punchy line that makes the reader want to open it; each body is 2-3 sentences of concrete detail (never just repeat the hook).\n"
+    "1. 2 to 4 beats. Each HOOK must provoke curiosity or name a tension — a line the reader NEEDS to tap open. NEVER a factual restatement of the headline. Good hook: 'The rate cut that quietly punishes savers'. Bad hook: 'RBI keeps the repo rate at 6.5%'. Each BODY is 2-3 sentences of concrete detail (real names, numbers), never just repeating the hook.\n"
     "2. Move the beats from the stakes -> the bigger pattern this connects to -> a concrete detail or number.\n"
     "3. Plain, vivid English. Zero jargon, no 'stakeholders', no filler, no markdown.\n"
     "4. The question must be genuinely open and personal ('you'/'we') — a tension with no clean answer. Never yes/no.\n"
@@ -530,7 +530,7 @@ async def _background_news_ingestor() -> None:
             await asyncio.sleep(3600)  # 1h back-off on unexpected error
 
 
-_CATEGORY_MIGRATION_VERSION = 3
+_CATEGORY_MIGRATION_VERSION = 4
 
 
 async def _run_category_migration() -> None:
@@ -546,8 +546,8 @@ async def _run_category_migration() -> None:
             {}, {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1}
         ):
             try:
-                desc = (art.get("description") or "").strip()
-                body = (art.get("content") or "").strip()
+                desc = clean_newsapi_text((art.get("description") or "").strip())
+                body = clean_newsapi_text((art.get("content") or "").strip())
                 cat, sub = detect_category(art.get("title", ""), desc + " " + body)
                 summary = (desc or body[:400] or art.get("title", "")).strip()
                 await db.articles.update_one(
@@ -555,6 +555,8 @@ async def _run_category_migration() -> None:
                     {"$set": {
                         "category": cat,
                         "subcategory": sub,
+                        "description": desc[:300] + "..." if len(desc) > 300 else desc,
+                        "content": body,
                         "summary": summary[:600],
                         "what": summary[:500],
                         "why": "",
@@ -1883,10 +1885,16 @@ def detect_category(title: str, body: str) -> tuple:
     return best_cat, None
 
 def clean_newsapi_text(text: str) -> str:
-    """Strip NewsAPI truncation artifacts like '[+1234 chars]' and anything after."""
+    """Strip NewsAPI truncation artifacts and WordPress/RSS footer cruft."""
     if not text:
         return text
-    return re.sub(r'\s*\[\+\d+\s*chars?\].*', '', text, flags=re.IGNORECASE).strip()
+    # NewsAPI truncation marker "[+1234 chars]" and anything after
+    clean = re.sub(r'\s*\[\+\d+\s*chars?\].*', '', text, flags=re.IGNORECASE | re.DOTALL)
+    # "The post <title> appeared first on <site>." WordPress RSS footer
+    clean = re.sub(r'\s*The post\b.*?\bappeared first on\b.*', '', clean, flags=re.IGNORECASE | re.DOTALL)
+    # Trailing "Continue reading..." / "Read more at..." tails
+    clean = re.sub(r'\s*(Continue reading|Read (more|full story)).*', '', clean, flags=re.IGNORECASE | re.DOTALL)
+    return clean.strip()
 
 
 # Domains that consistently produce off-topic / non-India content.
@@ -2397,6 +2405,20 @@ async def get_brief(brief_type: str, request: Request = None):
     raw_name: str = (user.get("name") or "") if user else ""
     user_name = raw_name.split()[0] if raw_name else "there"
 
+    # Cache the generated brief for 1 hour, per user + brief type. Briefs don't
+    # change minute to minute, so this avoids a fresh LLM call on every open.
+    _user_id = user.get("user_id") if user else None
+    _brief_cache_key = f"{brief_type}:{_user_id or 'anon'}"
+    _cached = await db.brief_cache.find_one({"_id": _brief_cache_key})
+    if _cached and _cached.get("brief"):
+        try:
+            _gen = _cached.get("generated_at")
+            _gen_dt = datetime.fromisoformat(_gen) if isinstance(_gen, str) else _gen
+            if _gen_dt and (datetime.now(timezone.utc) - _gen_dt).total_seconds() < 3600:
+                return _cached["brief"]
+        except Exception:
+            pass
+
     _greetings = {
         "morning": ("Good Morning",  "while you were sleeping, we curated your morning brief"),
         "midday":  ("Good Afternoon", "while you were working, we were curating your tailored afternoon brief"),
@@ -2532,7 +2554,7 @@ async def get_brief(brief_type: str, request: Request = None):
 
     read_time = f"{max(1, round(len(summary.split()) / 200))} min read"
 
-    return {
+    brief = {
         "greeting":           greeting,
         "subtitle":           subtitle,
         "summary":            summary,
@@ -2540,6 +2562,12 @@ async def get_brief(brief_type: str, request: Request = None):
         "referenced_stories": referenced_stories,
         "read_time":          read_time,
     }
+    await db.brief_cache.update_one(
+        {"_id": _brief_cache_key},
+        {"$set": {"brief": brief, "generated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return brief
 
 # ===================== AI ROUTES =====================
 

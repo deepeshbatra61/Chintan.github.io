@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import {
-  Search, Bell, User, Menu, Sun, CloudSun, Moon,
+  Bell, User, Menu, Sun, CloudSun, Moon,
   Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
@@ -259,10 +259,7 @@ const FeedPage = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-white/5 rounded-lg transition-colors">
-              <Search className="w-5 h-5 text-gray-400" />
-            </button>
-            <button 
+            <button
               onClick={openNotifications}
               className="p-2 hover:bg-white/5 rounded-lg transition-colors relative"
               data-testid="notifications-btn"
