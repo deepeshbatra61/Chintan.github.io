@@ -248,6 +248,62 @@ def _parse_contemplation(raw: str) -> dict | None:
     return {"beats": beats, "question": question[:300]}
 
 
+# ── Contemplation summariser (shared by the ingest loop AND the on-demand path) ──
+_SUM_SYSTEM = (
+    "You are the writer for Chintan, a contemplative Indian news app "
+    "(\"Don't just consume. Contemplate.\"). You do NOT summarize — you stage "
+    "a small act of thinking. Respond with ONLY valid JSON, no markdown, no preamble."
+)
+_SUM_USER_TEMPLATE = (
+    "{retry_prefix}"
+    "Turn this news article into a contemplative read. Return ONLY this JSON:\n"
+    "{{\n"
+    "  \"beats\": [\n"
+    "    {{\"hook\": \"a compelling standalone one-liner, <=12 words\", \"body\": \"2-3 sentences of real, specific detail expanding the hook\"}},\n"
+    "    {{\"hook\": \"...\", \"body\": \"...\"}},\n"
+    "    {{\"hook\": \"...\", \"body\": \"...\"}}\n"
+    "  ],\n"
+    "  \"question\": \"one open, personal question with no clean answer\"\n"
+    "}}\n\n"
+    "RULES:\n"
+    "1. 2 to 4 beats. Each hook is a punchy line that makes the reader want to open it; each body is 2-3 sentences of concrete detail (never just repeat the hook).\n"
+    "2. Move the beats from the stakes -> the bigger pattern this connects to -> a concrete detail or number.\n"
+    "3. Plain, vivid English. Zero jargon, no 'stakeholders', no filler, no markdown.\n"
+    "4. The question must be genuinely open and personal ('you'/'we') — a tension with no clean answer. Never yes/no.\n"
+    "5. Indian context where relevant.\n\n"
+    "Article Title: {title}\n"
+    "Article Content: {content}"
+)
+_SUM_RETRY_PREFIX = (
+    "Your previous reply was not valid JSON in the required shape. "
+    "Return ONLY the JSON object with 'beats' and 'question'.\n\n"
+)
+
+
+async def _summarize_article(article: dict) -> dict | None:
+    """Generate the contemplation model {beats, question} for one article. Returns
+    the dict on success, None if the LLM output can't be parsed after a retry.
+    Raises on API errors (caller handles credit exhaustion)."""
+    clean_content = _strip_html(article.get("content", ""))
+    clean_desc = _strip_html(article.get("description", ""))
+    article_text = clean_content or clean_desc
+    for attempt in range(2):  # initial + 1 retry
+        raw = await _llm(
+            system=_SUM_SYSTEM,
+            user_content=_SUM_USER_TEMPLATE.format(
+                retry_prefix=_SUM_RETRY_PREFIX if attempt > 0 else "",
+                title=article.get("title", ""),
+                content=article_text,
+            ),
+            max_tokens=700,
+        )
+        result = _parse_contemplation(raw)
+        if result is not None:
+            return result
+        logger.warning(f"Contemplation parse failed (attempt {attempt + 1}) for {article.get('article_id')}")
+    return None
+
+
 async def _run_ingest_cycle() -> None:
     """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
     # ── 0. Distributed lock (Redis only) ────────────────────────────────────
@@ -342,58 +398,9 @@ async def _run_ingest_cycle() -> None:
             {"_id": 0, "article_id": 1, "title": 1, "content": 1, "description": 1},
         ).limit(INGEST_SUMMARIZE_LIMIT).to_list(INGEST_SUMMARIZE_LIMIT)
 
-        _SUM_SYSTEM = (
-            "You are the writer for Chintan, a contemplative Indian news app "
-            "(\"Don't just consume. Contemplate.\"). You do NOT summarize — you stage "
-            "a small act of thinking. Respond with ONLY valid JSON, no markdown, no preamble."
-        )
-        _SUM_USER_TEMPLATE = (
-            "{retry_prefix}"
-            "Turn this news article into a contemplative read. Return ONLY this JSON:\n"
-            "{{\n"
-            "  \"beats\": [\n"
-            "    {{\"hook\": \"a compelling standalone one-liner, <=12 words\", \"body\": \"2-3 sentences of real, specific detail expanding the hook\"}},\n"
-            "    {{\"hook\": \"...\", \"body\": \"...\"}},\n"
-            "    {{\"hook\": \"...\", \"body\": \"...\"}}\n"
-            "  ],\n"
-            "  \"question\": \"one open, personal question with no clean answer\"\n"
-            "}}\n\n"
-            "RULES:\n"
-            "1. 2 to 4 beats. Each hook is a punchy line that makes the reader want to open it; each body is 2-3 sentences of concrete detail (never just repeat the hook).\n"
-            "2. Move the beats from the stakes -> the bigger pattern this connects to -> a concrete detail or number.\n"
-            "3. Plain, vivid English. Zero jargon, no 'stakeholders', no filler, no markdown.\n"
-            "4. The question must be genuinely open and personal ('you'/'we') — a tension with no clean answer. Never yes/no.\n"
-            "5. Indian context where relevant.\n\n"
-            "Article Title: {title}\n"
-            "Article Content: {content}"
-        )
-        _RETRY_PREFIX = (
-            "Your previous reply was not valid JSON in the required shape. "
-            "Return ONLY the JSON object with 'beats' and 'question'.\n\n"
-        )
-
         for art in to_summarize:
             try:
-                clean_content = _strip_html(art.get("content", ""))
-                clean_desc = _strip_html(art.get("description", ""))
-                article_text = clean_content if clean_content else clean_desc
-
-                result = None
-                for attempt in range(2):  # initial + 1 retry
-                    retry_prefix = _RETRY_PREFIX if attempt > 0 else ""
-                    raw = await _llm(
-                        system=_SUM_SYSTEM,
-                        user_content=_SUM_USER_TEMPLATE.format(
-                            retry_prefix=retry_prefix,
-                            title=art["title"],
-                            content=article_text,
-                        ),
-                        max_tokens=700,
-                    )
-                    result = _parse_contemplation(raw)
-                    if result is not None:
-                        break
-                    logger.warning(f"Contemplation parse failed (attempt {attempt + 1}) for {art['article_id']}")
+                result = await _summarize_article(art)
 
                 if result is not None:
                     await db.articles.update_one(
@@ -2213,10 +2220,39 @@ async def get_developing_stories():
 
 @api_router.get("/articles/{article_id}")
 async def get_article(article_id: str):
-    """Get single article"""
+    """Get single article. Lazily generates the contemplation beats + question the
+    first time an article without them is opened (then cached), so summaries no
+    longer depend on the background ingest cycle running."""
     article = await db.articles.find_one({"article_id": article_id}, {"_id": 0})
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
+
+    if (ANTHROPIC_API_KEY and not article.get("beats")
+            and not article.get("summarization_failed") and not article.get("claude_skip")):
+        try:
+            result = await _summarize_article(article)
+            if result is not None:
+                await db.articles.update_one(
+                    {"article_id": article_id},
+                    {"$set": {
+                        "beats": result["beats"],
+                        "question": result["question"],
+                        "claude_summarized": True,
+                    }},
+                )
+                article["beats"] = result["beats"]
+                article["question"] = result["question"]
+            else:
+                await db.articles.update_one(
+                    {"article_id": article_id},
+                    {"$set": {"summarization_failed": True, "claude_summarized": True}},
+                )
+        except Exception as e:
+            # Credit exhaustion or transient API error — leave it unsummarized so a
+            # later open retries. Never fail the article load over it.
+            if not _is_credit_exhausted(e):
+                logger.error(f"On-demand summarization error for {article_id}: {e}")
+
     return article
 
 @api_router.get("/articles/{article_id}/reaction")
