@@ -8,15 +8,12 @@ import { toast } from "sonner";
 import { Share } from '@capacitor/share';
 import {
   Home, Bookmark, BookmarkCheck, Share2, MessageCircle,
-  BarChart2, Sparkles, BrainCircuit, ChevronDown, ChevronUp,
-  ThumbsUp, ThumbsDown, Send, Clock, Loader2, X
+  BarChart2, Sparkles, BrainCircuit,
+  ThumbsUp, ThumbsDown, Send, Clock, Loader2,
+  History, Scale, TrendingUp, Lightbulb, ChevronRight
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { useAuth, SuryaLogo } from "../App";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from "../components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
 
@@ -60,6 +57,35 @@ const truncateWords = (text, maxWords) => {
   return words.slice(0, maxWords).join(' ') + '…';
 };
 
+// The three reading depths and the four deep-dive lenses. Keys mirror the backend
+// (_DEEP_DIVE_ANGLES); labels/icons are the client's presentation of them.
+const DEEP_ANGLES = [
+  { key: "history", label: "The history", Icon: History },
+  { key: "winners_losers", label: "Winners & losers", Icon: Scale },
+  { key: "whats_next", label: "What happens next", Icon: TrendingUp },
+  { key: "contrarian", label: "The contrarian read", Icon: Lightbulb },
+];
+
+const LOADER_PHRASES = ["Contemplating…", "Pulling the threads…", "Weighing both sides…", "Reading past the headline…"];
+
+// The Chintan loading moment — the Surya mark turning while a line of thought
+// cycles underneath. Shown whenever a deeper tier is being generated.
+const SuryaThinking = () => {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI(x => x + 1), 1400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '72px 0', gap: '18px' }}>
+      <SuryaLogo className="w-11 h-11 animate-spin-slow" />
+      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '15px', color: '#8E877E', transition: 'opacity .3s' }}>
+        {LOADER_PHRASES[i % LOADER_PHRASES.length]}
+      </span>
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ArticleContent — self-contained per-article slide
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,10 +109,14 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [showOtherSide, setShowOtherSide] = useState(false);
   const [otherSideAnalysis, setOtherSideAnalysis] = useState(null);
   const [loadingOtherSide, setLoadingOtherSide] = useState(false);
-  const [aiQuestions, setAiQuestions] = useState([]);
   const [newComment, setNewComment] = useState("");
-  const [expandedSections, setExpandedSections] = useState({});
-  const [showThinkDeeper, setShowThinkDeeper] = useState(false);
+
+  // Tiered reading depth: 0 Glance · 1 Understand · 2 Deep dive
+  const [depth, setDepth] = useState(0);
+  const [angleKey, setAngleKey] = useState("history");
+  const [deepCache, setDeepCache] = useState({});   // { [angleKey]: {title, paragraphs} }
+  const [deepLoading, setDeepLoading] = useState(false);
+  const scrollRef = useRef(null);
 
   // Lazy-load all per-article data on first activation
   useEffect(() => {
@@ -127,11 +157,6 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     axios.get(`${API}/comments/${articleId}`, { withCredentials: true })
       .then(r => setComments(r.data))
       .catch(e => console.error("Comments fetch:", e));
-
-    // AI questions
-    axios.get(`${API}/ai/questions/${articleId}`, { withCredentials: true })
-      .then(r => setAiQuestions((r.data.questions || []).slice(0, 2)))
-      .catch(e => console.error("AI questions fetch:", e));
   }, [isActive, articleId]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -275,233 +300,254 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       .trim();
   };
 
+  // ── Depth + deep-dive navigation ────────────────────────────────────────────
+  const fetchAngle = async (key) => {
+    setAngleKey(key);
+    if (deepCache[key]) { if (scrollRef.current) scrollRef.current.scrollTop = 0; return; }
+    setDeepLoading(true);
+    try {
+      const r = await axios.get(`${API}/ai/deep-dive/${articleId}/${key}`, { withCredentials: true });
+      setDeepCache(prev => ({ ...prev, [key]: { title: r.data.title, paragraphs: r.data.paragraphs } }));
+    } catch (e) {
+      console.error("Deep dive fetch:", e);
+      toast.error("Could not load this angle");
+    } finally {
+      setDeepLoading(false);
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+  };
+
+  const goDepth = (d) => {
+    if (d === depth) return;
+    triggerHaptic('light');
+    setDepth(d);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (d === 2 && !deepCache[angleKey]) fetchAngle(angleKey);
+  };
+
+  const beats = getBeats(article);
+  const deep = deepCache[angleKey];
+  const gistText = article.gist || article.summary || article.what || article.description;
+  const secBtnStyle = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#8A847C', fontSize: '11px', cursor: 'pointer', fontFamily: "'Manrope', sans-serif" };
+
+  // The contemplation question — same warm close in Understand and Deep, and the
+  // single entry point into Ask AI ("Ask Chintan anything").
+  const questionClose = article.question ? (
+    <button
+      onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(article.question)}`)}
+      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', margin: '22px 0 6px', padding: '2px 0 2px 14px', borderLeft: '2px solid rgba(232,104,60,0.45)' }}
+      data-testid="question-ask-ai"
+    >
+      <p style={{ fontFamily: "'Playfair Display','Georgia',serif", fontStyle: 'italic', fontWeight: 500, fontSize: '19px', lineHeight: 1.42, color: '#E8B48C', margin: 0 }}>
+        {article.question}
+      </p>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '11px', fontSize: '12px', color: '#8A847C' }}>
+        Ask Chintan anything <ChevronRight className="w-3.5 h-3.5" />
+      </span>
+    </button>
+  ) : null;
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       {/* Scrollable article content */}
       <main
+        ref={scrollRef}
         style={{
           height: 'calc(100vh - var(--sat, 44px) - 56px)',
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: '80px',
+          paddingBottom: depth === 2 ? '190px' : '96px',
         }}
       >
-        {/* Hero image */}
-        <div style={{ width: '100%', height: '260px', overflow: 'hidden', position: 'relative', margin: 0, padding: 0 }}>
-          <img
-            src={article.image_url}
-            alt={article.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: '80%',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 40%, #000000 100%)',
-            zIndex: 1, pointerEvents: 'none',
-          }} />
-        </div>
-
-        {/* Breadcrumb */}
-        <div style={{
-          padding: '10px 16px', fontSize: '11px', color: '#888888',
-          display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap',
-        }}>
-          {article.category && (
-            <span style={{ color: '#82828A', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'monospace' }}>
-              {article.category}
-            </span>
-          )}
-          {article.is_breaking && <><span>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
-          {article.is_developing && !article.is_breaking && <><span>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
-          {(article.source || article.domain || article.publisher) && (
-            <><span>•</span><span>{article.source || article.domain || article.publisher}</span></>
-          )}
-          {article.published_at && (
-            <><span>•</span><span>{new Date(article.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
-          )}
-        </div>
-
-        {/* Headline */}
-        <h1 style={{
-          padding: '4px 16px 16px',
-          fontSize: 'clamp(1.3rem, 4vw, 1.75rem)',
-          fontWeight: '700',
-          lineHeight: '1.35',
-          color: '#ffffff',
-          margin: 0,
-          fontFamily: "'Playfair Display', 'Georgia', serif",
-        }}>
-          {article.title}
-        </h1>
-
-        <div className="px-4 max-w-3xl mx-auto">
-          {/* Gist — always visible, enough to grasp the story at a glance */}
-          {(() => {
-            const gist = article.gist || article.summary || article.what || article.description;
-            return gist ? (
-              <p style={{
-                padding: '0 8px 18px', margin: 0, color: '#C4C4CA',
-                fontFamily: "'Manrope', 'Georgia', sans-serif",
-                fontSize: '15px', lineHeight: 1.6, fontWeight: 300,
-              }}>
-                {gist}
-              </p>
-            ) : null;
-          })()}
-
-          {/* Expandable beats — the hook leads, depth folds away until tapped */}
-          <div style={{ marginBottom: getBeats(article).length ? '12px' : 0 }}>
-            {getBeats(article).map((beat, idx) => (
-              <Collapsible
-                key={idx}
-                open={!!expandedSections[idx]}
-                onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [idx]: open }))}
-              >
-                <div style={{
-                  background: 'rgba(255,255,255,0.022)',
-                  borderRadius: '12px',
-                  marginBottom: '10px',
-                  marginLeft: '8px',
-                  marginRight: '8px',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  overflow: 'hidden',
-                }}>
-                  <CollapsibleTrigger asChild>
-                    <button
-                      data-testid={`section-${idx}`}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                        justifyContent: 'space-between', padding: '15px 14px',
-                        background: 'none', cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <span style={{ color: '#DEDEE4', fontFamily: "'Manrope', sans-serif", fontSize: '16px', fontWeight: 400, lineHeight: 1.35, flex: 1 }}>
-                        {beat.hook || beat.body}
-                      </span>
-                      {expandedSections[idx]
-                        ? <ChevronUp className="w-5 h-5 text-gray-500" style={{ flexShrink: 0 }} />
-                        : <ChevronDown className="w-5 h-5 text-gray-500" style={{ flexShrink: 0 }} />}
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div style={{ padding: '2px 14px 15px', color: '#9A9AA2', lineHeight: 1.62, fontSize: '13.5px', fontWeight: 300, textAlign: 'left' }}>
-                      {beat.body}
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
-            ))}
-          </div>
-
-          {/* The Question — label-free contemplative close */}
-          {article.question && (
-            <div style={{
-              borderRadius: '16px', padding: '26px 22px', textAlign: 'center',
-              margin: '14px 8px 30px',
-              background: '#0C0A0B',
-              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(220,38,38,0.07) 0%, rgba(10,10,10,0) 70%)',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }}>
-              <p style={{
-                fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic',
-                fontWeight: 500, fontSize: '20px', lineHeight: 1.36, color: '#EDEDED', margin: 0,
-              }}>
-                {article.question}
-              </p>
+        {depth === 2 && deepLoading ? (
+          <SuryaThinking />
+        ) : depth === 0 ? (
+          /* ══════════ GLANCE — the cover: headline, gist, what's inside ══════════ */
+          <motion.div
+            key="glance"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div style={{ width: '100%', height: '240px', overflow: 'hidden', position: 'relative' }}>
+              <img src={article.image_url} alt={article.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '85%', background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.55) 45%, #0A0A0A 100%)', zIndex: 1, pointerEvents: 'none' }} />
             </div>
-          )}
-
-          {/* Think Deeper */}
-          {aiQuestions.length > 0 && (
-            <div className="glass-card rounded-xl p-6 mb-8">
-              <button
-                className="flex items-center justify-between w-full gap-2"
-                onClick={() => setShowThinkDeeper(prev => !prev)}
-              >
-                <span className="text-gray-400 font-mono text-xs uppercase tracking-wider">Think Deeper</span>
-                <span className="text-gray-500 text-xs">{showThinkDeeper ? '▲' : '▼'}</span>
-              </button>
-              {showThinkDeeper && (
-                <div className="space-y-3 mt-4">
-                  {aiQuestions.slice(0, 2).map((question, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(question)}`)}
-                      className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
-                      data-testid={`ai-question-${idx}`}
-                    >
-                      {truncateWords(question, 15)}
+            <div style={{ padding: '4px 22px 0' }}>
+              <div style={{ fontSize: '11px', color: '#888', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {article.category && <span style={{ color: '#E8683C', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category}</span>}
+                {article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
+                {article.is_developing && !article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
+                {(article.source || article.domain || article.publisher) && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.source || article.domain || article.publisher}</span></>}
+              </div>
+              <h1 style={{ fontSize: 'clamp(1.5rem, 5.5vw, 1.95rem)', fontWeight: 600, lineHeight: 1.18, color: '#F2EEE9', margin: '0 0 16px', fontFamily: "'Playfair Display', 'Georgia', serif" }}>
+                {article.title}
+              </h1>
+              {gistText && (
+                <p style={{ margin: 0, color: '#B6AFA6', fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '17px', lineHeight: 1.5 }}>
+                  {gistText}
+                </p>
+              )}
+              {beats.length > 0 && (
+                <div style={{ marginTop: '26px', paddingTop: '18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9.5px', letterSpacing: '0.18em', color: '#5A544D', textTransform: 'uppercase', marginBottom: '8px' }}>Inside this story</div>
+                  {beats.map((b, idx) => (
+                    <button key={idx} onClick={() => goDepth(1)} style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 0', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }} data-testid={`glance-thread-${idx}`}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#E8683C', opacity: 0.75 }}>{String(idx + 1).padStart(2, '0')}</span>
+                      <span style={{ color: '#9A938A', fontSize: '14px', fontFamily: "'Manrope', sans-serif", flex: 1, lineHeight: 1.35 }}>{b.hook || truncateWords(b.body, 10)}</span>
+                      <ChevronRight className="w-4 h-4" style={{ flexShrink: 0, color: '#4A453F' }} />
                     </button>
                   ))}
                 </div>
               )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '28px 0 8px', color: '#4A453F', fontSize: '11px' }}>
+                Swipe for the next story <ChevronRight className="w-3.5 h-3.5" />
+              </div>
             </div>
-          )}
+          </motion.div>
+        ) : depth === 1 ? (
+          /* ══════════ UNDERSTAND — the beats, the question, engagement ══════════ */
+          <motion.div
+            key="understand"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            style={{ padding: '20px 22px 0' }}
+          >
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#E8683C', textTransform: 'uppercase', marginBottom: '12px' }}>
+              {article.category || 'Story'}
+            </div>
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', lineHeight: 1.24, color: '#F2EEE9', margin: '0 0 20px' }}>
+              {article.title}
+            </h1>
+            {beats.length > 0 ? beats.map((beat, idx) => (
+              <motion.div key={idx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 + idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                style={{ background: '#141311', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', padding: '15px 16px', marginBottom: '11px' }} data-testid={`beat-${idx}`}>
+                <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: '16.5px', lineHeight: 1.3, color: '#EFEAE4', margin: beat.body ? '0 0 7px' : 0 }}>
+                  {beat.hook || beat.body}
+                </p>
+                {beat.hook && beat.body && (
+                  <p style={{ fontSize: '13.5px', lineHeight: 1.62, color: '#948E86', margin: 0, fontFamily: "'Manrope', sans-serif" }}>{beat.body}</p>
+                )}
+              </motion.div>
+            )) : gistText ? (
+              <p style={{ color: '#B6AFA6', fontFamily: "'Manrope', sans-serif", fontSize: '15px', lineHeight: 1.65 }}>{gistText}</p>
+            ) : null}
 
-          {/* Feedback */}
-          <div className="flex items-center justify-center gap-6 py-6 border-t border-white/10">
-            <button
-              onClick={handleLike}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                userReaction.liked ? "bg-green-500/20 text-green-400" : "bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400"
-              }`}
-              data-testid="like-btn"
-            >
-              <ThumbsUp className="w-4 h-4" />
-              <span className="text-sm">{article.likes || 0}</span>
-            </button>
-            <button
-              onClick={handleDislike}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                userReaction.disliked ? "bg-red-500/20 text-red-400" : "bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400"
-              }`}
-              data-testid="dislike-btn"
-            >
-              <ThumbsDown className="w-4 h-4" />
-              <span className="text-sm">{article.dislikes || 0}</span>
-            </button>
-          </div>
-        </div>
+            {questionClose}
+
+            {/* Secondary actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '18px 4px 4px', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '14px' }}>
+              <button onClick={() => setShowComments(true)} style={secBtnStyle} data-testid="discuss-btn"><MessageCircle className="w-5 h-5" /><span>Discuss</span></button>
+              <button onClick={() => setShowPoll(true)} style={secBtnStyle} data-testid="poll-btn"><BarChart2 className="w-5 h-5" /><span>Poll</span></button>
+              <button onClick={fetchOtherSide} style={secBtnStyle} data-testid="other-side-btn"><BrainCircuit className="w-5 h-5" /><span>Other Side</span></button>
+              <button onClick={() => navigate(`/ask-ai/${articleId}`)} style={secBtnStyle} data-testid="ask-ai-btn"><Sparkles className="w-5 h-5" /><span>Ask AI</span></button>
+            </div>
+
+            {/* Feedback */}
+            <div className="flex items-center justify-center gap-6 py-5">
+              <button onClick={handleLike} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${userReaction.liked ? "bg-green-500/20 text-green-400" : "bg-white/5 text-gray-400"}`} data-testid="like-btn">
+                <ThumbsUp className="w-4 h-4" /><span className="text-sm">{article.likes || 0}</span>
+              </button>
+              <button onClick={handleDislike} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${userReaction.disliked ? "bg-red-500/20 text-red-400" : "bg-white/5 text-gray-400"}`} data-testid="dislike-btn">
+                <ThumbsDown className="w-4 h-4" /><span className="text-sm">{article.dislikes || 0}</span>
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          /* ══════════ DEEP DIVE — long-form angle read ══════════ */
+          <motion.div
+            key={angleKey}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            style={{ padding: '20px 22px 0' }}
+          >
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#6E6862', textTransform: 'uppercase', marginBottom: '14px' }}>
+              Deep dive · {article.category || 'Story'}
+            </div>
+            {deep ? (
+              <>
+                <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '23px', lineHeight: 1.26, color: '#F2EEE9', margin: '0 0 16px' }}>
+                  {deep.title || DEEP_ANGLES.find(a => a.key === angleKey)?.label}
+                </h2>
+                {deep.paragraphs.map((p, idx) => (
+                  <p key={idx} style={{ fontSize: '15px', lineHeight: 1.75, color: '#B9B2A9', margin: '0 0 16px', fontFamily: "'Manrope', sans-serif" }}>
+                    {idx === 0 && (
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, float: 'left', fontSize: '42px', lineHeight: 0.82, color: '#E8683C', padding: '4px 9px 0 0' }}>{p.charAt(0)}</span>
+                    )}
+                    {idx === 0 ? p.slice(1) : p}
+                  </p>
+                ))}
+                {questionClose}
+              </>
+            ) : (
+              <p style={{ color: '#8A847C', textAlign: 'center', padding: '48px 0', fontSize: '14px' }}>
+                Couldn’t load this angle. Tap it again to retry.
+              </p>
+            )}
+          </motion.div>
+        )}
       </main>
 
-      {/* Action bar — only rendered for the active slide to avoid stacking */}
+      {/* Deep-dive angle picker — sticky footer above the rail, content scrolls under */}
+      {isActive && depth === 2 && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: '66px', zIndex: 45, padding: '30px 14px 12px', background: 'linear-gradient(to top, #0A0A0A 56%, rgba(10,10,10,0.92) 82%, rgba(10,10,10,0))', pointerEvents: 'none' }}>
+          <div style={{ maxWidth: '640px', margin: '0 auto', pointerEvents: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {DEEP_ANGLES.map(({ key, label, Icon }) => {
+                const on = key === angleKey && !deepLoading;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => fetchAngle(key)}
+                    data-testid={`angle-${key}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '9px', height: '46px', padding: '0 13px',
+                      borderRadius: '13px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+                      fontFamily: "'Manrope', sans-serif",
+                      background: on ? 'rgba(232,104,60,0.10)' : '#151412',
+                      border: on ? '1px solid rgba(232,104,60,0.55)' : '1px solid rgba(255,255,255,0.08)',
+                      color: on ? '#F6D2B4' : '#C4BDB3',
+                      transition: 'all .22s ease',
+                    }}
+                  >
+                    <Icon className="w-4 h-4" style={{ flexShrink: 0, color: on ? '#E8683C' : '#6E6862' }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Depth rail — the primary bottom control (active slide only) */}
       {isActive && (
-        <div className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 z-50">
-          <div className="max-w-3xl mx-auto flex items-center justify-around">
-            <button
-              onClick={() => setShowComments(true)}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="discuss-btn"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span className="text-xs">Discuss</span>
-            </button>
-            <button
-              onClick={() => setShowPoll(true)}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="poll-btn"
-            >
-              <BarChart2 className="w-5 h-5" />
-              <span className="text-xs">Poll</span>
-            </button>
-            <button
-              onClick={fetchOtherSide}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="other-side-btn"
-            >
-              <BrainCircuit className="w-5 h-5" />
-              <span className="text-xs">Other Side</span>
-            </button>
-            <button
-              onClick={() => navigate(`/ask-ai/${articleId}`)}
-              className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors"
-              data-testid="ask-ai-btn"
-            >
-              <Sparkles className="w-5 h-5" />
-              <span className="text-xs">Ask AI</span>
-            </button>
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+          <div style={{ position: 'relative', maxWidth: '640px', margin: '0 auto', background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
+            <div style={{
+              position: 'absolute', top: '5px', bottom: '5px', width: 'calc(33.333% - 3px)', left: '5px',
+              transform: `translateX(${depth * 100}%)`,
+              background: 'linear-gradient(180deg, #E8683C, #D2542C)', borderRadius: '12px',
+              transition: 'transform .5s cubic-bezier(.34,1.4,.5,1)', boxShadow: '0 4px 16px rgba(232,104,60,0.28)',
+            }} />
+            {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
+              <button
+                key={i}
+                onClick={() => goDepth(i)}
+                data-testid={`depth-${i}`}
+                style={{
+                  flex: 1, textAlign: 'center', padding: '11px 0', fontSize: '12.5px', fontWeight: 600,
+                  color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
+                  background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
+                }}
+              >
+                {lbl}
+              </button>
+            ))}
           </div>
         </div>
       )}

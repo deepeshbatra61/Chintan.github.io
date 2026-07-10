@@ -95,6 +95,12 @@ _MODEL_ALIASES = {
 _AI_MODEL_RAW = os.environ.get("AI_MODEL", "haiku").strip()
 AI_MODEL = _MODEL_ALIASES.get(_AI_MODEL_RAW.lower(), _AI_MODEL_RAW)
 
+# Deep dive is the deepest reading tier — default to Sonnet for genuine analytical
+# depth. Each angle is cached + shared per (article, angle) and only generated on an
+# explicit tap, so the spend is one-time. Set DEEP_DIVE_MODEL=haiku to cut cost.
+_DEEP_DIVE_MODEL_RAW = os.environ.get("DEEP_DIVE_MODEL", "sonnet").strip()
+DEEP_DIVE_MODEL = _MODEL_ALIASES.get(_DEEP_DIVE_MODEL_RAW.lower(), _DEEP_DIVE_MODEL_RAW)
+
 def _extract_text(msg) -> str:
     """Safely pull text from an Anthropic message. Returns '' if the response has
     no content or the first block isn't text (refusal, empty, odd shape) instead
@@ -301,6 +307,112 @@ async def _summarize_article(article: dict) -> dict | None:
         if result is not None:
             return result
         logger.warning(f"Contemplation parse failed (attempt {attempt + 1}) for {article.get('article_id')}")
+    return None
+
+
+# ── Deep dive: on-demand, per-angle long-form reads (the deepest tier) ──────────
+# Each angle is a distinct analytical lens on the same story. Generated only when
+# the reader taps that angle, then cached + shared per (article_id, angle).
+_DEEP_DIVE_ANGLES = {
+    "history": {
+        "label": "The history",
+        "lens": "Trace how this situation actually came to be. Go back to the decisions, "
+                "policies or events that set it up, and show the through-line to today.",
+    },
+    "winners_losers": {
+        "label": "Winners & losers",
+        "lens": "Follow the money and the power. Name concretely who gains and who pays — "
+                "which groups, industries or regions — and in what order they feel it.",
+    },
+    "whats_next": {
+        "label": "What happens next",
+        "lens": "Project the realistic near-term ripple. Lay out the most likely chain of "
+                "consequences, what to watch for, and the signals that would confirm each path.",
+    },
+    "contrarian": {
+        "label": "The contrarian read",
+        "lens": "Argue the strongest, most intelligent counter-view the mainstream coverage "
+                "is under-weighting. Steelman it honestly — not a strawman, a real alternative reading.",
+    },
+}
+
+_DEEP_DIVE_SYSTEM = (
+    "You are the long-form writer for Chintan, a contemplative Indian news app. This is the "
+    "DEEP DIVE tier — for the reader who chose to go deeper and wants real substance, not a "
+    "recap. Write with the depth of a sharp explainer column. Respond with ONLY valid JSON."
+)
+
+
+def _parse_deep_dive(raw: str) -> dict | None:
+    """Extract {title, paragraphs:[...]} from a raw LLM deep-dive response."""
+    raw_s = raw.strip()
+    if raw_s.startswith("```"):
+        raw_s = raw_s.split("```")[1]
+        if raw_s.startswith("json"):
+            raw_s = raw_s[4:]
+        raw_s = raw_s.strip()
+    start, end = raw_s.find("{"), raw_s.rfind("}") + 1
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(raw_s[start:end])
+    except json.JSONDecodeError:
+        return None
+    paras_in = data.get("paragraphs", [])
+    if not isinstance(paras_in, list):
+        return None
+    paragraphs = [str(p).strip() for p in paras_in if str(p).strip()]
+    if len(paragraphs) < 2:
+        return None
+    title = str(data.get("title", "")).strip()
+    return {"title": title[:80], "paragraphs": paragraphs[:5]}
+
+
+async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
+    """Generate one deep-dive angle {title, paragraphs} for an article. Uses the
+    DEEP_DIVE_MODEL (Sonnet by default). Returns None if unparseable after a retry."""
+    spec = _DEEP_DIVE_ANGLES[angle]
+    clean_content = _strip_html(article.get("content", ""))
+    clean_desc = _strip_html(article.get("description", ""))
+    article_text = clean_content or clean_desc
+    base_user = (
+        "{retry_prefix}"
+        "Write a DEEP DIVE on the news story below, through one specific lens.\n\n"
+        f"LENS — {spec['label']}: {spec['lens']}\n\n"
+        "Return ONLY this JSON:\n"
+        "{{\n"
+        "  \"title\": \"a short, evocative title for this angle (<=6 words, no colon, not a label)\",\n"
+        "  \"paragraphs\": [\"...\", \"...\", \"...\", \"...\"]\n"
+        "}}\n\n"
+        "RULES:\n"
+        "1. Exactly 4 paragraphs. Each is 4-6 full sentences of real, specific analysis — "
+        "this is the deep tier, so go deep. No one-line paragraphs, no padding.\n"
+        "2. Be concrete: real names, numbers, institutions, dates, cause-and-effect. Never generic.\n"
+        "3. Stay strictly inside the lens above — don't drift into a neutral summary.\n"
+        "4. Plain, vivid English. Zero jargon, no 'stakeholders', no markdown, no bullet points.\n"
+        "5. Indian context and stakes where relevant.\n\n"
+        "Article Title: {title}\n"
+        "Article Content: {content}"
+    )
+    for attempt in range(2):  # initial + 1 retry
+        raw = await _llm(
+            system=_DEEP_DIVE_SYSTEM,
+            user_content=base_user.format(
+                retry_prefix=(
+                    "Your previous reply was not valid JSON in the required shape. "
+                    "Return ONLY the JSON object with 'title' and 'paragraphs'.\n\n"
+                ) if attempt > 0 else "",
+                title=article.get("title", ""),
+                content=article_text,
+            ),
+            max_tokens=1400,
+            model=DEEP_DIVE_MODEL,
+        )
+        result = _parse_deep_dive(raw)
+        if result is not None:
+            return result
+        logger.warning(f"Deep-dive parse failed (attempt {attempt + 1}) for "
+                       f"{article.get('article_id')} / {angle}")
     return None
 
 
@@ -2717,6 +2829,57 @@ async def get_other_side(article_id: str, user: dict = Depends(require_auth)):
     except Exception as e:
         logger.error(f"AI error: {e}")
         raise HTTPException(status_code=500, detail="AI service error")
+
+
+@api_router.get("/ai/deep-dive/angles")
+async def get_deep_dive_angles():
+    """The fixed set of deep-dive lenses, in display order. Lets the client render
+    the angle picker without hardcoding the keys/labels."""
+    return {"angles": [{"key": k, "label": v["label"]} for k, v in _DEEP_DIVE_ANGLES.items()]}
+
+
+@api_router.get("/ai/deep-dive/{article_id}/{angle}")
+async def get_deep_dive(article_id: str, angle: str, user: dict = Depends(require_auth)):
+    """One long-form deep-dive angle for an article. Generated on first tap with the
+    DEEP_DIVE_MODEL, then cached + shared per (article_id, angle)."""
+    if angle not in _DEEP_DIVE_ANGLES:
+        raise HTTPException(status_code=404, detail="Unknown deep-dive angle")
+
+    cache_id = f"{article_id}:{angle}"
+    cached = await db.deep_dive_cache.find_one({"_id": cache_id}, {"_id": 0})
+    if cached:
+        return {"angle": angle, "title": cached["title"], "paragraphs": cached["paragraphs"]}
+
+    article = await db.articles.find_one({"article_id": article_id}, {"_id": 0})
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    try:
+        result = await _generate_deep_dive(article, angle)
+    except Exception as e:
+        if _is_credit_exhausted(e):
+            raise HTTPException(status_code=503, detail="AI temporarily unavailable")
+        logger.error(f"Deep-dive error for {article_id}/{angle}: {e}")
+        raise HTTPException(status_code=500, detail="AI service error")
+
+    if result is None:
+        raise HTTPException(status_code=502, detail="Could not generate this angle")
+
+    await db.deep_dive_cache.update_one(
+        {"_id": cache_id},
+        {"$set": {
+            "article_id": article_id,
+            "angle": angle,
+            "title": result["title"],
+            "paragraphs": result["paragraphs"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"angle": angle, "title": result["title"], "paragraphs": result["paragraphs"]}
+
 
 @api_router.get("/ai/questions/{article_id}")
 async def get_ai_questions(article_id: str):
