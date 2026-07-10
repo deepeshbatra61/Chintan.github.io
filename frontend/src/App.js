@@ -446,7 +446,7 @@ function App() {
       <AuthProvider>
         <Toaster
           position="top-center"
-          containerStyle={{ top: '10px' }}
+          offset="calc(var(--sat, 44px) + 12px)"
           toastOptions={{
             style: {
               background: '#171717',

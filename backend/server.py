@@ -275,7 +275,10 @@ _SUM_USER_TEMPLATE = (
     "1. 2 to 4 beats. Each HOOK must provoke curiosity or name a tension — a line the reader NEEDS to tap open. NEVER a factual restatement of the headline. Good hook: 'The rate cut that quietly punishes savers'. Bad hook: 'RBI keeps the repo rate at 6.5%'. Each BODY is 2-3 sentences of concrete detail (real names, numbers), never just repeating the hook.\n"
     "2. Move the beats from the stakes -> the bigger pattern this connects to -> a concrete detail or number.\n"
     "3. Plain, vivid English. Zero jargon, no 'stakeholders', no filler, no markdown.\n"
-    "4. The question must be genuinely open and personal ('you'/'we') — a tension with no clean answer. Never yes/no.\n"
+    "4. The question is the hardest part — make it EARN its place. It must be SPECIFIC to THIS story's exact tension (not a generic prompt you could paste on any article), personal ('you'/'we'), and have no clean answer. Force a real trade-off or values conflict the story exposes. "
+    "Good (fuel price rise): 'How much of your freedom to move are you quietly willing to price out?' "
+    "Good (AI layoffs): 'If the tool that replaces you was built on your own work, who owes whom?' "
+    "BAD, never do this: 'What do you think about this?', 'How does this affect society?', 'Is this good or bad?', 'What are the implications?' — vague, could apply to anything. Never yes/no.\n"
     "5. Indian context where relevant.\n\n"
     "Article Title: {title}\n"
     "Article Content: {content}"
@@ -3065,51 +3068,77 @@ async def like_comment(comment_id: str, user: dict = Depends(require_auth)):
     )
     return {"success": True}
 
+def _reaction_count_field(reaction: str) -> str:
+    return "agrees" if reaction == "agree" else "disagrees"
+
+
+async def _set_comment_reaction(comment_id: str, user_id: str, target: str) -> dict:
+    """Toggle/switch a user's reaction on a comment (target: 'agree'|'disagree').
+    Tapping the current reaction again removes it; tapping the opposite switches it.
+    One reaction per user per comment is enforced by the single reaction doc. Returns
+    the fresh counts and the user's resulting reaction (or None)."""
+    existing = await db.comment_reactions.find_one({"comment_id": comment_id, "user_id": user_id})
+
+    if existing and existing.get("reaction") == target:
+        # Same reaction tapped again → remove it
+        await db.comment_reactions.delete_one({"_id": existing["_id"]})
+        await db.comments.update_one({"comment_id": comment_id}, {"$inc": {_reaction_count_field(target): -1}})
+        new_reaction = None
+    elif existing:
+        # Switch from the opposite reaction
+        await db.comment_reactions.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"reaction": target, "created_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        await db.comments.update_one(
+            {"comment_id": comment_id},
+            {"$inc": {_reaction_count_field(existing["reaction"]): -1, _reaction_count_field(target): 1}},
+        )
+        new_reaction = target
+    else:
+        # First reaction
+        await db.comment_reactions.insert_one({
+            "comment_id": comment_id, "user_id": user_id, "reaction": target,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        await db.comments.update_one({"comment_id": comment_id}, {"$inc": {_reaction_count_field(target): 1}})
+        new_reaction = target
+
+    doc = await db.comments.find_one({"comment_id": comment_id}, {"_id": 0, "agrees": 1, "disagrees": 1}) or {}
+    return {
+        "agrees": max(0, doc.get("agrees", 0) or 0),
+        "disagrees": max(0, doc.get("disagrees", 0) or 0),
+        "reaction": new_reaction,
+    }
+
+
 @api_router.post("/comments/{comment_id}/agree")
 async def agree_comment(comment_id: str, user: dict = Depends(require_auth)):
-    """Agree with a comment"""
-    # Check if already reacted
-    existing = await db.comment_reactions.find_one({
-        "comment_id": comment_id,
-        "user_id": user["user_id"]
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Already reacted")
+    """Agree with a comment (toggles off if already agreed, switches if disagreed)."""
+    return await _set_comment_reaction(comment_id, user["user_id"], "agree")
 
-    await db.comments.update_one(
-        {"comment_id": comment_id},
-        {"$inc": {"agrees": 1}}
-    )
-    await db.comment_reactions.insert_one({
-        "comment_id": comment_id,
-        "user_id": user["user_id"],
-        "reaction": "agree",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return {"success": True}
 
 @api_router.post("/comments/{comment_id}/disagree")
 async def disagree_comment(comment_id: str, user: dict = Depends(require_auth)):
-    """Disagree with a comment"""
-    # Check if already reacted
-    existing = await db.comment_reactions.find_one({
-        "comment_id": comment_id,
-        "user_id": user["user_id"]
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Already reacted")
+    """Disagree with a comment (toggles off if already disagreed, switches if agreed)."""
+    return await _set_comment_reaction(comment_id, user["user_id"], "disagree")
 
-    await db.comments.update_one(
-        {"comment_id": comment_id},
-        {"$inc": {"disagrees": 1}}
-    )
-    await db.comment_reactions.insert_one({
-        "comment_id": comment_id,
-        "user_id": user["user_id"],
-        "reaction": "disagree",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return {"success": True}
+
+@api_router.get("/comments/{article_id}/my-reactions")
+async def my_comment_reactions(article_id: str, user: dict = Depends(require_auth)):
+    """The current user's reaction on each comment of an article, so the client can
+    show the correct agree/disagree highlight on load."""
+    comment_ids = [
+        c["comment_id"]
+        for c in await db.comments.find({"article_id": article_id}, {"_id": 0, "comment_id": 1}).to_list(500)
+    ]
+    if not comment_ids:
+        return {"reactions": {}}
+    rows = await db.comment_reactions.find(
+        {"comment_id": {"$in": comment_ids}, "user_id": user["user_id"]},
+        {"_id": 0, "comment_id": 1, "reaction": 1},
+    ).to_list(1000)
+    return {"reactions": {r["comment_id"]: r["reaction"] for r in rows}}
 
 # ===================== BOOKMARKS ROUTES =====================
 

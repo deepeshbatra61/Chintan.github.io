@@ -10,7 +10,7 @@ import {
   Home, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit,
   ThumbsUp, ThumbsDown, Send, Clock, Loader2,
-  History, Scale, TrendingUp, Lightbulb, ChevronRight
+  History, TrendingUp, ChevronRight, MoreHorizontal
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth, SuryaLogo } from "../App";
@@ -57,13 +57,12 @@ const truncateWords = (text, maxWords) => {
   return words.slice(0, maxWords).join(' ') + '…';
 };
 
-// The three reading depths and the four deep-dive lenses. Keys mirror the backend
-// (_DEEP_DIVE_ANGLES); labels/icons are the client's presentation of them.
+// The three reading depths and the two deep-dive lenses. Keys mirror the backend
+// (_DEEP_DIVE_ANGLES, which still defines four); we surface the two temporal
+// bookends — how it got here, and where it goes — as the least-redundant pair.
 const DEEP_ANGLES = [
   { key: "history", label: "The history", Icon: History },
-  { key: "winners_losers", label: "Winners & losers", Icon: Scale },
   { key: "whats_next", label: "What happens next", Icon: TrendingUp },
-  { key: "contrarian", label: "The contrarian read", Icon: Lightbulb },
 ];
 
 const LOADER_PHRASES = ["Contemplating…", "Pulling the threads…", "Weighing both sides…", "Reading past the headline…"];
@@ -102,7 +101,9 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [pollLoading, setPollLoading] = useState(false);
   const [userVoted, setUserVoted] = useState(false);
   const [comments, setComments] = useState([]);
+  const [commentReactions, setCommentReactions] = useState({}); // { [commentId]: 'agree'|'disagree'|null }
   const [showComments, setShowComments] = useState(false);
+  const [showActions, setShowActions] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [commentSubmitState, setCommentSubmitState] = useState('idle'); // 'idle'|'loading'|'success'
@@ -157,6 +158,11 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     axios.get(`${API}/comments/${articleId}`, { withCredentials: true })
       .then(r => setComments(r.data))
       .catch(e => console.error("Comments fetch:", e));
+
+    // This user's existing agree/disagree per comment (for highlight state)
+    axios.get(`${API}/comments/${articleId}/my-reactions`, { withCredentials: true })
+      .then(r => setCommentReactions(r.data.reactions || {}))
+      .catch(() => {});
   }, [isActive, articleId]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -264,18 +270,17 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleCommentReaction = async (commentId, reaction) => {
+    triggerHaptic('light');
     try {
-      triggerHaptic('light');
-      await axios.post(`${API}/comments/${commentId}/${reaction}`, {}, { withCredentials: true });
-      setComments(prev => prev.map(c => {
-        if (c.comment_id === commentId) {
-          const key = reaction === 'agree' ? 'agrees' : 'disagrees';
-          return { ...c, [key]: (c[key] || 0) + 1 };
-        }
-        return c;
-      }));
-    } catch (error) {
-      if (error.response?.status === 400) toast.info("Already reacted");
+      // Server toggles/switches and returns authoritative counts + the user's
+      // resulting reaction (or null). No optimistic increment — no drift.
+      const r = await axios.post(`${API}/comments/${commentId}/${reaction}`, {}, { withCredentials: true });
+      setComments(prev => prev.map(c =>
+        c.comment_id === commentId ? { ...c, agrees: r.data.agrees, disagrees: r.data.disagrees } : c
+      ));
+      setCommentReactions(prev => ({ ...prev, [commentId]: r.data.reaction }));
+    } catch {
+      toast.error("Couldn't update reaction");
     }
   };
 
@@ -328,17 +333,25 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const beats = getBeats(article);
   const deep = deepCache[angleKey];
   const gistText = article.gist || article.summary || article.what || article.description;
-  const secBtnStyle = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#8A847C', fontSize: '11px', cursor: 'pointer', fontFamily: "'Manrope', sans-serif" };
+
+  // Article-level actions live in one place: a bottom sheet opened from the rail,
+  // so they don't repeat per depth mode.
+  const articleActions = [
+    { label: "Discuss", Icon: MessageCircle, onClick: () => { setShowActions(false); setShowComments(true); }, testid: "discuss-btn" },
+    { label: "Poll", Icon: BarChart2, onClick: () => { setShowActions(false); setShowPoll(true); }, testid: "poll-btn" },
+    { label: "The other side", Icon: BrainCircuit, onClick: () => { setShowActions(false); fetchOtherSide(); }, testid: "other-side-btn" },
+    { label: "Ask Chintan", Icon: Sparkles, onClick: () => { setShowActions(false); navigate(`/ask-ai/${articleId}`); }, testid: "ask-ai-btn" },
+  ];
 
   // The contemplation question — same warm close in Understand and Deep, and the
   // single entry point into Ask AI ("Ask Chintan anything").
   const questionClose = article.question ? (
     <button
       onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(article.question)}`)}
-      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', margin: '22px 0 6px', padding: '2px 0 2px 14px', borderLeft: '2px solid rgba(232,104,60,0.45)' }}
+      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', margin: '22px 0 6px', padding: '2px 0 2px 14px', borderLeft: '2px solid rgba(220,38,38,0.45)' }}
       data-testid="question-ask-ai"
     >
-      <p style={{ fontFamily: "'Playfair Display','Georgia',serif", fontStyle: 'italic', fontWeight: 500, fontSize: '19px', lineHeight: 1.42, color: '#E8B48C', margin: 0 }}>
+      <p style={{ fontFamily: "'Playfair Display','Georgia',serif", fontStyle: 'italic', fontWeight: 500, fontSize: '19px', lineHeight: 1.42, color: '#FCA5A5', margin: 0 }}>
         {article.question}
       </p>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '11px', fontSize: '12px', color: '#8A847C' }}>
@@ -377,7 +390,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             </div>
             <div style={{ padding: '4px 22px 0' }}>
               <div style={{ fontSize: '11px', color: '#888', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
-                {article.category && <span style={{ color: '#E8683C', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category}</span>}
+                {article.category && <span style={{ color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category}</span>}
                 {article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
                 {article.is_developing && !article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
                 {(article.source || article.domain || article.publisher) && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.source || article.domain || article.publisher}</span></>}
@@ -395,16 +408,14 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9.5px', letterSpacing: '0.18em', color: '#5A544D', textTransform: 'uppercase', marginBottom: '8px' }}>Inside this story</div>
                   {beats.map((b, idx) => (
                     <button key={idx} onClick={() => goDepth(1)} style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 0', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }} data-testid={`glance-thread-${idx}`}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#E8683C', opacity: 0.75 }}>{String(idx + 1).padStart(2, '0')}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#DC2626', opacity: 0.75 }}>{String(idx + 1).padStart(2, '0')}</span>
                       <span style={{ color: '#9A938A', fontSize: '14px', fontFamily: "'Manrope', sans-serif", flex: 1, lineHeight: 1.35 }}>{b.hook || truncateWords(b.body, 10)}</span>
                       <ChevronRight className="w-4 h-4" style={{ flexShrink: 0, color: '#4A453F' }} />
                     </button>
                   ))}
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '28px 0 8px', color: '#4A453F', fontSize: '11px' }}>
-                Swipe for the next story <ChevronRight className="w-3.5 h-3.5" />
-              </div>
+              <div style={{ height: '20px' }} />
             </div>
           </motion.div>
         ) : depth === 1 ? (
@@ -416,7 +427,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
             style={{ padding: '20px 22px 0' }}
           >
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#E8683C', textTransform: 'uppercase', marginBottom: '12px' }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#DC2626', textTransform: 'uppercase', marginBottom: '12px' }}>
               {article.category || 'Story'}
             </div>
             <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', lineHeight: 1.24, color: '#F2EEE9', margin: '0 0 20px' }}>
@@ -437,24 +448,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             ) : null}
 
             {questionClose}
-
-            {/* Secondary actions */}
-            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '18px 4px 4px', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '14px' }}>
-              <button onClick={() => setShowComments(true)} style={secBtnStyle} data-testid="discuss-btn"><MessageCircle className="w-5 h-5" /><span>Discuss</span></button>
-              <button onClick={() => setShowPoll(true)} style={secBtnStyle} data-testid="poll-btn"><BarChart2 className="w-5 h-5" /><span>Poll</span></button>
-              <button onClick={fetchOtherSide} style={secBtnStyle} data-testid="other-side-btn"><BrainCircuit className="w-5 h-5" /><span>Other Side</span></button>
-              <button onClick={() => navigate(`/ask-ai/${articleId}`)} style={secBtnStyle} data-testid="ask-ai-btn"><Sparkles className="w-5 h-5" /><span>Ask AI</span></button>
-            </div>
-
-            {/* Feedback */}
-            <div className="flex items-center justify-center gap-6 py-5">
-              <button onClick={handleLike} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${userReaction.liked ? "bg-green-500/20 text-green-400" : "bg-white/5 text-gray-400"}`} data-testid="like-btn">
-                <ThumbsUp className="w-4 h-4" /><span className="text-sm">{article.likes || 0}</span>
-              </button>
-              <button onClick={handleDislike} className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${userReaction.disliked ? "bg-red-500/20 text-red-400" : "bg-white/5 text-gray-400"}`} data-testid="dislike-btn">
-                <ThumbsDown className="w-4 h-4" /><span className="text-sm">{article.dislikes || 0}</span>
-              </button>
-            </div>
+            <div style={{ height: '8px' }} />
           </motion.div>
         ) : (
           /* ══════════ DEEP DIVE — long-form angle read ══════════ */
@@ -476,7 +470,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 {deep.paragraphs.map((p, idx) => (
                   <p key={idx} style={{ fontSize: '15px', lineHeight: 1.75, color: '#B9B2A9', margin: '0 0 16px', fontFamily: "'Manrope', sans-serif" }}>
                     {idx === 0 && (
-                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, float: 'left', fontSize: '42px', lineHeight: 0.82, color: '#E8683C', padding: '4px 9px 0 0' }}>{p.charAt(0)}</span>
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, float: 'left', fontSize: '42px', lineHeight: 0.82, color: '#DC2626', padding: '4px 9px 0 0' }}>{p.charAt(0)}</span>
                     )}
                     {idx === 0 ? p.slice(1) : p}
                   </p>
@@ -496,7 +490,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       {isActive && depth === 2 && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: '66px', zIndex: 45, padding: '30px 14px 12px', background: 'linear-gradient(to top, #0A0A0A 56%, rgba(10,10,10,0.92) 82%, rgba(10,10,10,0))', pointerEvents: 'none' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', pointerEvents: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
               {DEEP_ANGLES.map(({ key, label, Icon }) => {
                 const on = key === angleKey && !deepLoading;
                 return (
@@ -508,13 +502,13 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                       display: 'flex', alignItems: 'center', gap: '9px', height: '46px', padding: '0 13px',
                       borderRadius: '13px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
                       fontFamily: "'Manrope', sans-serif",
-                      background: on ? 'rgba(232,104,60,0.10)' : '#151412',
-                      border: on ? '1px solid rgba(232,104,60,0.55)' : '1px solid rgba(255,255,255,0.08)',
-                      color: on ? '#F6D2B4' : '#C4BDB3',
+                      background: on ? 'rgba(220,38,38,0.10)' : '#151412',
+                      border: on ? '1px solid rgba(220,38,38,0.55)' : '1px solid rgba(255,255,255,0.08)',
+                      color: on ? '#FCA5A5' : '#C4BDB3',
                       transition: 'all .22s ease',
                     }}
                   >
-                    <Icon className="w-4 h-4" style={{ flexShrink: 0, color: on ? '#E8683C' : '#6E6862' }} />
+                    <Icon className="w-4 h-4" style={{ flexShrink: 0, color: on ? '#DC2626' : '#6E6862' }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
                   </button>
                 );
@@ -524,28 +518,72 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
         </div>
       )}
 
-      {/* Depth rail — the primary bottom control (active slide only) */}
+      {/* Depth rail + single actions trigger — the only bottom control (active slide) */}
       {isActive && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-          <div style={{ position: 'relative', maxWidth: '640px', margin: '0 auto', background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
-            <div style={{
-              position: 'absolute', top: '5px', bottom: '5px', width: 'calc(33.333% - 3px)', left: '5px',
-              transform: `translateX(${depth * 100}%)`,
-              background: 'linear-gradient(180deg, #E8683C, #D2542C)', borderRadius: '12px',
-              transition: 'transform .5s cubic-bezier(.34,1.4,.5,1)', boxShadow: '0 4px 16px rgba(232,104,60,0.28)',
-            }} />
-            {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
-              <button
-                key={i}
-                onClick={() => goDepth(i)}
-                data-testid={`depth-${i}`}
-                style={{
-                  flex: 1, textAlign: 'center', padding: '11px 0', fontSize: '12.5px', fontWeight: 600,
-                  color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
-                  background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
-                }}
-              >
-                {lbl}
+          <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ position: 'relative', flex: 1, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
+              <div style={{
+                position: 'absolute', top: '5px', bottom: '5px', width: 'calc(33.333% - 3px)', left: '5px',
+                transform: `translateX(${depth * 100}%)`,
+                background: 'linear-gradient(180deg, #DC2626, #B91C1C)', borderRadius: '12px',
+                transition: 'transform .5s cubic-bezier(.34,1.4,.5,1)', boxShadow: '0 4px 16px rgba(220,38,38,0.28)',
+              }} />
+              {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
+                <button
+                  key={i}
+                  onClick={() => goDepth(i)}
+                  data-testid={`depth-${i}`}
+                  style={{
+                    flex: 1, textAlign: 'center', padding: '11px 0', fontSize: '12.5px', fontWeight: 600,
+                    color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
+                    background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { triggerHaptic('light'); setShowActions(true); }}
+              aria-label="More actions"
+              data-testid="more-actions-btn"
+              style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '14px', background: '#121110', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9A938A' }}
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Actions sheet — one home for Discuss / Poll / Other Side / Ask AI + reactions */}
+      {isActive && showActions && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
+          <div onClick={() => setShowActions(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab, 16px))' }}>
+            <div style={{ width: '38px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '6px auto 16px' }} />
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+              <button onClick={handleLike} data-testid="like-btn"
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', cursor: 'pointer',
+                  border: '1px solid ' + (userReaction.liked ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.08)'),
+                  background: userReaction.liked ? 'rgba(34,197,94,0.12)' : '#181715',
+                  color: userReaction.liked ? '#4ADE80' : '#9A938A' }}>
+                <ThumbsUp className="w-4 h-4" /><span style={{ fontSize: '14px' }}>{article.likes || 0}</span>
+              </button>
+              <button onClick={handleDislike} data-testid="dislike-btn"
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', cursor: 'pointer',
+                  border: '1px solid ' + (userReaction.disliked ? 'rgba(220,38,38,0.5)' : 'rgba(255,255,255,0.08)'),
+                  background: userReaction.disliked ? 'rgba(220,38,38,0.12)' : '#181715',
+                  color: userReaction.disliked ? '#FCA5A5' : '#9A938A' }}>
+                <ThumbsDown className="w-4 h-4" /><span style={{ fontSize: '14px' }}>{article.dislikes || 0}</span>
+              </button>
+            </div>
+            {articleActions.map(({ label, Icon, onClick, testid }) => (
+              <button key={label} onClick={onClick} data-testid={testid}
+                style={{ display: 'flex', alignItems: 'center', gap: '13px', width: '100%', padding: '15px 6px', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', color: '#DEDEE4', fontFamily: "'Manrope', sans-serif", fontSize: '15px' }}>
+                <Icon className="w-5 h-5" style={{ color: '#9A938A', flexShrink: 0 }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+                <ChevronRight className="w-4 h-4" style={{ color: '#4A453F' }} />
               </button>
             ))}
           </div>
@@ -600,20 +638,31 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
                   <div className="flex items-center gap-3 pt-2 border-t border-white/5">
-                    <button
-                      onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-white/5 hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors"
-                    >
-                      <ThumbsUp className="w-3 h-3" />
-                      Agree {comment.agrees > 0 && <span className="text-gray-500">({comment.agrees})</span>}
-                    </button>
-                    <button
-                      onClick={() => handleCommentReaction(comment.comment_id, 'disagree')}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
-                    >
-                      <ThumbsDown className="w-3 h-3" />
-                      Disagree {comment.disagrees > 0 && <span className="text-gray-500">({comment.disagrees})</span>}
-                    </button>
+                    {(() => {
+                      const myReaction = commentReactions[comment.comment_id];
+                      return (
+                        <>
+                          <button
+                            onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors ${
+                              myReaction === 'agree' ? "bg-green-500/20 text-green-400" : "bg-white/5 text-gray-400 hover:text-green-400"
+                            }`}
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                            Agree {comment.agrees > 0 && <span className="opacity-70">({comment.agrees})</span>}
+                          </button>
+                          <button
+                            onClick={() => handleCommentReaction(comment.comment_id, 'disagree')}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors ${
+                              myReaction === 'disagree' ? "bg-red-500/20 text-red-400" : "bg-white/5 text-gray-400 hover:text-red-400"
+                            }`}
+                          >
+                            <ThumbsDown className="w-3 h-3" />
+                            Disagree {comment.disagrees > 0 && <span className="opacity-70">({comment.disagrees})</span>}
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
