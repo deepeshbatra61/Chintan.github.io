@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import {
-  Bell, User, Menu, Sun, CloudSun, Moon,
-  Bookmark, TrendingUp, ChevronRight, Clock, Eye, Radio, X
+  Bell, User, Menu, Sun, CloudSun, Moon, Eye, Radio
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import BottomNav from "../components/BottomNav";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -103,15 +103,6 @@ const FeedPage = () => {
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loading, page, activeCategory, fetchArticles]);
-
-  const getCurrentBrief = () => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return { type: "morning", icon: Sun, label: "Morning Brief" };
-    if (hour >= 12 && hour < 18) return { type: "midday", icon: CloudSun, label: "Midday Update" };
-    return { type: "night", icon: Moon, label: "Night Summary" };
-  };
-
-  const currentBrief = getCurrentBrief();
 
   const handleLogout = async () => {
     await logout();
@@ -219,25 +210,6 @@ const FeedPage = () => {
                       </button>
                     )}
 
-                    <div className="h-px bg-white/10 my-4" />
-
-                    <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Menu</p>
-                    <button 
-                      onClick={() => { navigate("/bookmarks"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid="bookmarks-nav"
-                    >
-                      <Bookmark className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-300">Bookmarks</span>
-                    </button>
-                    <button 
-                      onClick={() => { navigate("/profile"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid="profile-nav"
-                    >
-                      <User className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-300">Profile</span>
-                    </button>
                   </div>
                 </ScrollArea>
                 <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
@@ -322,26 +294,6 @@ const FeedPage = () => {
               </div>
             </motion.div>
           )}
-
-          {/* Brief Button */}
-          <motion.button
-            onClick={() => navigate(`/brief/${currentBrief.type}`)}
-            className="w-full glass-card rounded-xl p-4 mb-6 flex items-center justify-between group hover:border-red-600/30 transition-colors"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            data-testid="current-brief-btn"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center">
-                <currentBrief.icon className="w-5 h-5 text-red-500" />
-              </div>
-              <div className="text-left">
-                <p className="text-white font-medium">{currentBrief.label}</p>
-                <p className="text-gray-500 text-sm">Your personalized digest</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-red-500 transition-colors" />
-          </motion.button>
 
           {/* Categories */}
           <div className="mb-6 overflow-x-auto hide-scrollbar">
@@ -445,36 +397,7 @@ const FeedPage = () => {
         </div>
       </main>
 
-      {/* Bottom Navigation (Mobile) */}
-      <nav className="fixed bottom-0 left-0 right-0 glass-nav py-3 px-4 md:hidden">
-        <div className="flex items-center justify-around">
-          <button className="flex flex-col items-center gap-1 text-red-500">
-            <TrendingUp className="w-5 h-5" />
-            <span className="text-xs">Feed</span>
-          </button>
-          <button
-            onClick={() => navigate(`/brief/${currentBrief.type}`)}
-            className="flex flex-col items-center gap-1 text-gray-500"
-          >
-            <currentBrief.icon className="w-5 h-5" />
-            <span className="text-xs">Brief</span>
-          </button>
-<button
-            onClick={() => navigate("/bookmarks")}
-            className="flex flex-col items-center gap-1 text-gray-500"
-          >
-            <Bookmark className="w-5 h-5" />
-            <span className="text-xs">Saved</span>
-          </button>
-          <button
-            onClick={() => navigate("/profile")}
-            className="flex flex-col items-center gap-1 text-gray-500"
-          >
-            <User className="w-5 h-5" />
-            <span className="text-xs">Profile</span>
-          </button>
-        </div>
-      </nav>
+      <BottomNav />
 
       {/* Notifications Dialog */}
       <Dialog open={showNotifications} onOpenChange={setShowNotifications}>

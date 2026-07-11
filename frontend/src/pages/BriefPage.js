@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import axios from "axios";
 import { ArrowLeft, Sun, CloudSun, Moon, Clock, ChevronRight } from "lucide-react";
 import { SuryaLogo, useAuth } from "../App";
+import BottomNav from "../components/BottomNav";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -89,7 +90,7 @@ const BriefPage = () => {
       </header>
 
       {/* Content */}
-      <main style={{ position: "relative", zIndex: 1, padding: "0 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
+      <main style={{ position: "relative", zIndex: 1, padding: "0 22px 96px", maxWidth: "640px", margin: "0 auto" }}>
         {/* Greeting */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} style={{ paddingTop: "28px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "11px", marginBottom: "8px" }}>
@@ -160,6 +161,8 @@ const BriefPage = () => {
           </p>
         )}
       </main>
+
+      <BottomNav />
     </div>
   );
 };

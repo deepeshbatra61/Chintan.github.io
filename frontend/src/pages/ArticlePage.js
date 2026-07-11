@@ -130,10 +130,11 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const scrollRef = useRef(null);
 
   // Depth-rail: segments stay equal thirds (always fit), but the sliding pill is
-  // measured to the active label's text width so it hugs the word, not the third.
+  // measured to each label's text width so it hugs the word, not the third. We
+  // measure ALL three up front so switching to any depth is already correct.
   const railRef = useRef(null);
   const segRefs = useRef([]);
-  const [pill, setPill] = useState({ left: 5, width: 0 });
+  const [pillGeos, setPillGeos] = useState([]);
 
   // Lazy-load all per-article data on first activation
   useEffect(() => {
@@ -345,28 +346,33 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     if (d === 2 && !deepRead) fetchDeepRead();
   };
 
-  // Size the pill to the active label's text (hug the word) + a little padding,
-  // measured relative to the rail so it works regardless of segment width.
+  // Measure every segment label once (and on font load / resize) so each depth's
+  // pill geometry is precomputed. Positions don't change with depth, so this is
+  // more robust than re-measuring the active one on every switch.
   useLayoutEffect(() => {
     if (!isActive) return;
     const PAD = 12;
     const measure = () => {
       const rail = railRef.current;
-      const label = segRefs.current[depth];
-      if (!rail || !label) return;
+      if (!rail) return;
       const r = rail.getBoundingClientRect();
-      const l = label.getBoundingClientRect();
-      setPill({ left: l.left - r.left - PAD, width: l.width + PAD * 2 });
+      const geos = segRefs.current.map((label) => {
+        if (!label) return null;
+        const l = label.getBoundingClientRect();
+        return { left: l.left - r.left - PAD, width: l.width + PAD * 2 };
+      });
+      if (geos.every(Boolean)) setPillGeos(geos);
     };
     measure();
     const raf = requestAnimationFrame(measure);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure).catch(() => {});
     window.addEventListener('resize', measure);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
-  }, [depth, isActive]);
+  }, [isActive]);
 
   const beats = getBeats(article);
   const deep = deepRead;
+  const pill = pillGeos[depth] || { left: 5, width: 0 };
   const gistText = article.gist || article.summary || article.what || article.description;
 
   // Article-level actions live in one place: a bottom sheet opened from the rail,

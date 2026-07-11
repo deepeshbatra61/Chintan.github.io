@@ -10,6 +10,7 @@ import {
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
+import BottomNav from "../components/BottomNav";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -177,7 +178,7 @@ const ProfilePage = () => {
       </header>
 
       {/* Content */}
-      <main style={{ padding: "20px 22px 48px", maxWidth: "640px", margin: "0 auto" }}>
+      <main style={{ padding: "20px 22px 96px", maxWidth: "640px", margin: "0 auto" }}>
         {/* Identity */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "22px" }}>
           <div style={{ width: "60px", height: "60px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "#1a1917", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -403,6 +404,8 @@ const ProfilePage = () => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      <BottomNav />
     </div>
   );
 };
