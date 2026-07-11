@@ -379,6 +379,13 @@ body {
   --normal-text: var(--text-primary);
 }
 
+/* Keep every top-anchored toast clear of the status bar / camera notch. The
+   sonner `offset` prop is unreliable, so pin the container below the safe area
+   here — this covers all toasts app-wide. */
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(var(--sat, 44px) + 10px) !important;
+}
+
 /* Base layer */
 @layer base {
   :root {

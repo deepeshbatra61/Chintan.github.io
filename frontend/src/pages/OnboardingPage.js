@@ -34,13 +34,9 @@ const INTEREST_CATEGORIES = {
     description: "Research, health, climate", 
     subcategories: ["Space", "Health", "Environment", "Research", "Climate"] 
   },
-  World: { 
-    description: "Global affairs, geopolitics", 
-    subcategories: ["USA", "China", "Europe", "Middle East", "Southeast Asia"] 
-  },
-  Lifestyle: { 
-    description: "Travel, food, wellness", 
-    subcategories: ["Travel", "Food", "Fashion", "Wellness", "Automobiles"] 
+  World: {
+    description: "Global affairs, geopolitics",
+    subcategories: ["USA", "China", "Europe", "Middle East", "Southeast Asia"]
   }
 };
 
@@ -121,7 +117,7 @@ const OnboardingPage = () => {
         />
       </div>
 
-      <div className="relative z-10 max-w-2xl mx-auto px-6 py-16">
+      <div className="relative z-10 max-w-2xl mx-auto px-6 pb-16" style={{ paddingTop: 'calc(var(--sat, 44px) + 28px)' }}>
         <AnimatePresence mode="wait">
           {/* Step 1: Welcome */}
           {step === 1 && (
@@ -241,14 +237,10 @@ const OnboardingPage = () => {
               <button
                 onClick={() => setStep(2)}
                 disabled={selectedCategories.length < 3}
-                className={`w-full py-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
-                  selectedCategories.length >= 3
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-white/5 text-gray-600 cursor-not-allowed"
-                }`}
+                style={{ width: '100%', height: '52px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', border: 'none', fontSize: '15px', fontWeight: 600, cursor: selectedCategories.length >= 3 ? 'pointer' : 'not-allowed', background: selectedCategories.length >= 3 ? '#DC2626' : '#1a1917', color: selectedCategories.length >= 3 ? '#fff' : '#5A544D' }}
                 data-testid="onboarding-next-btn"
               >
-                Continue <ChevronRight className="w-5 h-5" />
+                Continue {selectedCategories.length >= 3 && <ChevronRight className="w-4 h-4" />}
               </button>
             </motion.div>
           )}
@@ -292,20 +284,21 @@ const OnboardingPage = () => {
                 </div>
               </div>
 
-              <div className="flex gap-4 max-w-md mx-auto">
+              <div style={{ display: 'flex', gap: '10px', maxWidth: '420px', margin: '0 auto' }}>
                 <button
                   onClick={() => setStep(1)}
-                  className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '50px', padding: '0 20px', flexShrink: 0, borderRadius: '14px', background: '#1a1917', border: '1px solid rgba(255,255,255,0.08)', color: '#9A938A', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
                 >
-                  <ChevronLeft className="w-5 h-5" /> Back
+                  <ChevronLeft className="w-4 h-4" /> Back
                 </button>
                 <button
                   onClick={handleComplete}
                   disabled={loading}
-                  className="flex-1 py-3 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '50px', borderRadius: '14px', background: '#DC2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '15px', fontWeight: 600, opacity: loading ? 0.6 : 1 }}
                   data-testid="onboarding-complete-btn"
                 >
-                  {loading ? "Setting up..." : "Start Reading"} <ChevronRight className="w-5 h-5" />
+                  {loading ? "Setting up…" : "Start reading"}
+                  {!loading && <ChevronRight className="w-4 h-4" />}
                 </button>
               </div>
             </motion.div>

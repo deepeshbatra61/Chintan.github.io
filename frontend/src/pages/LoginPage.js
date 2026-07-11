@@ -180,14 +180,6 @@ const LoginPage = () => {
           </button>
         </div>
 
-        {/* Values */}
-        <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "16px", marginTop: "22px", fontSize: "11px", color: "#5A544D" }}>
-          {["Truth over bias", "Depth over speed", "Reflection over reaction"].map((v) => (
-            <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#DC2626" }} />{v}
-            </span>
-          ))}
-        </div>
       </motion.div>
     </div>
   );
