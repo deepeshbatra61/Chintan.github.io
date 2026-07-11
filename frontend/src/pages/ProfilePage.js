@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight,
-  Edit3, FileText, Check, Loader2, Sparkles, Flame, BookOpen
+  ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight, ChevronDown,
+  Edit3, Check, Loader2, Sparkles, Flame, BookOpen
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -14,8 +14,18 @@ import { ScrollArea } from "../components/ui/scroll-area";
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
-// The categories a reader can actually filter/receive (matches the feed + backend).
-const INTEREST_CATEGORIES = ["Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
+const MAX_NICHES_PER_CATEGORY = 3;
+
+// Fallback taxonomy if /interests/categories can't be fetched (mirrors backend).
+const FALLBACK_TAXONOMY = {
+  Politics: ["Parliament", "Elections", "Judiciary", "International Relations", "State Politics"],
+  Technology: ["AI & ML", "Startups", "Gadgets", "Fintech", "Space Tech", "Telecom"],
+  Business: ["Markets", "Economy", "Startups", "Real Estate", "Banking", "Corporate"],
+  Sports: ["Cricket", "Football", "Tennis", "Olympics", "Kabaddi", "Motorsport"],
+  Entertainment: ["Bollywood", "OTT", "Music", "Television", "Regional Cinema"],
+  Science: ["Space", "Health", "Environment", "Research", "Climate"],
+  World: ["USA", "China", "Europe", "Middle East", "Southeast Asia"],
+};
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -25,9 +35,8 @@ const ProfilePage = () => {
   const [showEditInterests, setShowEditInterests] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [savingInterests, setSavingInterests] = useState(false);
-  const [showReport, setShowReport] = useState(false);
-  const [report, setReport] = useState(null);
-  const [generatingReport, setGeneratingReport] = useState(false);
+  const [taxonomy, setTaxonomy] = useState(FALLBACK_TAXONOMY);
+  const [expandedCats, setExpandedCats] = useState({});
   const [showPolls, setShowPolls] = useState(false);
   const [votedPolls, setVotedPolls] = useState([]);
   const [loadingPolls, setLoadingPolls] = useState(false);
@@ -61,15 +70,33 @@ const ProfilePage = () => {
     if (user?.interests) setSelectedInterests(user.interests);
   }, [fetchStats, user]);
 
+  // Pull the category → niches taxonomy from the backend (single source of truth).
+  useEffect(() => {
+    axios.get(`${API}/interests/categories`, { withCredentials: true })
+      .then((r) => { if (r.data && typeof r.data === "object" && !Array.isArray(r.data)) setTaxonomy(r.data); })
+      .catch(() => {});
+  }, []);
+
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
-  const toggleInterest = (interest) => {
-    setSelectedInterests((prev) =>
-      prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
-    );
+  const nicheCount = (cat) => (taxonomy[cat] || []).filter((n) => selectedInterests.includes(n)).length;
+
+  const toggleCategory = (cat) => {
+    setSelectedInterests((prev) => (prev.includes(cat) ? prev.filter((i) => i !== cat) : [...prev, cat]));
+  };
+
+  const toggleNiche = (cat, niche) => {
+    setSelectedInterests((prev) => {
+      if (prev.includes(niche)) return prev.filter((i) => i !== niche);
+      if (nicheCount(cat) >= MAX_NICHES_PER_CATEGORY) {
+        toast.error(`Up to ${MAX_NICHES_PER_CATEGORY} niches per category`);
+        return prev;
+      }
+      return [...prev, niche];
+    });
   };
 
   const saveInterests = async () => {
@@ -87,31 +114,6 @@ const ProfilePage = () => {
       toast.error("Couldn't update interests");
     } finally {
       setSavingInterests(false);
-    }
-  };
-
-  const generateLocalReport = () => {
-    if (!stats) return null;
-    const insights = [];
-    if (stats.articles_read > 0) insights.push(`You read ${stats.articles_read} stories, about ${stats.reading_time_min || 0} minutes in all.`);
-    if (stats.top_category) insights.push(`${stats.top_category} held most of your attention this week.`);
-    if (stats.blind_spot) insights.push(`You barely touched ${stats.blind_spot} — worth a look before the week turns.`);
-    return {
-      summary: insights.length ? insights.join("\n\n") : "Read a few stories and your week in review will fill in.",
-      stats: { articlesRead: stats.articles_read || 0, topCategory: stats.top_category || "Not enough data" },
-    };
-  };
-
-  const generateWeeklyReport = async () => {
-    setGeneratingReport(true);
-    setShowReport(true);
-    try {
-      const response = await axios.get(`${API}/users/weekly-report`, { withCredentials: true });
-      setReport(response.data);
-    } catch (error) {
-      setReport(generateLocalReport());
-    } finally {
-      setGeneratingReport(false);
     }
   };
 
@@ -256,14 +258,6 @@ const ProfilePage = () => {
 
         {/* Actions */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
-          <button onClick={generateWeeklyReport} data-testid="weekly-report-btn" style={actionStyle}>
-            <FileText className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Weekly reading report</div>
-              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Your week, read back to you</div>
-            </div>
-            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
-          </button>
           <button onClick={openPollsHistory} data-testid="poll-history-btn" style={actionStyle}>
             <BarChart2 className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
@@ -291,53 +285,57 @@ const ProfilePage = () => {
           <DialogHeader>
             <DialogTitle className="text-white">Edit interests</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-gray-500 text-sm mb-4">Pick at least 3 topics ({selectedInterests.length} selected)</p>
-            <div className="flex flex-wrap gap-2">
-              {INTEREST_CATEGORIES.map((interest) => (
-                <button key={interest} onClick={() => toggleInterest(interest)}
-                  className={`px-4 py-2 rounded-full text-sm transition-colors ${selectedInterests.includes(interest) ? "bg-red-600 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
-                  {interest}
-                </button>
-              ))}
+          <p className="text-gray-500 text-sm" style={{ marginTop: "2px" }}>
+            Pick your topics — expand any for niches (up to {MAX_NICHES_PER_CATEGORY} each).
+          </p>
+          <ScrollArea className="max-h-[52vh]" style={{ marginTop: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingRight: "4px" }}>
+              {Object.entries(taxonomy).map(([cat, niches]) => {
+                const picked = selectedInterests.includes(cat);
+                const open = !!expandedCats[cat];
+                const nCount = nicheCount(cat);
+                return (
+                  <div key={cat} style={{ border: "1px solid rgba(255,255,255,0.07)", borderRadius: "12px", overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "11px 12px" }}>
+                      <button onClick={() => toggleCategory(cat)} aria-label={`Select ${cat}`}
+                        style={{ width: "20px", height: "20px", borderRadius: "6px", flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                          background: picked ? "#DC2626" : "transparent", border: picked ? "1.5px solid #DC2626" : "1.5px solid #4A453F" }}>
+                        {picked && <Check className="w-3 h-3 text-white" />}
+                      </button>
+                      <button onClick={() => setExpandedCats((p) => ({ ...p, [cat]: !p[cat] }))}
+                        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "none", cursor: "pointer" }}>
+                        <span style={{ color: "#ECE7E1", fontSize: "14.5px", fontWeight: 500 }}>{cat}{nCount > 0 && <span style={{ color: "#DC6B5A", fontSize: "12px", marginLeft: "7px" }}>{nCount}</span>}</span>
+                        <ChevronDown className="w-4 h-4" style={{ color: "#6E6862", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+                      </button>
+                    </div>
+                    {open && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "7px", padding: "0 12px 12px" }}>
+                        {(niches || []).map((niche) => {
+                          const on = selectedInterests.includes(niche);
+                          const dim = !on && nCount >= MAX_NICHES_PER_CATEGORY;
+                          return (
+                            <button key={niche} onClick={() => toggleNiche(cat, niche)}
+                              style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "16px", cursor: "pointer", opacity: dim ? 0.4 : 1,
+                                background: on ? "rgba(220,38,38,0.14)" : "#1a1917", color: on ? "#F0A090" : "#B6AFA6",
+                                border: on ? "1px solid rgba(220,38,38,0.5)" : "1px solid rgba(255,255,255,0.08)" }}>
+                              {niche}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-white/10">
+          </ScrollArea>
+          <div className="flex gap-3 pt-4 border-t border-white/10" style={{ marginTop: "12px" }}>
             <button onClick={() => setShowEditInterests(false)} className="flex-1 py-2 px-4 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>
             <button onClick={saveInterests} disabled={savingInterests || selectedInterests.length < 3}
               className="flex-1 py-2 px-4 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {savingInterests ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
             </button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Weekly Report Dialog */}
-      <Dialog open={showReport} onOpenChange={setShowReport}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2" style={{ paddingRight: "40px" }}>
-              <FileText className="w-5 h-5 text-red-500 flex-shrink-0" /> Your week in review
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            {generatingReport ? (
-              <div className="flex items-center justify-center py-12"><SuryaLogo className="w-12 h-12 animate-spin-slow" /></div>
-            ) : report ? (
-              <div className="space-y-5 py-4">
-                <div className="glass-card rounded-lg p-3 text-center">
-                  <p className="text-lg font-bold text-white truncate">{report.stats?.topCategory || "-"}</p>
-                  <p className="text-gray-500 text-xs">Top interest</p>
-                </div>
-                <div className="glass-card rounded-xl p-5">
-                  <h3 className="text-red-500 font-mono text-xs uppercase tracking-wider mb-3">Highlights</h3>
-                  <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-line">{report.summary}</div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">Couldn't generate the report right now.</p>
-            )}
-          </ScrollArea>
         </DialogContent>
       </Dialog>
 

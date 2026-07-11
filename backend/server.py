@@ -651,7 +651,7 @@ async def _background_news_ingestor() -> None:
             await asyncio.sleep(3600)  # 1h back-off on unexpected error
 
 
-_CATEGORY_MIGRATION_VERSION = 4
+_CATEGORY_MIGRATION_VERSION = 5
 
 
 async def _run_category_migration() -> None:
@@ -1008,6 +1008,10 @@ def _score_article(
     # Signal 1: Category affinity (40 pts max)
     if cat and cat in user_interests:
         score += 20.0                                          # declared interest
+    # Niche affinity: a picked sub-topic is a stronger, more specific signal
+    sub = article.get("subcategory")
+    if sub and sub in user_interests:
+        score += 28.0
     score += affinity.get("completion", {}).get(cat, 0.0)     # behaviour completion 0-20
     # (engagement handled by signal 2 below)
 
@@ -1416,7 +1420,6 @@ INTEREST_CATEGORIES = {
     "Entertainment": ["Bollywood", "OTT", "Music", "Television", "Regional Cinema"],
     "Science": ["Space", "Health", "Environment", "Research", "Climate"],
     "World": ["USA", "China", "Europe", "Middle East", "Southeast Asia"],
-    "Lifestyle": ["Travel", "Food", "Fashion", "Wellness", "Automobiles"]
 }
 
 # ===================== AUTHENTICATION =====================
@@ -2039,6 +2042,64 @@ _CATEGORY_KEYWORDS = {
 }
 
 
+# Niche keywords, scored WITHIN the winning category (names mirror
+# INTEREST_CATEGORIES so a tagged article maps straight to a picked interest).
+_SUBCATEGORY_KEYWORDS = {
+    "Politics": {
+        "Parliament": ["parliament", "lok sabha", "rajya sabha", "bill", "ordinance", "monsoon session", "speaker"],
+        "Elections": ["election", "poll", "voter", "bypoll", "campaign", "manifesto", "constituency", "polling"],
+        "Judiciary": ["supreme court", "high court", "verdict", "judge", "bench", "petition", "plea", "judgment"],
+        "International Relations": ["bilateral", "diplomat", "treaty", "summit", "embassy", "external affairs"],
+        "State Politics": ["chief minister", "assembly", "mla", "governor", "state government", "cabinet"],
+    },
+    "Technology": {
+        "AI & ML": ["artificial intelligence", "machine learning", "openai", "chatgpt", "ai model", "llm", "generative ai"],
+        "Startups": ["startup", "funding", "unicorn", "founder", "venture capital", "seed round"],
+        "Gadgets": ["smartphone", "laptop", "gadget", "wearable", "processor", "gpu", "chip", "semiconductor"],
+        "Fintech": ["fintech", "upi", "digital payment", "neobank", "paytm", "razorpay"],
+        "Space Tech": ["satellite", "spacex", "rocket", "launch vehicle"],
+        "Telecom": ["5g", "telecom", "spectrum", "jio", "airtel", "vodafone", "broadband"],
+    },
+    "Business": {
+        "Markets": ["sensex", "nifty", "stock", "shares", "ipo", "mutual fund", "equities"],
+        "Economy": ["gdp", "inflation", "rbi", "fiscal", "repo rate", "economic"],
+        "Startups": ["startup", "funding", "unicorn", "venture", "founder"],
+        "Real Estate": ["real estate", "property", "housing", "realty"],
+        "Banking": ["bank", "loan", "npa", "sbi", "hdfc", "credit", "banking"],
+        "Corporate": ["merger", "acquisition", "earnings", "revenue", "ceo", "corporate", "profit"],
+    },
+    "Sports": {
+        "Cricket": ["cricket", "ipl", "bcci", "wicket", "batsman", "bowler", "virat", "kohli", "rohit", "dhoni", "odi", "t20", "test match", "innings"],
+        "Football": ["football", "fifa", "isl", "messi", "ronaldo", "premier league"],
+        "Tennis": ["tennis", "wimbledon", "grand slam", "djokovic"],
+        "Olympics": ["olympic", "medal", "athlete", "asian games"],
+        "Kabaddi": ["kabaddi", "pro kabaddi"],
+        "Motorsport": ["formula 1", "f1", "motogp", "grand prix"],
+    },
+    "Entertainment": {
+        "Bollywood": ["bollywood", "shah rukh", "salman khan", "deepika", "box office", "hindi film"],
+        "OTT": ["ott", "netflix", "prime video", "web series", "hotstar", "streaming"],
+        "Music": ["song", "music", "album", "concert", "singer"],
+        "Television": ["television", "tv serial", "reality show"],
+        "Regional Cinema": ["tollywood", "kollywood", "telugu film", "tamil film", "regional cinema"],
+    },
+    "Science": {
+        "Space": ["isro", "chandrayaan", "gaganyaan", "satellite", "nasa", "astronomy"],
+        "Health": ["hospital", "disease", "covid", "vaccine", "aiims", "medicine", "cancer", "dengue"],
+        "Environment": ["environment", "pollution", "wildlife", "forest", "biodiversity"],
+        "Research": ["research", "study", "scientist", "discovery", "experiment"],
+        "Climate": ["climate", "global warming", "emissions", "monsoon", "heatwave"],
+    },
+    "World": {
+        "USA": ["united states", "trump", "biden", "washington"],
+        "China": ["china", "beijing", "xi jinping"],
+        "Europe": ["european union", "uk", "france", "germany", "europe"],
+        "Middle East": ["gaza", "israel", "iran", "saudi", "middle east", "palestine"],
+        "Southeast Asia": ["pakistan", "bangladesh", "sri lanka", "nepal", "myanmar"],
+    },
+}
+
+
 def _kw_pattern(kw: str):
     """Word-boundary regex for single words; plain (escaped) regex for phrases.
     Word boundaries stop short keywords like 'ev' or 'app' from matching inside
@@ -2052,11 +2113,17 @@ _CATEGORY_PATTERNS = {
     cat: [_kw_pattern(kw) for kw in kws] for cat, kws in _CATEGORY_KEYWORDS.items()
 }
 
+_SUBCATEGORY_PATTERNS = {
+    cat: {sub: [_kw_pattern(kw) for kw in kws] for sub, kws in subs.items()}
+    for cat, subs in _SUBCATEGORY_KEYWORDS.items()
+}
+
 
 def detect_category(title: str, body: str) -> tuple:
     """Score every category by weighted keyword matches (title hits count double)
-    and return the highest scorer. Beats the old first-match-wins + substring
-    approach that dumped nearly everything into Technology."""
+    and return the highest scorer, plus the best niche WITHIN that category (or
+    None). Beats the old first-match-wins + substring approach that dumped nearly
+    everything into Technology."""
     title_s = title or ""
     body_s = body or ""
     best_cat, best_score = "World", 0
@@ -2069,7 +2136,23 @@ def detect_category(title: str, body: str) -> tuple:
                 score += 1
         if score > best_score:
             best_cat, best_score = cat, score
-    return best_cat, None
+
+    # Niche within the winning category
+    subcategory = None
+    if best_score > 0:
+        best_sub, best_sub_score = None, 0
+        for sub, pats in _SUBCATEGORY_PATTERNS.get(best_cat, {}).items():
+            sub_score = 0
+            for pat in pats:
+                if pat.search(title_s):
+                    sub_score += 2
+                if pat.search(body_s):
+                    sub_score += 1
+            if sub_score > best_sub_score:
+                best_sub, best_sub_score = sub, sub_score
+        subcategory = best_sub
+
+    return best_cat, subcategory
 
 def clean_newsapi_text(text: str) -> str:
     """Strip NewsAPI truncation artifacts and WordPress/RSS footer cruft."""
@@ -2613,7 +2696,11 @@ async def get_brief(brief_type: str, request: Request = None):
     }
     greeting, subtitle = _greetings[brief_type]
 
-    category_query: dict = {"category": {"$in": user_interests}} if user_interests else {}
+    # Interests can be broad categories or specific niches — match either.
+    category_query: dict = (
+        {"$or": [{"category": {"$in": user_interests}}, {"subcategory": {"$in": user_interests}}]}
+        if user_interests else {}
+    )
 
     # ── 1. Cascade: 24 h → 72 h → no time filter → drop interest filter ──────
     fresh_articles: list = []
