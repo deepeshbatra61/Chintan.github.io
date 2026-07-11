@@ -257,41 +257,45 @@ const FeedPage = () => {
       </header>
 
       {/* Main Content */}
-      <main className="pb-24 px-4" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
+      <main className="pb-24 px-4" style={{ paddingTop: '14px', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-6xl mx-auto">
           {/* Developing Stories Banner */}
           {developingStories.length > 0 && (
             <motion.div
-              className="mb-6"
-              style={{ marginTop: '-10px' }}
-              initial={{ opacity: 0, y: -20 }}
+              className="mb-5"
+              initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="glass-card rounded-xl p-4 border-red-600/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="live-indicator">
-                    <span className="live-dot" />
-                    Developing
-                  </span>
+              <motion.div
+                animate={{ boxShadow: ['0 0 0px rgba(220,38,38,0)', '0 0 18px rgba(220,38,38,0.12)', '0 0 0px rgba(220,38,38,0)'] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ background: '#131211', border: '1px solid rgba(220,38,38,0.28)', borderRadius: '16px', padding: '14px 16px' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '12px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626' }} className="animate-pulse" />
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#DC6B5A', textTransform: 'uppercase' }}>Developing</span>
                 </div>
                 <div className="overflow-x-auto hide-scrollbar">
-                  <div className="flex gap-4">
-                    {developingStories.slice(0, 3).map((story) => (
-                      <button
-                        key={story.story_id}
-                        onClick={() => navigate(`/developing/${story.story_id}`)}
-                        className="flex-shrink-0 text-left group"
-                        data-testid={`developing-${story.story_id}`}
-                      >
-                        <p className="text-white text-sm font-medium group-hover:text-red-400 transition-colors line-clamp-2 max-w-[200px]">
-                          {story.title}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-1">{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
-                      </button>
+                  <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                    {developingStories.slice(0, 4).map((story, i) => (
+                      <React.Fragment key={story.story_id}>
+                        {i > 0 && <div style={{ width: '1px', alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '2px 15px', flexShrink: 0 }} />}
+                        <button
+                          onClick={() => navigate(`/developing/${story.story_id}`)}
+                          className="group"
+                          style={{ flexShrink: 0, maxWidth: '210px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          data-testid={`developing-${story.story_id}`}
+                        >
+                          <p className="group-hover:text-red-400 transition-colors" style={{ color: '#ECE7E1', fontSize: '13.5px', fontWeight: 500, lineHeight: 1.32, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {story.title}
+                          </p>
+                          <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
+                        </button>
+                      </React.Fragment>
                     ))}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
           )}
 
