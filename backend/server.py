@@ -17,6 +17,8 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import hashlib
+import hmac
+import secrets
 import re
 import httpx
 import redis.asyncio as aioredis
@@ -1272,6 +1274,15 @@ class ChatMessage(BaseModel):
 
 # ===================== REQUEST/RESPONSE MODELS =====================
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 class InterestsUpdate(BaseModel):
     interests: List[str]
 
@@ -1582,7 +1593,7 @@ async def get_current_user(request: Request) -> Optional[dict]:
     
     user = await db.users.find_one(
         {"user_id": session["user_id"]},
-        {"_id": 0}
+        {"_id": 0, "password_hash": 0, "password_salt": 0}
     )
     return user
 
@@ -1611,6 +1622,21 @@ SESSION_COOKIE_MAX_AGE = int(ACCESS_TOKEN_TTL.total_seconds())
 def _hash_token(token: str) -> str:
     """SHA-256 a refresh token so the DB never stores a usable secret."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+_PWD_ITERATIONS = 200_000
+
+def _hash_password(password: str) -> tuple:
+    """PBKDF2-HMAC-SHA256 (stdlib, no bcrypt dep). Returns (salt_hex, hash_hex)."""
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PWD_ITERATIONS)
+    return salt, dk.hex()
+
+def _verify_password(password: str, salt_hex: str, expected_hex: str) -> bool:
+    if not salt_hex or not expected_hex:
+        return False
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt_hex.encode(), _PWD_ITERATIONS)
+    return hmac.compare_digest(dk.hex(), expected_hex)
 
 
 async def _issue_tokens(user_id: str) -> tuple:
@@ -1725,6 +1751,62 @@ async def google_auth(request: Request, response: Response):
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@api_router.post("/auth/register")
+@limiter.limit("10/minute")
+async def register(request: Request, payload: RegisterRequest, response: Response):
+    """Create an account with email + password. Reliable path that doesn't depend
+    on the native OAuth deep-link."""
+    email = (payload.email or "").strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    if len(payload.password or "") < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    if await db.users.find_one({"email": email}, {"_id": 1}):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    salt, phash = _hash_password(payload.password)
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    await db.users.insert_one({
+        "user_id": user_id,
+        "email": email,
+        "name": (payload.name or email.split("@")[0]).strip()[:60],
+        "picture": None,
+        "password_salt": salt,
+        "password_hash": phash,
+        "interests": [],
+        "onboarding_completed": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    app_access, app_refresh = await _issue_tokens(user_id)
+    _set_session_cookie(response, app_access)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
+    return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
+
+
+@api_router.post("/auth/login")
+@limiter.limit("10/minute")
+async def login_with_password(request: Request, payload: LoginRequest, response: Response):
+    """Log in with email + password."""
+    email = (payload.email or "").strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not _verify_password(payload.password or "", user.get("password_salt", ""), user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    app_access, app_refresh = await _issue_tokens(user["user_id"])
+    _set_session_cookie(response, app_access)
+    user.pop("password_hash", None)
+    user.pop("password_salt", None)
+    return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
+
 
 _NATIVE_REDIRECT_URI = "https://chintangithubio-production.up.railway.app/api/auth/native-callback"
 _NATIVE_APP_SCHEME  = "com.chintan.app://auth/callback"
