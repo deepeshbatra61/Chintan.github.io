@@ -481,15 +481,15 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       {isActive && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
+            <div style={{ flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-evenly', alignItems: 'center', padding: '5px' }}>
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
                 <button
                   key={i}
                   onClick={() => goDepth(i)}
                   data-testid={`depth-${i}`}
                   style={{
-                    flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    padding: '4px 2px', background: 'none', border: 'none', cursor: 'pointer',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    padding: 0, background: 'none', border: 'none', cursor: 'pointer',
                   }}
                 >
                   {depth === i ? (
