@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
@@ -129,12 +129,6 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [deepLoading, setDeepLoading] = useState(false);
   const scrollRef = useRef(null);
 
-  // Depth-rail: segments stay equal thirds (always fit), but the sliding pill is
-  // measured to each label's text width so it hugs the word, not the third. We
-  // measure ALL three up front so switching to any depth is already correct.
-  const railRef = useRef(null);
-  const segRefs = useRef([]);
-  const [pillGeos, setPillGeos] = useState([]);
 
   // Lazy-load all per-article data on first activation
   useEffect(() => {
@@ -346,33 +340,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     if (d === 2 && !deepRead) fetchDeepRead();
   };
 
-  // Measure every segment label once (and on font load / resize) so each depth's
-  // pill geometry is precomputed. Positions don't change with depth, so this is
-  // more robust than re-measuring the active one on every switch.
-  useLayoutEffect(() => {
-    if (!isActive) return;
-    const PAD = 12;
-    const measure = () => {
-      const rail = railRef.current;
-      if (!rail) return;
-      const r = rail.getBoundingClientRect();
-      const geos = segRefs.current.map((label) => {
-        if (!label) return null;
-        const l = label.getBoundingClientRect();
-        return { left: l.left - r.left - PAD, width: l.width + PAD * 2 };
-      });
-      if (geos.every(Boolean)) setPillGeos(geos);
-    };
-    measure();
-    const raf = requestAnimationFrame(measure);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure).catch(() => {});
-    window.addEventListener('resize', measure);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
-  }, [isActive]);
-
   const beats = getBeats(article);
   const deep = deepRead;
-  const pill = pillGeos[depth] || { left: 5, width: 0 };
   const gistText = article.gist || article.summary || article.what || article.description;
 
   // Article-level actions live in one place: a bottom sheet opened from the rail,
@@ -512,13 +481,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       {isActive && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div ref={railRef} style={{ position: 'relative', flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
-              <div style={{
-                position: 'absolute', top: '5px', bottom: '5px', left: `${pill.left}px`, width: `${pill.width}px`,
-                background: 'linear-gradient(180deg, #DC2626, #B91C1C)', borderRadius: '12px',
-                transition: 'left .45s cubic-bezier(.34,1.4,.5,1), width .45s cubic-bezier(.34,1.4,.5,1)',
-                boxShadow: '0 4px 16px rgba(220,38,38,0.28)', opacity: pill.width ? 1 : 0,
-              }} />
+            <div style={{ flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
                 <button
                   key={i}
@@ -526,12 +489,24 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                   data-testid={`depth-${i}`}
                   style={{
                     flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    padding: '11px 2px', fontSize: '12px', fontWeight: 600,
-                    color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
-                    background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
+                    padding: '4px 2px', background: 'none', border: 'none', cursor: 'pointer',
                   }}
                 >
-                  <span ref={el => { segRefs.current[i] = el; }} style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
+                  {depth === i ? (
+                    <motion.span
+                      layoutId="depthPill"
+                      transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+                      style={{
+                        display: 'inline-block', padding: '7px 13px', borderRadius: '12px', whiteSpace: 'nowrap',
+                        background: 'linear-gradient(180deg, #DC2626, #B91C1C)', boxShadow: '0 4px 16px rgba(220,38,38,0.28)',
+                        fontSize: '12px', fontWeight: 600, color: '#120A06',
+                      }}
+                    >
+                      {lbl}
+                    </motion.span>
+                  ) : (
+                    <span style={{ display: 'inline-block', padding: '7px 13px', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, color: '#7C766E' }}>{lbl}</span>
+                  )}
                 </button>
               ))}
             </div>
