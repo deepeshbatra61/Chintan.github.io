@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
@@ -10,9 +10,9 @@ import {
   Home, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit,
   ThumbsUp, ThumbsDown, Send, Clock, Loader2,
-  History, TrendingUp, ChevronRight, MoreHorizontal
+  ChevronRight, MoreHorizontal
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -57,30 +57,41 @@ const truncateWords = (text, maxWords) => {
   return words.slice(0, maxWords).join(' ') + '…';
 };
 
-// The three reading depths and the two deep-dive lenses. Keys mirror the backend
-// (_DEEP_DIVE_ANGLES, which still defines four); we surface the two temporal
-// bookends — how it got here, and where it goes — as the least-redundant pair.
-const DEEP_ANGLES = [
-  { key: "history", label: "The history", Icon: History },
-  { key: "whats_next", label: "What happens next", Icon: TrendingUp },
-];
+// Deep dive is a single generic long-form read (the backend "full" angle).
+const DEEP_KEY = "full";
 
-const LOADER_PHRASES = ["Contemplating…", "Pulling the threads…", "Weighing both sides…", "Reading past the headline…"];
+const LOADER_PHRASES = ["Contemplating…", "Reading past the headline…", "Weighing both sides…", "Finding the tension…"];
 
-// The Chintan loading moment — the Surya mark turning while a line of thought
-// cycles underneath. Shown whenever a deeper tier is being generated.
+// The Chintan loading moment — the Surya mark breathing while a line of thought
+// cross-fades underneath, at an unhurried pace. Shown while a deeper tier loads.
 const SuryaThinking = () => {
   const [i, setI] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setI(x => x + 1), 1400);
+    const t = setInterval(() => setI(x => x + 1), 3000);
     return () => clearInterval(t);
   }, []);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '72px 0', gap: '18px' }}>
-      <SuryaLogo className="w-11 h-11 animate-spin-slow" />
-      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '15px', color: '#8E877E', transition: 'opacity .3s' }}>
-        {LOADER_PHRASES[i % LOADER_PHRASES.length]}
-      </span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '74px 0', gap: '22px' }}>
+      <motion.div
+        animate={{ scale: [1, 1.08, 1], opacity: [0.78, 1, 0.78] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <SuryaLogo className="w-12 h-12" />
+      </motion.div>
+      <div style={{ height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={i}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.9, ease: 'easeInOut' }}
+            style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '15px', color: '#9A938A' }}
+          >
+            {LOADER_PHRASES[i % LOADER_PHRASES.length]}
+          </motion.span>
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
@@ -114,10 +125,13 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
   // Tiered reading depth: 0 Glance · 1 Understand · 2 Deep dive
   const [depth, setDepth] = useState(0);
-  const [angleKey, setAngleKey] = useState("history");
-  const [deepCache, setDeepCache] = useState({});   // { [angleKey]: {title, paragraphs} }
+  const [deepRead, setDeepRead] = useState(null);   // { title, paragraphs } once loaded
   const [deepLoading, setDeepLoading] = useState(false);
   const scrollRef = useRef(null);
+
+  // Depth-rail sliding pill — measured to hug each label instead of a fixed third.
+  const segRefs = useRef([]);
+  const [pill, setPill] = useState({ left: 5, width: 0 });
 
   // Lazy-load all per-article data on first activation
   useEffect(() => {
@@ -306,16 +320,15 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   // ── Depth + deep-dive navigation ────────────────────────────────────────────
-  const fetchAngle = async (key) => {
-    setAngleKey(key);
-    if (deepCache[key]) { if (scrollRef.current) scrollRef.current.scrollTop = 0; return; }
+  const fetchDeepRead = async () => {
+    if (deepRead) { if (scrollRef.current) scrollRef.current.scrollTop = 0; return; }
     setDeepLoading(true);
     try {
-      const r = await axios.get(`${API}/ai/deep-dive/${articleId}/${key}`, { withCredentials: true });
-      setDeepCache(prev => ({ ...prev, [key]: { title: r.data.title, paragraphs: r.data.paragraphs } }));
+      const r = await axios.get(`${API}/ai/deep-dive/${articleId}/${DEEP_KEY}`, { withCredentials: true });
+      setDeepRead({ title: r.data.title, paragraphs: r.data.paragraphs });
     } catch (e) {
       console.error("Deep dive fetch:", e);
-      toast.error("Could not load this angle");
+      toast.error("Could not load the deep dive");
     } finally {
       setDeepLoading(false);
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -327,11 +340,25 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     triggerHaptic('light');
     setDepth(d);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    if (d === 2 && !deepCache[angleKey]) fetchAngle(angleKey);
+    if (d === 2 && !deepRead) fetchDeepRead();
   };
 
+  // Keep the rail pill sized/positioned to the active segment's real box.
+  useLayoutEffect(() => {
+    if (!isActive) return;
+    const measure = () => {
+      const el = segRefs.current[depth];
+      if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    measure();
+    const raf = requestAnimationFrame(measure);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure).catch(() => {});
+    window.addEventListener('resize', measure);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
+  }, [depth, isActive]);
+
   const beats = getBeats(article);
-  const deep = deepCache[angleKey];
+  const deep = deepRead;
   const gistText = article.gist || article.summary || article.what || article.description;
 
   // Article-level actions live in one place: a bottom sheet opened from the rail,
@@ -342,23 +369,6 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     { label: "The other side", Icon: BrainCircuit, onClick: () => { setShowActions(false); fetchOtherSide(); }, testid: "other-side-btn" },
     { label: "Ask Chintan", Icon: Sparkles, onClick: () => { setShowActions(false); navigate(`/ask-ai/${articleId}`); }, testid: "ask-ai-btn" },
   ];
-
-  // The contemplation question — same warm close in Understand and Deep, and the
-  // single entry point into Ask AI ("Ask Chintan anything").
-  const questionClose = article.question ? (
-    <button
-      onClick={() => navigate(`/ask-ai/${articleId}?q=${encodeURIComponent(article.question)}`)}
-      style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', margin: '22px 0 6px', padding: '2px 0 2px 14px', borderLeft: '2px solid rgba(220,38,38,0.45)' }}
-      data-testid="question-ask-ai"
-    >
-      <p style={{ fontFamily: "'Playfair Display','Georgia',serif", fontStyle: 'italic', fontWeight: 500, fontSize: '19px', lineHeight: 1.42, color: '#FCA5A5', margin: 0 }}>
-        {article.question}
-      </p>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '11px', fontSize: '12px', color: '#8A847C' }}>
-        Ask Chintan anything <ChevronRight className="w-3.5 h-3.5" />
-      </span>
-    </button>
-  ) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -371,7 +381,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: depth === 2 ? '190px' : '96px',
+          paddingBottom: '96px',
         }}
       >
         {depth === 2 && deepLoading ? (
@@ -419,7 +429,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             </div>
           </motion.div>
         ) : depth === 1 ? (
-          /* ══════════ UNDERSTAND — the beats, the question, engagement ══════════ */
+          /* ══════════ UNDERSTAND — the beats ══════════ */
           <motion.div
             key="understand"
             initial={{ opacity: 0, y: 14 }}
@@ -446,14 +456,12 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             )) : gistText ? (
               <p style={{ color: '#B6AFA6', fontFamily: "'Manrope', sans-serif", fontSize: '15px', lineHeight: 1.65 }}>{gistText}</p>
             ) : null}
-
-            {questionClose}
             <div style={{ height: '8px' }} />
           </motion.div>
         ) : (
-          /* ══════════ DEEP DIVE — long-form angle read ══════════ */
+          /* ══════════ DEEP DIVE — one long-form read ══════════ */
           <motion.div
-            key={angleKey}
+            key="deep"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
@@ -465,7 +473,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             {deep ? (
               <>
                 <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '23px', lineHeight: 1.26, color: '#F2EEE9', margin: '0 0 16px' }}>
-                  {deep.title || DEEP_ANGLES.find(a => a.key === angleKey)?.label}
+                  {deep.title || 'The full story'}
                 </h2>
                 {deep.paragraphs.map((p, idx) => (
                   <p key={idx} style={{ fontSize: '15px', lineHeight: 1.75, color: '#B9B2A9', margin: '0 0 16px', fontFamily: "'Manrope', sans-serif" }}>
@@ -475,67 +483,36 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                     {idx === 0 ? p.slice(1) : p}
                   </p>
                 ))}
-                {questionClose}
+                <div style={{ height: '8px' }} />
               </>
             ) : (
               <p style={{ color: '#8A847C', textAlign: 'center', padding: '48px 0', fontSize: '14px' }}>
-                Couldn’t load this angle. Tap it again to retry.
+                Couldn’t load the deep dive. Tap Deep dive again to retry.
               </p>
             )}
           </motion.div>
         )}
       </main>
 
-      {/* Deep-dive angle picker — sticky footer above the rail, content scrolls under */}
-      {isActive && depth === 2 && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: '66px', zIndex: 45, padding: '30px 14px 12px', background: 'linear-gradient(to top, #0A0A0A 56%, rgba(10,10,10,0.92) 82%, rgba(10,10,10,0))', pointerEvents: 'none' }}>
-          <div style={{ maxWidth: '640px', margin: '0 auto', pointerEvents: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-              {DEEP_ANGLES.map(({ key, label, Icon }) => {
-                const on = key === angleKey && !deepLoading;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => fetchAngle(key)}
-                    data-testid={`angle-${key}`}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '9px', height: '46px', padding: '0 13px',
-                      borderRadius: '13px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
-                      fontFamily: "'Manrope', sans-serif",
-                      background: on ? 'rgba(220,38,38,0.10)' : '#151412',
-                      border: on ? '1px solid rgba(220,38,38,0.55)' : '1px solid rgba(255,255,255,0.08)',
-                      color: on ? '#FCA5A5' : '#C4BDB3',
-                      transition: 'all .22s ease',
-                    }}
-                  >
-                    <Icon className="w-4 h-4" style={{ flexShrink: 0, color: on ? '#DC2626' : '#6E6862' }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Depth rail + single actions trigger — the only bottom control (active slide) */}
       {isActive && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative', flex: 1, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
+            <div style={{ position: 'relative', flex: 1, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', padding: '5px' }}>
               <div style={{
-                position: 'absolute', top: '5px', bottom: '5px', width: 'calc(33.333% - 3px)', left: '5px',
-                transform: `translateX(${depth * 100}%)`,
+                position: 'absolute', top: '5px', bottom: '5px', left: `${pill.left}px`, width: `${pill.width}px`,
                 background: 'linear-gradient(180deg, #DC2626, #B91C1C)', borderRadius: '12px',
-                transition: 'transform .5s cubic-bezier(.34,1.4,.5,1)', boxShadow: '0 4px 16px rgba(220,38,38,0.28)',
+                transition: 'left .45s cubic-bezier(.34,1.4,.5,1), width .45s cubic-bezier(.34,1.4,.5,1)',
+                boxShadow: '0 4px 16px rgba(220,38,38,0.28)', opacity: pill.width ? 1 : 0,
               }} />
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
                 <button
                   key={i}
+                  ref={el => { segRefs.current[i] = el; }}
                   onClick={() => goDepth(i)}
                   data-testid={`depth-${i}`}
                   style={{
-                    flex: 1, textAlign: 'center', padding: '11px 0', fontSize: '12.5px', fontWeight: 600,
+                    padding: '11px 16px', fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap',
                     color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
                     background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
                   }}

@@ -317,6 +317,12 @@ async def _summarize_article(article: dict) -> dict | None:
 # Each angle is a distinct analytical lens on the same story. Generated only when
 # the reader taps that angle, then cached + shared per (article_id, angle).
 _DEEP_DIVE_ANGLES = {
+    "full": {
+        "label": "The full story",
+        "lens": "Write the complete long-form article on this story — the full background and "
+                "how it came to be, the key facts and numbers, why it matters, who it touches, and "
+                "where it is likely to go. One coherent, flowing piece, not a themed take.",
+    },
     "history": {
         "label": "The history",
         "lens": "Trace how this situation actually came to be. Go back to the decisions, "
@@ -368,7 +374,7 @@ def _parse_deep_dive(raw: str) -> dict | None:
     if len(paragraphs) < 2:
         return None
     title = str(data.get("title", "")).strip()
-    return {"title": title[:80], "paragraphs": paragraphs[:5]}
+    return {"title": title[:80], "paragraphs": paragraphs[:6]}
 
 
 async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
@@ -384,12 +390,12 @@ async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
         f"LENS — {spec['label']}: {spec['lens']}\n\n"
         "Return ONLY this JSON:\n"
         "{{\n"
-        "  \"title\": \"a short, evocative title for this angle (<=6 words, no colon, not a label)\",\n"
-        "  \"paragraphs\": [\"...\", \"...\", \"...\", \"...\"]\n"
+        "  \"title\": \"a short, evocative title for this piece (<=6 words, no colon, not a label)\",\n"
+        "  \"paragraphs\": [\"...\", \"...\", \"...\", \"...\", \"...\"]\n"
         "}}\n\n"
         "RULES:\n"
-        "1. Exactly 4 paragraphs. Each is 4-6 full sentences of real, specific analysis — "
-        "this is the deep tier, so go deep. No one-line paragraphs, no padding.\n"
+        "1. 5 to 6 substantial paragraphs. Each is 4-6 full sentences of real, specific analysis — "
+        "this is the deep tier, so go deep and make it a proper long read. No one-line paragraphs, no padding.\n"
         "2. Be concrete: real names, numbers, institutions, dates, cause-and-effect. Never generic.\n"
         "3. Stay strictly inside the lens above — don't drift into a neutral summary.\n"
         "4. Plain, vivid English. Zero jargon, no 'stakeholders', no markdown, no bullet points.\n"
@@ -408,7 +414,7 @@ async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
                 title=article.get("title", ""),
                 content=article_text,
             ),
-            max_tokens=1400,
+            max_tokens=1900,
             model=DEEP_DIVE_MODEL,
         )
         result = _parse_deep_dive(raw)
