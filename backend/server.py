@@ -1816,36 +1816,102 @@ async def update_interests(interests_update: InterestsUpdate, user: dict = Depen
     updated_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     return updated_user
 
+# The categories a reader can actually filter/receive (matches the feed + interests).
+_CANON_CATEGORIES = ["Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"]
+
+
 @api_router.get("/users/stats")
 async def get_user_stats(user: dict = Depends(require_auth)):
-    """Get user reading stats"""
-    # Get reading history
-    history = await db.reading_history.find(
-        {"user_id": user["user_id"]},
-        {"_id": 0}
-    ).to_list(1000)
-    
+    """User reading stats + a couple of genuinely useful signals (streak, blind
+    spot). Bookmark count is aligned to what the Saved list can actually show, and
+    orphaned bookmarks (article since deleted) are pruned so counts stay honest."""
+    uid = user["user_id"]
+    history = await db.reading_history.find({"user_id": uid}, {"_id": 0}).to_list(2000)
+
     total_time = sum(h.get("time_spent", 0) for h in history)
     articles_read = len(history)
     completed = sum(1 for h in history if h.get("completed", False))
-    
-    # Get bookmarks count
-    bookmarks_count = await db.bookmarks.count_documents({"user_id": user["user_id"]})
-    
-    # Get category breakdown
-    category_counts = {}
+
+    # ── Bookmarks: count only what resolves to a real article; prune the rest ──
+    bm = await db.bookmarks.find({"user_id": uid}, {"_id": 0, "article_id": 1}).to_list(1000)
+    bm_ids = [b["article_id"] for b in bm]
+    existing_bm = set()
+    if bm_ids:
+        existing_bm = {
+            a["article_id"]
+            for a in await db.articles.find(
+                {"article_id": {"$in": bm_ids}}, {"_id": 0, "article_id": 1}
+            ).to_list(len(bm_ids))
+        }
+    orphans = [i for i in bm_ids if i not in existing_bm]
+    if orphans:
+        await db.bookmarks.delete_many({"user_id": uid, "article_id": {"$in": orphans}})
+        logger.info(f"Pruned {len(orphans)} orphaned bookmarks for {uid}")
+    bookmarks_count = len(bm_ids) - len(orphans)
+
+    # ── Category breakdown: one $in lookup instead of N find_one calls ─────────
+    read_ids = [h["article_id"] for h in history]
+    arts_by_id = {}
+    if read_ids:
+        arts_by_id = {
+            a["article_id"]: a
+            for a in await db.articles.find(
+                {"article_id": {"$in": read_ids}}, {"_id": 0, "article_id": 1, "category": 1}
+            ).to_list(len(read_ids))
+        }
+    category_counts: dict = {}
+    cat_last: dict = {}  # category -> most recent read date (YYYY-MM-DD)
+    read_dates: set = set()
     for h in history:
-        article = await db.articles.find_one({"article_id": h["article_id"]}, {"_id": 0})
-        if article:
-            cat = article.get("category", "Other")
+        day = (h.get("created_at") or "")[:10]
+        if day:
+            read_dates.add(day)
+        art = arts_by_id.get(h["article_id"])
+        if art:
+            cat = art.get("category") or "Other"
             category_counts[cat] = category_counts.get(cat, 0) + 1
-    
+            if day and (cat not in cat_last or day > cat_last[cat]):
+                cat_last[cat] = day
+
+    # ── Reading streak: consecutive days with activity, ending today/yesterday ─
+    today = datetime.now(timezone.utc).date()
+    streak = 0
+    start = today if today.isoformat() in read_dates else (today - timedelta(days=1))
+    d = start
+    while d.isoformat() in read_dates:
+        streak += 1
+        d -= timedelta(days=1)
+
+    # ── Blind spot: a canonical category you read least (never > stale) ────────
+    top_category, top_pct = None, 0
+    if category_counts:
+        top_category = max(category_counts, key=category_counts.get)
+        top_pct = round(category_counts[top_category] / max(1, articles_read) * 100)
+    never = [c for c in _CANON_CATEGORIES if category_counts.get(c, 0) == 0]
+    blind_spot, blind_spot_days = None, None
+    if never:
+        blind_spot = never[0]
+    elif cat_last:
+        blind_spot = min(_CANON_CATEGORIES, key=lambda c: cat_last.get(c, "0000-00-00"))
+        last = cat_last.get(blind_spot)
+        if last:
+            try:
+                blind_spot_days = (today - datetime.fromisoformat(last[:10]).date()).days
+            except ValueError:
+                blind_spot_days = None
+
     return {
         "total_reading_time": total_time,
+        "reading_time_min": round(total_time / 60),
         "articles_read": articles_read,
         "articles_completed": completed,
         "bookmarks_count": bookmarks_count,
-        "category_breakdown": category_counts
+        "category_breakdown": category_counts,
+        "streak_days": streak,
+        "top_category": top_category,
+        "top_pct": top_pct,
+        "blind_spot": blind_spot,
+        "blind_spot_days": blind_spot_days,
     }
 
 @api_router.get("/users/weekly-report")
