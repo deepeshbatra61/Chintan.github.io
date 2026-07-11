@@ -129,7 +129,9 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [deepLoading, setDeepLoading] = useState(false);
   const scrollRef = useRef(null);
 
-  // Depth-rail sliding pill — measured to hug each label instead of a fixed third.
+  // Depth-rail: segments stay equal thirds (always fit), but the sliding pill is
+  // measured to the active label's text width so it hugs the word, not the third.
+  const railRef = useRef(null);
   const segRefs = useRef([]);
   const [pill, setPill] = useState({ left: 5, width: 0 });
 
@@ -343,12 +345,18 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     if (d === 2 && !deepRead) fetchDeepRead();
   };
 
-  // Keep the rail pill sized/positioned to the active segment's real box.
+  // Size the pill to the active label's text (hug the word) + a little padding,
+  // measured relative to the rail so it works regardless of segment width.
   useLayoutEffect(() => {
     if (!isActive) return;
+    const PAD = 12;
     const measure = () => {
-      const el = segRefs.current[depth];
-      if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth });
+      const rail = railRef.current;
+      const label = segRefs.current[depth];
+      if (!rail || !label) return;
+      const r = rail.getBoundingClientRect();
+      const l = label.getBoundingClientRect();
+      setPill({ left: l.left - r.left - PAD, width: l.width + PAD * 2 });
     };
     measure();
     const raf = requestAnimationFrame(measure);
@@ -498,7 +506,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       {isActive && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative', flex: 1, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', padding: '5px' }}>
+            <div ref={railRef} style={{ position: 'relative', flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', padding: '5px' }}>
               <div style={{
                 position: 'absolute', top: '5px', bottom: '5px', left: `${pill.left}px`, width: `${pill.width}px`,
                 background: 'linear-gradient(180deg, #DC2626, #B91C1C)', borderRadius: '12px',
@@ -508,16 +516,16 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
                 <button
                   key={i}
-                  ref={el => { segRefs.current[i] = el; }}
                   onClick={() => goDepth(i)}
                   data-testid={`depth-${i}`}
                   style={{
-                    padding: '11px 16px', fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap',
+                    flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    padding: '11px 2px', fontSize: '12px', fontWeight: 600,
                     color: depth === i ? '#120A06' : '#7C766E', position: 'relative', zIndex: 2,
                     background: 'none', border: 'none', cursor: 'pointer', transition: 'color .35s ease',
                   }}
                 >
-                  {lbl}
+                  <span ref={el => { segRefs.current[i] = el; }} style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
                 </button>
               ))}
             </div>

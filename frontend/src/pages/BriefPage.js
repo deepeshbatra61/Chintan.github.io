@@ -1,122 +1,33 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { ArrowLeft, Sun, CloudSun, Moon, Clock } from "lucide-react";
+import { ArrowLeft, Sun, CloudSun, Moon, Clock, ChevronRight } from "lucide-react";
 import { SuryaLogo, useAuth } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
-const briefThemes = {
-  morning: {
-    icon: Sun,
-    gradient: "from-amber-900/40 via-orange-900/20 to-[#0A0A0A]",
-    bgColor: "bg-gradient-to-br from-amber-950/30 to-[#0A0A0A]",
-    accent: "text-amber-400",
-    accentBg: "bg-amber-500/20",
-    borderAccent: "border-amber-500/30",
-    greeting: "Good Morning",
-    subtitle: "while you were sleeping, we curated your morning brief",
-    sentenceCardBg: "bg-amber-950/20",
-    sentenceCardBorder: "border-amber-800/30",
-    pillBg: "bg-amber-500/15",
-    pillText: "text-amber-400",
-  },
-  midday: {
-    icon: CloudSun,
-    gradient: "from-orange-900/30 via-red-900/20 to-[#0A0A0A]",
-    bgColor: "bg-gradient-to-br from-orange-950/30 to-[#0A0A0A]",
-    accent: "text-orange-400",
-    accentBg: "bg-orange-500/20",
-    borderAccent: "border-orange-500/30",
-    greeting: "Good Afternoon",
-    subtitle: "while you were working, we were curating your tailored afternoon brief",
-    sentenceCardBg: "bg-orange-950/20",
-    sentenceCardBorder: "border-orange-800/30",
-    pillBg: "bg-orange-500/15",
-    pillText: "text-orange-400",
-  },
-  night: {
-    icon: Moon,
-    gradient: "from-indigo-900/40 via-purple-900/20 to-[#0A0A0A]",
-    bgColor: "bg-gradient-to-br from-indigo-950/40 to-[#0A0A0A]",
-    accent: "text-indigo-300",
-    accentBg: "bg-indigo-500/20",
-    borderAccent: "border-indigo-500/30",
-    greeting: "Good Evening",
-    subtitle: "while you wound down, here's what shaped your world today",
-    sentenceCardBg: "bg-indigo-950/30",
-    sentenceCardBorder: "border-indigo-800/30",
-    pillBg: "bg-indigo-500/15",
-    pillText: "text-indigo-300",
-  },
-};
-
-const STAR_KEYFRAMES = `
-@keyframes chintan-fall {
-  0%   { transform: translateY(-10px); opacity: 0; }
-  12%  { opacity: 1; }
-  88%  { opacity: 1; }
-  100% { transform: translateY(100vh); opacity: 0; }
-}
-`;
-
-const FallingStars = () => {
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 15 }, (_, i) => ({
-        id: i,
-        left: `${(i * 6.5 + Math.sin(i * 1.9) * 9 + 50) % 100}%`,
-        delay: `${(i * 0.7) % 10}s`,
-        duration: `${8 + (i % 5)}s`,
-        opacity: 0.4,
-      })),
-    []
-  );
-
-  return (
-    <>
-      <style>{STAR_KEYFRAMES}</style>
-      {stars.map((star) => (
-        <div
-          key={star.id}
-          style={{
-            position: "absolute",
-            left: star.left,
-            top: 0,
-            width: "2px",
-            height: "2px",
-            borderRadius: "50%",
-            background: "white",
-            opacity: star.opacity,
-            animation: `chintan-fall ${star.duration} ${star.delay} linear infinite`,
-          }}
-        />
-      ))}
-    </>
-  );
+// One theme (obsidian + red) across all three briefs — the only per-time cue is a
+// quiet icon and a very faint top glow. No gradients-as-decoration, no stars.
+const briefMeta = {
+  morning: { Icon: Sun,      glow: "rgba(245,158,11,0.10)",  greeting: "Good morning",   sub: "Three stories to start the day." },
+  midday:  { Icon: CloudSun, glow: "rgba(220,38,38,0.09)",   greeting: "Good afternoon", sub: "Three stories from the day so far." },
+  night:   { Icon: Moon,     glow: "rgba(129,140,248,0.10)", greeting: "Good evening",   sub: "Three stories that shaped today." },
 };
 
 const cleanText = (text) =>
-  text
-    .replace(/^#+\s*/gm, "")
-    .replace(/\*\*/g, "")
-    .trim();
+  (text || "").replace(/^#+\s*/gm, "").replace(/\*\*/g, "").trim();
 
-const cleanSentence = (text) =>
-  text
-    .replace(/^[\.\s]+/, "")
-    .replace(/^(Your\s+\w+\s+Brief[\,\s]*)/i, "")
-    .replace(/^(\w+'s\s+\w+\s+Brief[\,\s]*)/i, "")
-    .trim();
-
+// The backend writes exactly 3 sentences, one per top category, index-aligned
+// with `categories` and `referenced_stories`.
 const splitSentences = (text) =>
   cleanText(text)
     .split(/\.\s+/)
-    .filter((s) => s.trim().length > 0)
+    .map((s) => s.trim())
+    .filter(Boolean)
     .slice(0, 3)
-    .map((s) => cleanSentence(s.trim().replace(/\.$/, "") + "."));
+    .map((s) => s.replace(/\.$/, "") + ".");
 
 const BriefPage = () => {
   const { briefType } = useParams();
@@ -125,19 +36,16 @@ const BriefPage = () => {
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const theme = briefThemes[briefType] || briefThemes.morning;
-  const Icon = theme.icon;
-  console.log('Briefs user object:', user);
+  const meta = briefMeta[briefType] || briefMeta.morning;
+  const Icon = meta.Icon;
   const firstName = user?.name?.split(" ")[0] || "";
 
   const fetchBrief = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/briefs/${briefType}`, {
-        withCredentials: true,
-      });
-      setBrief(response.data);
-    } catch (error) {
-      console.error("Error fetching brief:", error);
+      const r = await axios.get(`${API}/briefs/${briefType}`, { withCredentials: true });
+      setBrief(r.data);
+    } catch (e) {
+      console.error("Error fetching brief:", e);
     } finally {
       setLoading(false);
     }
@@ -150,159 +58,107 @@ const BriefPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <SuryaLogo className="w-16 h-16 animate-spin-slow" />
+        <SuryaLogo className="w-14 h-14 animate-spin-slow" />
       </div>
     );
   }
 
-  const rawSummary = brief?.summary || "No brief available right now. Check back soon.";
-  const sentences = splitSentences(rawSummary);
+  const sentences = splitSentences(brief?.summary);
+  const stories = brief?.referenced_stories || [];
   const categories = brief?.categories || [];
-  const referencedStories = brief?.referenced_stories || [];
+  const greeting = brief?.greeting || meta.greeting;
   const readTime = brief?.read_time || "1 min read";
-  const greeting = brief?.greeting || theme.greeting;
-  const subtitle = brief?.subtitle || theme.subtitle;
 
   return (
-    <div
-      className={`min-h-screen ${theme.bgColor}`}
-      data-testid={`brief-${briefType}-page`}
-    >
-      {/* Background gradient */}
-      <div
-        className={`fixed inset-0 bg-gradient-to-b ${theme.gradient} pointer-events-none`}
-      />
+    <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid={`brief-${briefType}-page`}>
+      {/* Very faint time-of-day glow */}
+      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "300px", background: `radial-gradient(ellipse at center, ${meta.glow}, rgba(10,10,10,0) 70%)`, pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Night: falling stars */}
-      {briefType === "night" && (
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <FallingStars />
-        </div>
-      )}
-
-      {/* Morning: warm glow */}
-      {briefType === "morning" && (
-        <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
-        </div>
-      )}
-
-      {/* Nav */}
-      <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat, 44px)', paddingBottom: '12px' }}>
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            data-testid="back-btn"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-400" />
+      {/* Header */}
+      <header
+        className="sticky z-40 px-4"
+        style={{ top: 0, paddingTop: "var(--sat, 44px)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+      >
+        <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
+            <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
           </button>
-          <span className="text-white font-medium text-sm">Daily Brief</span>
-          <div className="w-9" />
+          <span style={{ color: "#82828A", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>Daily brief</span>
+          <div style={{ width: "36px" }} />
         </div>
       </header>
 
       {/* Content */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
-        <div className="max-w-2xl mx-auto">
-          {/* Header row: icon + greeting */}
-          <motion.div
-            className="flex items-center gap-3 mt-6 mb-2"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Icon className={`w-6 h-6 ${theme.accent} flex-shrink-0`} />
-            <h1 className="text-2xl font-bold text-white">
+      <main style={{ position: "relative", zIndex: 1, padding: "0 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
+        {/* Greeting */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} style={{ paddingTop: "28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "11px", marginBottom: "8px" }}>
+            <Icon className="w-5 h-5" style={{ color: "#DC2626", flexShrink: 0 }} />
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "27px", lineHeight: 1.15, color: "#F2EEE9", margin: 0 }}>
               {greeting}{firstName ? `, ${firstName}` : ""}
             </h1>
-          </motion.div>
-
-          {/* Subtitle */}
-          <motion.p
-            className="text-sm text-gray-500 mb-5"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-          >
-            {subtitle}
-          </motion.p>
-
-          {/* Read time */}
-          <motion.div
-            className="flex items-center gap-1.5 text-gray-600 text-xs mb-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-          >
+          </div>
+          <p style={{ color: "#8E877E", fontSize: "14px", margin: "0 0 6px", fontFamily: "'Manrope', sans-serif" }}>{meta.sub}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#5A544D", fontSize: "12px" }}>
             <Clock className="w-3.5 h-3.5" />
             <span>{readTime}</span>
-          </motion.div>
+          </div>
+        </motion.div>
 
-          {/* Sentence boxes */}
-          <div className="space-y-3 mb-10">
-            {sentences.map((sentence, idx) => {
-              const category = categories[idx] || null;
+        {/* Section label */}
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.2em", color: "#5A544D", textTransform: "uppercase", margin: "30px 0 14px" }}>
+          Across your interests
+        </div>
+
+        {/* Three story cards */}
+        {stories.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {stories.map((story, idx) => {
+              const category = categories[idx];
+              const take = sentences[idx] || story.title;
               return (
-                <motion.div
-                  key={idx}
-                  className={`${theme.sentenceCardBg} border ${theme.sentenceCardBorder} rounded-xl px-5 py-4`}
+                <motion.button
+                  key={story.article_id || idx}
+                  onClick={() => story.article_id && navigate(`/article/${story.article_id}`)}
+                  data-testid={`brief-story-${idx}`}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + idx * 0.1 }}
+                  transition={{ duration: 0.4, delay: 0.12 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  style={{
+                    textAlign: "left", width: "100%", background: "#131211",
+                    border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px",
+                    padding: "17px 18px", cursor: "pointer",
+                  }}
                 >
-                  {category && (
-                    <span
-                      className={`inline-block text-xs font-mono uppercase tracking-wider ${theme.pillBg} ${theme.pillText} px-2 py-0.5 rounded mb-3`}
-                    >
-                      {category}
-                    </span>
-                  )}
-                  <p className="text-gray-100 leading-relaxed text-[15px]">
-                    {sentence}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "11px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                      {category && (
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.12em", color: "#DC2626", textTransform: "uppercase" }}>{category}</span>
+                      )}
+                      {story.source && (
+                        <>
+                          <span style={{ color: "#3A362F" }}>·</span>
+                          <span style={{ color: "#6E6862", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{story.source}</span>
+                        </>
+                      )}
+                    </div>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "#2E2A25", flexShrink: 0 }}>{String(idx + 1).padStart(2, "0")}</span>
+                  </div>
+                  <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "17px", lineHeight: 1.42, color: "#ECE7E1", margin: 0 }}>
+                    {take}
                   </p>
-                </motion.div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "12px", color: "#8A847C", fontSize: "12px", fontFamily: "'Manrope', sans-serif" }}>
+                    Read the story <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </motion.button>
               );
             })}
           </div>
-
-          {/* Divider + Referenced Stories */}
-          {referencedStories.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.55 }}
-            >
-              <div className={`border-t ${theme.borderAccent} mb-7`} />
-
-              <p
-                className={`text-xs font-mono uppercase tracking-wider ${theme.accent} mb-4`}
-              >
-                Referenced Stories
-              </p>
-
-              <div className="space-y-3">
-                {referencedStories.map((article, idx) => (
-                  <motion.button
-                    key={article.article_id}
-                    onClick={() => navigate(`/article/${article.article_id}`)}
-                    className={`w-full text-left p-4 rounded-xl glass-card border ${theme.borderAccent} hover:bg-white/5 transition-colors group`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 + idx * 0.08 }}
-                    data-testid={`ref-article-${article.article_id}`}
-                  >
-                    <p className="text-white text-sm font-medium leading-snug group-hover:text-red-400 transition-colors line-clamp-2">
-                      {article.title}
-                    </p>
-                    <p className="text-gray-600 text-xs mt-1.5 font-mono">
-                      {article.source}
-                    </p>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </div>
+        ) : (
+          <p style={{ color: "#8A847C", textAlign: "center", padding: "48px 0", fontSize: "14px" }}>
+            No stories are ready right now. Check back soon.
+          </p>
+        )}
       </main>
     </div>
   );
