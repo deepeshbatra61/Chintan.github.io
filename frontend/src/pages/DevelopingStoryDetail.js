@@ -2,36 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { ArrowLeft, Swords, Trophy, Clock, ExternalLink } from "lucide-react";
+import { ArrowLeft, Flame, Clock } from "lucide-react";
 import { SuryaLogo } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
-
-const themeConfig = {
-  war: {
-    icon: Swords,
-    gradient: "from-red-900/40 via-red-950/20 to-[#0A0A0A]",
-    accent: "text-red-400",
-    accentBg: "bg-red-500/10",
-    border: "border-red-900/40",
-    liveColor: "bg-red-500",
-    liveBadge: "bg-red-950/80 text-red-400",
-    timelineDot: "bg-red-500",
-    timelineLine: "bg-red-900/40",
-  },
-  cricket: {
-    icon: Trophy,
-    gradient: "from-emerald-900/30 via-emerald-950/20 to-[#0A0A0A]",
-    accent: "text-emerald-400",
-    accentBg: "bg-emerald-500/10",
-    border: "border-emerald-900/40",
-    liveColor: "bg-emerald-500",
-    liveBadge: "bg-emerald-950/80 text-emerald-400",
-    timelineDot: "bg-emerald-500",
-    timelineLine: "bg-emerald-900/40",
-  },
-};
 
 function formatRelativeTime(isoString) {
   if (!isoString) return "";
@@ -42,6 +17,13 @@ function formatRelativeTime(isoString) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+const trendLabel = (m) => {
+  const t = m?.trend;
+  const n = m?.today || 0;
+  const head = t === "gaining" ? "Gaining pace" : t === "cooling" ? "Cooling off" : "Holding steady";
+  return `${head} · ${n} update${n === 1 ? "" : "s"} today`;
+};
+
 const DevelopingStoryDetail = () => {
   const { storyId } = useParams();
   const navigate = useNavigate();
@@ -50,9 +32,7 @@ const DevelopingStoryDetail = () => {
 
   const fetchStory = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/developing-stories/${storyId}`, {
-        withCredentials: true,
-      });
+      const response = await axios.get(`${API}/developing-stories/${storyId}`, { withCredentials: true });
       setStory(response.data);
     } catch (error) {
       console.error("Error fetching developing story:", error);
@@ -70,7 +50,7 @@ const DevelopingStoryDetail = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <SuryaLogo className="w-16 h-16 animate-spin-slow" />
+        <SuryaLogo className="w-14 h-14 animate-spin-slow" />
       </div>
     );
   }
@@ -78,156 +58,108 @@ const DevelopingStoryDetail = () => {
   if (!story) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-400 mb-4">Story not found</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="text-red-400 hover:text-red-300 transition-colors"
-          >
-            Go back
-          </button>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: "#8A847C", marginBottom: "14px" }}>Story not found</p>
+          <button onClick={() => navigate(-1)} style={{ color: "#DC6B5A", background: "none", border: "none", cursor: "pointer" }}>Go back</button>
         </div>
       </div>
     );
   }
 
-  const cfg = themeConfig[story.theme] || themeConfig.war;
-  const Icon = cfg.icon;
+  const articles = story.articles || [];
+  const momentum = story.momentum || {};
+  const buckets = momentum.buckets || [];
+  const maxBucket = Math.max(1, ...buckets);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]" data-testid="developing-story-detail">
-      {/* Background gradient */}
-      <div className={`fixed inset-0 bg-gradient-to-b ${cfg.gradient} pointer-events-none`} />
+    <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="developing-story-detail">
+      {/* faint top glow */}
+      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }} />
 
-      {/* Header — 56px, sits at top-0 (WebView already starts below status bar via overlaysWebView:false) */}
-      <header
-        className="glass-nav sticky z-40"
-        style={{ top: 0, paddingTop: 'var(--sat, 44px)' }}
-      >
-        {/* Relative container so the LIVE badge can be absolutely centred */}
-        <div className="relative h-full flex items-center justify-between px-4">
-          {/* Back arrow — left, vertically centred */}
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            data-testid="back-btn"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-400" />
+      {/* Header */}
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat, 44px)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
+            <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
           </button>
-
-          {/* LIVE badge — absolutely centred horizontally and vertically */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className={`text-xs font-mono px-2 py-0.5 rounded ${cfg.liveBadge} flex items-center gap-1`}>
-              <span className={`w-1.5 h-1.5 ${cfg.liveColor} rounded-full animate-pulse`} />
-              LIVE
-            </span>
-          </div>
-
-          {/* Theme icon — right, 32×32, vertically centred */}
-          <div className="w-8 h-8 flex items-center justify-center">
-            <Icon className={`w-5 h-5 ${cfg.accent}`} />
-          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", color: "#DC6B5A", background: "rgba(220,38,38,0.12)", padding: "4px 10px", borderRadius: "20px" }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" />
+            LIVE
+          </span>
+          <Flame className="w-5 h-5" style={{ color: "#DC6B5A" }} />
         </div>
       </header>
 
-      {/* Content — top padding = 56px header + safe area already on outer div */}
-      <main className="relative z-10 pb-16 px-6" style={{ paddingTop: '60px', height: '100vh', overflowY: 'auto' }}>
-        <div className="max-w-2xl mx-auto">
-          {/* Story header */}
-          <motion.div
-            className="mt-6 mb-8"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className={`w-9 h-9 rounded-full ${cfg.accentBg} flex items-center justify-center flex-shrink-0`}>
-                <Icon className={`w-4.5 h-4.5 ${cfg.accent}`} />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white leading-snug">{story.title}</h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Clock className="w-3 h-3 text-gray-600" />
-                  <span className="text-gray-600 text-xs font-mono">
-                    Updated {formatRelativeTime(story.last_updated)}
-                  </span>
-                  <span className="text-gray-700 text-xs">·</span>
-                  <span className="text-gray-600 text-xs font-mono">
-                    {story.articles.length} update{story.articles.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+      {/* Content */}
+      <main style={{ position: "relative", zIndex: 1, padding: "18px 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "#F2EEE9", margin: "0 0 8px" }}>{story.title}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#6E6862" }}>
+            <span>{story.article_count || articles.length} update{(story.article_count || articles.length) === 1 ? "" : "s"}</span>
+            <span>·</span>
+            <span>updated {formatRelativeTime(story.last_updated)}</span>
+          </div>
+        </motion.div>
 
-          {/* Timeline */}
-          {story.articles.length > 0 ? (
-            <div className="relative">
-              {/* Vertical line */}
-              <div className={`absolute left-3.5 top-0 bottom-0 w-px ${cfg.timelineLine}`} />
-
-              <div className="space-y-0">
-                {story.articles.map((article, idx) => (
-                  <motion.div
-                    key={article.article_id}
-                    className="relative pl-10"
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.07 }}
-                  >
-                    {/* Timeline dot */}
-                    <div
-                      className={`absolute left-2 top-5 w-3 h-3 rounded-full ${cfg.timelineDot} border-2 border-[#0A0A0A] ${idx === 0 ? "animate-pulse" : "opacity-60"}`}
-                    />
-
-                    {/* Card */}
-                    <div
-                      className={`mb-4 p-4 glass-card rounded-xl border ${cfg.border} cursor-pointer hover:bg-white/5 transition-colors group`}
-                      onClick={() => navigate(`/article/${article.article_id}`)}
-                      data-testid={`timeline-article-${article.article_id}`}
-                    >
-                      {idx === 0 && (
-                        <span className={`inline-flex items-center gap-1 text-xs font-mono ${cfg.accent} mb-2`}>
-                          <span className={`w-1.5 h-1.5 ${cfg.liveColor} rounded-full animate-pulse`} />
-                          LATEST
-                        </span>
-                      )}
-                      <h3 className="text-white text-sm font-medium leading-snug group-hover:text-red-400 transition-colors line-clamp-3">
-                        {article.title}
-                      </h3>
-                      {article.description && (
-                        <p className="text-gray-500 text-xs mt-1.5 line-clamp-2 leading-relaxed">
-                          {article.description}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between mt-3">
-                        <span className="text-gray-600 text-xs font-mono">{article.source}</span>
-                        <span className="text-gray-600 text-xs font-mono">
-                          {formatRelativeTime(article.published_at)}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
+        {/* Where it stands */}
+        {(story.state_summary || buckets.length > 0) && (
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+            style={{ background: "linear-gradient(135deg, rgba(220,38,38,0.10), #131211 62%)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "16px", padding: "16px", margin: "16px 0 6px" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "#DC6B5A", textTransform: "uppercase", marginBottom: "8px" }}>Where it stands</div>
+            {story.state_summary && (
+              <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "#ECE7E1" }}>{story.state_summary}</p>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: story.state_summary ? "12px" : 0 }}>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "18px" }}>
+                {buckets.map((b, i) => (
+                  <span key={i} style={{ width: "4px", borderRadius: "1px", height: `${Math.max(3, (b / maxBucket) * 18)}px`, background: i === buckets.length - 1 ? "#DC2626" : "#7A2A24" }} />
                 ))}
               </div>
+              <span style={{ fontSize: "11px", color: "#8A847C", fontFamily: "'Manrope', sans-serif" }}>{trendLabel(momentum)}</span>
             </div>
-          ) : (
-            <motion.div
-              className="text-center py-16"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Icon className={`w-12 h-12 ${cfg.accent} opacity-30 mx-auto mb-4`} />
-              <p className="text-gray-500">No updates yet</p>
-              <p className="text-gray-600 text-sm mt-1">Check back soon as this story develops</p>
-            </motion.div>
-          )}
+          </motion.div>
+        )}
 
-          <div className="text-center mt-8">
-            <p className="text-gray-600 text-xs flex items-center justify-center gap-2">
-              <Clock className="w-3 h-3" />
-              Auto-refreshes every 60 seconds
-            </p>
+        {/* Timeline */}
+        {articles.length > 0 ? (
+          <div style={{ position: "relative", marginTop: "20px", paddingLeft: "22px" }}>
+            <div style={{ position: "absolute", left: "5px", top: "4px", bottom: "10px", width: "1px", background: "rgba(220,38,38,0.25)" }} />
+            {articles.map((article, idx) => (
+              <motion.div
+                key={article.article_id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: Math.min(idx, 8) * 0.05 }}
+                onClick={() => navigate(`/article/${article.article_id}`)}
+                data-testid={`timeline-article-${article.article_id}`}
+                style={{ position: "relative", marginBottom: "16px", cursor: "pointer" }}
+              >
+                <span style={{ position: "absolute", left: "-21px", top: "4px", width: "11px", height: "11px", borderRadius: "50%", background: idx === 0 ? "#DC2626" : "#5A544D", border: "2px solid #0A0A0A" }} className={idx === 0 ? "animate-pulse" : ""} />
+                <div style={{ background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "13px 14px" }}>
+                  {idx === 0 && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#DC6B5A", marginBottom: "6px" }}>
+                      <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" /> LATEST
+                    </span>
+                  )}
+                  <h3 style={{ fontSize: "14px", lineHeight: 1.36, color: "#ECE7E1", margin: 0, fontWeight: 500 }}>{article.title}</h3>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#6E6862" }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{article.source}</span>
+                    <span>{formatRelativeTime(article.published_at)}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
           </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "56px 0" }}>
+            <Flame className="w-10 h-10" style={{ color: "#4A453F", margin: "0 auto 14px" }} />
+            <p style={{ color: "#8A847C" }}>No updates yet</p>
+            <p style={{ color: "#5A544D", fontSize: "13px", marginTop: "4px" }}>Check back as this story develops.</p>
+          </div>
+        )}
+
+        <div style={{ textAlign: "center", marginTop: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "#4A453F", fontSize: "11px" }}>
+          <Clock className="w-3 h-3" /> Refreshes every 60 seconds
         </div>
       </main>
     </div>

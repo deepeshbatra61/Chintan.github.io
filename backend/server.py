@@ -425,6 +425,123 @@ async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
     return None
 
 
+_DEV_STOPWORDS = set(
+    "the and for with that this from into over after before amid says said report reports "
+    "will have has had not new latest their they what when where which more most about india "
+    "indian government minister national country people first year years today week month".split()
+)
+
+
+def _significant_terms(title: str) -> set:
+    """Content-bearing lowercased words from a headline (drop stopwords / short words)."""
+    terms = set()
+    for w in re.findall(r"[A-Za-z][A-Za-z'&-]{3,}", title or ""):
+        lw = w.lower()
+        if lw not in _DEV_STOPWORDS:
+            terms.add(lw)
+    return terms
+
+
+async def _detect_developing_stories() -> None:
+    """Cluster recent articles by shared terms, score by velocity/size/source
+    diversity, then name + validate the top few with Haiku and promote them as
+    auto developing stories. Stale auto stories are retired. Manual seeds
+    (source != 'auto') are never touched here."""
+    try:
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(hours=48)).isoformat()
+        recent = await db.articles.find(
+            {"published_at": {"$gte": cutoff}},
+            {"_id": 0, "article_id": 1, "title": 1, "source": 1, "published_at": 1},
+        ).sort("published_at", -1).to_list(400)
+        if len(recent) < 6:
+            return
+
+        term_articles: dict = {}
+        for a in recent:
+            for term in _significant_terms(a.get("title", "")):
+                term_articles.setdefault(term, []).append(a)
+
+        day_cut = (now - timedelta(hours=24)).isoformat()
+        candidates = []
+        for term, arts in term_articles.items():
+            if len(arts) < 4:
+                continue
+            sources = {a.get("source") for a in arts if a.get("source")}
+            if len(sources) < 2:
+                continue
+            vel = sum(1 for a in arts if (a.get("published_at") or "") >= day_cut)
+            score = vel * 3 + len(arts) + len(sources) * 2
+            candidates.append({
+                "term": term, "arts": arts, "score": score, "vel": vel,
+                "newest": max((a.get("published_at") or "") for a in arts),
+            })
+        candidates.sort(key=lambda c: c["score"], reverse=True)
+
+        # Collapse clusters that are really the same story (heavy article overlap)
+        chosen, used = [], set()
+        for c in candidates:
+            ids = {a["article_id"] for a in c["arts"]}
+            if used and len(ids & used) >= len(ids) * 0.5:
+                continue
+            chosen.append(c)
+            used |= ids
+            if len(chosen) >= 6:
+                break
+
+        promoted = []
+        for c in chosen:
+            story_id = "auto-" + re.sub(r"[^a-z0-9]+", "-", c["term"])[:40]
+            name, theme, ok = c["term"].title(), "news", True
+            if ANTHROPIC_API_KEY:
+                try:
+                    raw = await _llm(
+                        system="You judge whether a set of news headlines is ONE genuine, currently-developing story (an ongoing event drawing fresh updates) rather than a stale evergreen topic or unrelated headlines. Respond ONLY with JSON.",
+                        user_content=(
+                            "Headlines:\n- " + "\n- ".join(a.get("title", "") for a in c["arts"][:8]) +
+                            '\n\nReturn ONLY: {"developing": true or false, '
+                            '"title": "a short specific story title, <=7 words", '
+                            '"theme": "one lowercase word: protest, politics, cricket, conflict, business, disaster, election, sports"}'
+                        ),
+                        max_tokens=120,
+                    )
+                    s = raw.strip()
+                    st, en = s.find("{"), s.rfind("}") + 1
+                    if st >= 0 and en > st:
+                        data = json.loads(s[st:en])
+                        ok = bool(data.get("developing"))
+                        name = (str(data.get("title") or name)).strip()[:80]
+                        theme = (str(data.get("theme") or theme)).strip().lower()[:20]
+                except Exception as e:
+                    logger.warning(f"Developing detect: LLM validate failed for {story_id}: {e}")
+            if not ok:
+                continue
+            await db.developing_stories.update_one(
+                {"story_id": story_id},
+                {
+                    "$set": {
+                        "title": name, "theme": theme, "keywords": [c["term"]],
+                        "source": "auto", "is_active": True, "velocity": c["vel"],
+                        "last_updated": c["newest"] or now.isoformat(),
+                        "detected_at": now.isoformat(),
+                    },
+                    "$addToSet": {"article_ids": {"$each": [a["article_id"] for a in c["arts"]]}},
+                },
+                upsert=True,
+            )
+            promoted.append(story_id)
+
+        # Retire stale auto stories that weren't re-promoted this cycle
+        stale_cut = (now - timedelta(hours=18)).isoformat()
+        await db.developing_stories.update_many(
+            {"source": "auto", "story_id": {"$nin": promoted}, "last_updated": {"$lt": stale_cut}},
+            {"$set": {"is_active": False}},
+        )
+        logger.info(f"Developing detection: promoted {len(promoted)} auto stories")
+    except Exception:
+        logger.error(f"Developing detection failed: {traceback.format_exc()}")
+
+
 async def _run_ingest_cycle() -> None:
     """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
     # ── 0. Distributed lock (Redis only) ────────────────────────────────────
@@ -579,6 +696,9 @@ async def _run_ingest_cycle() -> None:
                     },
                 )
                 logger.info(f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}")
+
+    # ── 6. Auto-detect fresh developing stories from recent article clusters ──
+    await _detect_developing_stories()
 
 
 async def _run_cleanup_cycle() -> None:
@@ -749,6 +869,7 @@ async def lifespan(app: FastAPI):
                     "title": topic["title"],
                     "theme": topic["theme"],
                     "keywords": topic["keywords"],
+                    "source": "seed",
                 },
             },
             upsert=True,
@@ -3656,7 +3777,7 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
     """Return all active watched topics with article count and latest article preview."""
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
-    ).to_list(100)
+    ).sort("last_updated", -1).to_list(100)
 
     result = []
     for story in stories:
@@ -3695,12 +3816,53 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
              "published_at": 1, "image_url": 1, "url": 1, "is_breaking": 1},
         ).sort("published_at", -1).to_list(50)
 
+    # ── Momentum: bucket updates over the last 48h + a trend label ────────────
+    now = datetime.now(timezone.utc)
+
+    def _age_h(iso):
+        try:
+            dt = datetime.fromisoformat((iso or "").replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (now - dt).total_seconds() / 3600.0
+        except (ValueError, TypeError):
+            return 9999.0
+
+    ages = [_age_h(a.get("published_at")) for a in articles]
+    today = sum(1 for h in ages if h <= 24)
+    prev = sum(1 for h in ages if 24 < h <= 48)
+    trend = "gaining" if today > prev else ("cooling" if today < prev else "steady")
+    buckets = [sum(1 for h in ages if b * 8 <= h < (b + 1) * 8) for b in range(6)]
+    buckets.reverse()  # oldest → newest, for the sparkline
+    momentum = {"today": today, "trend": trend, "buckets": buckets}
+
+    # ── "Where it stands" one-liner, cached until new updates arrive ──────────
+    count = len(article_ids)
+    summary = story.get("state_summary")
+    if ANTHROPIC_API_KEY and articles and (not summary or story.get("state_summary_count") != count):
+        try:
+            titles = "\n- ".join(a.get("title", "") for a in articles[:8])
+            summary = (await _llm(
+                system="You summarize the CURRENT state of a developing news story in ONE plain, factual sentence (present tense, <=26 words). No preamble, no quotes.",
+                user_content=f"Story: {story.get('title', '')}\nLatest headlines (newest first):\n- {titles}\n\nWrite the one-sentence current status:",
+                max_tokens=90,
+            )).strip().strip('"')
+            await db.developing_stories.update_one(
+                {"story_id": story_id},
+                {"$set": {"state_summary": summary, "state_summary_count": count}},
+            )
+        except Exception as e:
+            logger.warning(f"State summary failed for {story_id}: {e}")
+
     return {
         "story_id": story["story_id"],
         "title": story["title"],
-        "theme": story["theme"],
+        "theme": story.get("theme", "news"),
         "articles": articles,
+        "article_count": count,
         "last_updated": story.get("last_updated"),
+        "state_summary": summary,
+        "momentum": momentum,
     }
 
 
