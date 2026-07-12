@@ -20,9 +20,9 @@ import { ScrollArea } from "../components/ui/scroll-area";
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
-// Public base for shared links. Point this at the web/landing (or Play Store)
-// URL once decided — used in the article share sheet.
-const SHARE_BASE = "https://chintan-updated.vercel.app";
+// Public base for shared links (the Chintan website). Swap for a Play Store
+// link once the app is published.
+const SHARE_BASE = "https://chintan.news";
 
 const triggerHaptic = (type = 'light') => {
   if ('vibrate' in navigator) {

@@ -14,6 +14,17 @@ import BottomNav from "../components/BottomNav";
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
+// Time-aware sidebar crown: the header tint shifts with the hour (device clock).
+const SIDEBAR_PHASES = {
+  dawn:  "linear-gradient(135deg, rgba(245,158,11,0.26), rgba(220,38,38,0.06))",
+  day:   "linear-gradient(135deg, rgba(220,38,38,0.20), rgba(220,38,38,0.03))",
+  dusk:  "linear-gradient(135deg, rgba(234,88,12,0.24), rgba(124,58,237,0.14))",
+  night: "linear-gradient(135deg, rgba(99,102,241,0.22), rgba(10,10,10,0.3))",
+};
+const sidebarPhase = (h) => (h < 5 ? "night" : h < 11 ? "dawn" : h < 17 ? "day" : h < 21 ? "dusk" : "night");
+const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night");
+const CANON_CATEGORIES = ["Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
+
 const FeedPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -143,6 +154,14 @@ const FeedPage = () => {
     }
   };
 
+  // Sidebar crown + quick-jump (computed when the feed renders / drawer opens)
+  const _now = new Date();
+  const _hour = _now.getHours();
+  const _greeting = sidebarGreeting(_hour);
+  const _firstName = user?.name?.split(" ")[0] || "";
+  const _timeStr = _now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const _topics = (user?.interests || []).filter((i) => CANON_CATEGORIES.includes(i));
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
@@ -164,17 +183,43 @@ const FeedPage = () => {
                 </button>
               </SheetTrigger>
               <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0">
-                <div className="p-6 border-b border-white/10" style={{ paddingTop: 'calc(var(--sat, 44px) + 24px)' }}>
-                  <div className="flex items-center gap-3">
-                    <SuryaLogo className="w-10 h-10" />
-                    <div>
-                      <h2 className="font-serif text-xl text-white">Chintan</h2>
-                      <p className="text-xs text-gray-500">Contemplate.</p>
-                    </div>
-                  </div>
+                {/* Time-aware crown */}
+                <div style={{ background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat, 44px) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <motion.div animate={{ scale: [1, 1.06, 1], opacity: [0.9, 1, 0.9] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }} style={{ display: 'inline-block', marginBottom: '12px' }}>
+                    <SuryaLogo className="w-11 h-11" />
+                  </motion.div>
+                  <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: '#F2EEE9', margin: 0 }}>
+                    {_greeting}{_firstName ? `, ${_firstName}` : ''}
+                  </h2>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'rgba(255,255,255,0.55)', margin: '5px 0 0', letterSpacing: '0.04em' }}>
+                    {_timeStr} · Contemplate.
+                  </p>
                 </div>
-                <ScrollArea className="h-[calc(100vh-180px)]">
+                <ScrollArea className="h-[calc(100vh-240px)]">
                   <div className="p-4 space-y-2">
+                    {/* Quick-jump to a chosen topic */}
+                    {_topics.length > 0 && (
+                      <>
+                        <p style={{ color: '#5A544D', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', padding: '4px 2px 8px' }}>Jump to a topic</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', padding: '0 2px 6px' }}>
+                          {_topics.map((cat) => (
+                            <button
+                              key={cat}
+                              onClick={() => { handleCategoryChange(cat); setSidebarOpen(false); }}
+                              style={{ padding: '7px 13px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer',
+                                background: activeCategory === cat ? 'rgba(220,38,38,0.16)' : '#151412',
+                                border: activeCategory === cat ? '1px solid rgba(220,38,38,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                                color: activeCategory === cat ? '#F0A090' : '#C4BDB3' }}
+                              data-testid={`sidebar-topic-${cat.toLowerCase()}`}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="h-px bg-white/10 my-3" />
+                      </>
+                    )}
+
                     <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Briefs</p>
                     <button 
                       onClick={() => { navigate("/brief/morning"); setSidebarOpen(false); }}
