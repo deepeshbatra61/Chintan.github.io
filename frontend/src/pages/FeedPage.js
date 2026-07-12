@@ -23,7 +23,6 @@ const SIDEBAR_PHASES = {
 };
 const sidebarPhase = (h) => (h < 5 ? "night" : h < 11 ? "dawn" : h < 17 ? "day" : h < 21 ? "dusk" : "night");
 const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night");
-const CANON_CATEGORIES = ["Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
 
 const FeedPage = () => {
   const navigate = useNavigate();
@@ -160,7 +159,6 @@ const FeedPage = () => {
   const _greeting = sidebarGreeting(_hour);
   const _firstName = user?.name?.split(" ")[0] || "";
   const _timeStr = _now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const _topics = (user?.interests || []).filter((i) => CANON_CATEGORIES.includes(i));
 
   if (loading) {
     return (
@@ -182,46 +180,28 @@ const FeedPage = () => {
                   <Menu className="w-5 h-5 text-gray-400" />
                 </button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0">
+              <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
                 {/* Time-aware crown */}
-                <div style={{ background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat, 44px) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <motion.div animate={{ scale: [1, 1.06, 1], opacity: [0.9, 1, 0.9] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }} style={{ display: 'inline-block', marginBottom: '12px' }}>
-                    <SuryaLogo className="w-11 h-11" />
-                  </motion.div>
-                  <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: '#F2EEE9', margin: 0 }}>
+                <div style={{ flexShrink: 0, background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat, 44px) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px' }}>
+                  <SuryaLogo className="w-11 h-11 animate-spin-slow" />
+                  <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: '#F2EEE9', margin: '14px 0 0' }}>
                     {_greeting}{_firstName ? `, ${_firstName}` : ''}
                   </h2>
                   <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'rgba(255,255,255,0.55)', margin: '5px 0 0', letterSpacing: '0.04em' }}>
                     {_timeStr} · Contemplate.
                   </p>
                 </div>
-                <ScrollArea className="h-[calc(100vh-240px)]">
-                  <div className="p-4 space-y-2">
-                    {/* Quick-jump to a chosen topic */}
-                    {_topics.length > 0 && (
-                      <>
-                        <p style={{ color: '#5A544D', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', textTransform: 'uppercase', padding: '4px 2px 8px' }}>Jump to a topic</p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', padding: '0 2px 6px' }}>
-                          {_topics.map((cat) => (
-                            <button
-                              key={cat}
-                              onClick={() => { handleCategoryChange(cat); setSidebarOpen(false); }}
-                              style={{ padding: '7px 13px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer',
-                                background: activeCategory === cat ? 'rgba(220,38,38,0.16)' : '#151412',
-                                border: activeCategory === cat ? '1px solid rgba(220,38,38,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                                color: activeCategory === cat ? '#F0A090' : '#C4BDB3' }}
-                              data-testid={`sidebar-topic-${cat.toLowerCase()}`}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="h-px bg-white/10 my-3" />
-                      </>
-                    )}
 
+                {/* Stylish divider — a red-glow hairline with a lit center */}
+                <div style={{ flexShrink: 0, position: 'relative', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(220,38,38,0.55) 50%, transparent)' }}>
+                  <div style={{ position: 'absolute', top: '-2px', left: '50%', transform: 'translateX(-50%)', width: '5px', height: '5px', borderRadius: '50%', background: '#DC2626', boxShadow: '0 0 9px rgba(220,38,38,0.8)' }} />
+                </div>
+
+                {/* Scrollable nav */}
+                <div style={{ flex: 1, overflowY: 'auto' }} className="hide-scrollbar">
+                  <div className="p-4 space-y-2">
                     <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Briefs</p>
-                    <button 
+                    <button
                       onClick={() => { navigate("/brief/morning"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="morning-brief-nav"
@@ -229,7 +209,7 @@ const FeedPage = () => {
                       <Sun className="w-5 h-5 text-amber-500" />
                       <span className="text-gray-300">Morning Brief</span>
                     </button>
-                    <button 
+                    <button
                       onClick={() => { navigate("/brief/midday"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="midday-brief-nav"
@@ -237,7 +217,7 @@ const FeedPage = () => {
                       <CloudSun className="w-5 h-5 text-orange-500" />
                       <span className="text-gray-300">Midday Update</span>
                     </button>
-                    <button 
+                    <button
                       onClick={() => { navigate("/brief/night"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="night-brief-nav"
@@ -246,39 +226,39 @@ const FeedPage = () => {
                       <span className="text-gray-300">Night Summary</span>
                     </button>
 
-                    <div className="h-px bg-white/10 my-4" />
-
-                    {/* Developing Stories - Single Breathing Button */}
                     {developingStories.length > 0 && (
-                      <button 
-                        onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
-                        className="w-full relative overflow-hidden"
-                        data-testid="developing-stories-nav"
-                      >
-                        <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
-                          <div className="relative">
-                            <Radio className="w-5 h-5 text-red-500" />
-                            {/* Breathing glow effect */}
-                            <div className="absolute inset-0 animate-pulse">
-                              <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
+                      <>
+                        <div className="h-px bg-white/10 my-4" />
+                        <button
+                          onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
+                          className="w-full relative overflow-hidden"
+                          data-testid="developing-stories-nav"
+                        >
+                          <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
+                            <div className="relative">
+                              <Radio className="w-5 h-5 text-red-500" />
+                              <div className="absolute inset-0 animate-pulse">
+                                <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
+                              </div>
+                            </div>
+                            <div className="flex-1 text-left">
+                              <span className="text-red-400 font-medium">Developing Stories</span>
+                              <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
                             </div>
                           </div>
-                          <div className="flex-1">
-                            <span className="text-red-400 font-medium">Developing Stories</span>
-                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
-                          </div>
-                        </div>
-                        {/* Subtle breathing background glow */}
-                        <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
-                      </button>
+                          <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
+                        </button>
+                      </>
                     )}
-
                   </div>
-                </ScrollArea>
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-                  <button 
+                </div>
+
+                {/* Sign out — a flex row, so it never overlaps the list */}
+                <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', paddingBottom: 'calc(12px + var(--sab, 8px))' }}>
+                  <button
                     onClick={handleLogout}
-                    className="w-full py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                    className="w-full rounded-lg transition-colors hover:bg-red-500/10"
+                    style={{ padding: '11px', color: '#DC6B5A', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
                     data-testid="logout-btn"
                   >
                     Sign Out
