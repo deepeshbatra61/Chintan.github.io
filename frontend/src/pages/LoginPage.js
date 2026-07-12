@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "../App";
 import { Browser } from "@capacitor/browser";
 import { setTokens } from "../lib/tokenStore";
+import { Eye, EyeOff } from "lucide-react";
 
 // ease-out-expo — confident deceleration, no bounce
 const EASE = [0.16, 1, 0.3, 1];
@@ -55,6 +56,7 @@ const LoginPage = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -216,7 +218,14 @@ const LoginPage = () => {
               )}
             </AnimatePresence>
             <input type="email" placeholder="Email" autoCapitalize="none" autoCorrect="off" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={inputStyle} data-testid="email-input" />
-            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputStyle, marginBottom: "14px" }} data-testid="password-input" />
+            <div style={{ position: "relative", marginBottom: "14px" }}>
+              <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputStyle, marginBottom: 0, paddingRight: "46px" }} data-testid="password-input" />
+              <button type="button" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "9px", color: "#8A847C", display: "flex", alignItems: "center" }}>
+                {showPassword ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}
+              </button>
+            </div>
             <motion.button type="submit" disabled={submitting} data-testid="email-auth-btn"
               whileTap={R ? undefined : { scale: 0.97 }} transition={{ duration: 0.1, ease: EASE }}
               style={{ width: "100%", background: "linear-gradient(180deg, #DC2626, #B91C1C)", color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "15px", fontWeight: 600, cursor: "pointer", opacity: submitting ? 0.6 : 1, fontFamily: "'Manrope', sans-serif" }}>
