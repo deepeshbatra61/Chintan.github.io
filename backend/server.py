@@ -876,6 +876,13 @@ async def lifespan(app: FastAPI):
             },
             upsert=True,
         )
+    # Deactivate any seed stories no longer in WATCHED_TOPICS (retires the old
+    # Iran-US / India-Pakistan / IPL seeds so they stop showing).
+    _seed_ids = [t["story_id"] for t in WATCHED_TOPICS]
+    await db.developing_stories.update_many(
+        {"source": "seed", "story_id": {"$nin": _seed_ids}},
+        {"$set": {"is_active": False}},
+    )
     logger.info(f"Developing stories: upserted {len(WATCHED_TOPICS)} watched topics")
 
     # Reset claude_summarized on articles that don't yet have the contemplation
@@ -2415,37 +2422,10 @@ _INDIA_RELEVANCE_KEYWORDS = [
 # ── Developing-story topics ──────────────────────────────────────────────────
 # Upserted into the developing_stories collection on startup.
 # The background ingestor matches new articles against these keyword lists.
-WATCHED_TOPICS = [
-    {
-        "story_id": "iran-us-war-2026",
-        "title": "Iran–US Military Tensions 2026",
-        "theme": "war",
-        "keywords": [
-            "iran", "us strike", "trump iran", "tehran", "nuclear deal",
-            "sanctions iran", "middle east conflict", "pentagon iran",
-            "missile strike", "islamic republic",
-        ],
-    },
-    {
-        "story_id": "india-pakistan-tensions-2026",
-        "title": "India–Pakistan Tensions 2026",
-        "theme": "war",
-        "keywords": [
-            "india pakistan", "loc", "kashmir tension", "ceasefire",
-            "surgical strike", "islamabad", "pak army", "imf pakistan",
-            "pakistan india", "border tension",
-        ],
-    },
-    {
-        "story_id": "ipl-2026",
-        "title": "IPL 2026",
-        "theme": "cricket",
-        "keywords": [
-            "ipl", "ipl 2026", "indian premier league", "rcb", "csk",
-            "kkr", "srh", "pbks", "ipl season", "ipl match",
-        ],
-    },
-]
+# Optional hand-pinned stories (source="seed"). Left empty: the old Iran-US /
+# India-Pakistan / IPL seeds were stale ("dud") — developing stories are now
+# driven by auto-detection. Add an entry here only to pin a genuinely live topic.
+WATCHED_TOPICS = []
 
 
 async def fetch_from_newsapi() -> list:
@@ -3856,21 +3836,35 @@ async def admin_reset_summarization(body: dict, admin: dict = Depends(require_ad
 
 @api_router.get("/developing-stories")
 async def get_developing_stories_list(user: dict = Depends(require_auth)):
-    """Return all active watched topics with article count and latest article preview."""
+    """Active developing stories that are genuinely fresh: at least 3 articles and
+    a newest update within the last 48h. Filters out stale/'dud' stories."""
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
     ).sort("last_updated", -1).to_list(100)
 
+    now = datetime.now(timezone.utc)
+
+    def _fresh(iso, hours=48):
+        try:
+            dt = datetime.fromisoformat((iso or "").replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (now - dt) <= timedelta(hours=hours)
+        except (ValueError, TypeError):
+            return False
+
     result = []
     for story in stories:
         article_ids = story.get("article_ids", [])
-        latest_article = None
-        if article_ids:
-            latest_article = await db.articles.find_one(
-                {"article_id": {"$in": article_ids}},
-                {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
-                sort=[("published_at", -1)],
-            )
+        if len(article_ids) < 3:            # too thin to be a "story"
+            continue
+        latest_article = await db.articles.find_one(
+            {"article_id": {"$in": article_ids}},
+            {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
+            sort=[("published_at", -1)],
+        )
+        if not latest_article or not _fresh(latest_article.get("published_at")):
+            continue                         # newest update is stale → hide it
         result.append({
             "story_id": story["story_id"],
             "title": story["title"],

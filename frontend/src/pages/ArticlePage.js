@@ -20,6 +20,10 @@ import { ScrollArea } from "../components/ui/scroll-area";
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
+// Public base for shared links. Point this at the web/landing (or Play Store)
+// URL once decided — used in the article share sheet.
+const SHARE_BASE = "https://chintan-updated.vercel.app";
+
 const triggerHaptic = (type = 'light') => {
   if ('vibrate' in navigator) {
     const patterns = {
@@ -784,6 +788,16 @@ const ArticlePage = () => {
       .catch(() => {});
   }, [currentIndex, allArticles]);
 
+  // Warm the NEXT article's AI beats so swiping forward is instant, not a wait.
+  useEffect(() => {
+    const next = allArticles[currentIndex + 1];
+    if (!next || (next.beats && next.beats.length)) return;
+    const t = setTimeout(() => {
+      axios.get(`${API}/articles/${next.article_id}`, { withCredentials: true }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [currentIndex, allArticles]);
+
   const toggleBookmark = async () => {
     const id = allArticles[currentIndex]?.article_id;
     if (!id) return;
@@ -806,12 +820,14 @@ const ArticlePage = () => {
 
   const shareArticle = async () => {
     const art = allArticles[currentIndex];
+    if (!art) return;
+    const category = art.category ? `${art.category} · ` : "";
     try {
       await Share.share({
-        title: art?.title,
-        text: 'Check this News article on Chintan!',
-        url: `https://chintan-updated.vercel.app/article/${art?.article_id}`,
-        dialogTitle: 'Share via',
+        title: art.title,
+        text: `${art.title}\n\n${category}Read it on Chintan — don't just consume, contemplate.`,
+        url: `${SHARE_BASE}/article/${art.article_id}`,
+        dialogTitle: "Share this story",
       });
     } catch {
       // user dismissed or share not available — no feedback needed
@@ -856,7 +872,12 @@ const ArticlePage = () => {
         }}
       >
         <button
-          onClick={() => navigate('/feed')}
+          onClick={async () => {
+            if (window.Capacitor?.isNativePlatform()) {
+              try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+            } else { triggerHaptic('medium'); }
+            navigate('/feed');
+          }}
           className="p-2 hover:bg-white/5 rounded-lg transition-colors"
           data-testid="back-btn"
         >

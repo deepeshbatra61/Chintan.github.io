@@ -1,6 +1,15 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Home, Bookmark, User, Sun, CloudSun, Moon } from "lucide-react";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+
+const tapHaptic = async () => {
+  if (window.Capacitor?.isNativePlatform()) {
+    try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+  } else if ("vibrate" in navigator) {
+    navigator.vibrate(15);
+  }
+};
 
 // The app's single, persistent top-level navigation. Shown on the four
 // destinations (Feed, Briefs, Saved, Profile) and nowhere else — drill-down
@@ -37,7 +46,7 @@ const BottomNav = () => {
         {tabs.map(({ key, label, Icon, to, active }) => (
           <button
             key={key}
-            onClick={() => navigate(to)}
+            onClick={() => { tapHaptic(); navigate(to); }}
             data-testid={`nav-${key}`}
             style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",

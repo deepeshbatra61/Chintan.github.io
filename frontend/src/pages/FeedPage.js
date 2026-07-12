@@ -78,6 +78,24 @@ const FeedPage = () => {
     loadData();
   }, [fetchArticles, fetchDevelopingStories, fetchNotifications]);
 
+  // Warm the AI content for the articles most likely to be opened next: hitting
+  // GET /articles/:id triggers (and caches) the contemplation beats server-side,
+  // so by the time the reader taps in, there's no generation wait. Bounded to the
+  // top few, once each, and staggered so it never bursts.
+  const prefetchedRef = useRef(new Set());
+  useEffect(() => {
+    if (!articles.length) return;
+    const targets = articles
+      .filter((a) => !prefetchedRef.current.has(a.article_id) && !(a.beats && a.beats.length))
+      .slice(0, 6);
+    targets.forEach((a, i) => {
+      prefetchedRef.current.add(a.article_id);
+      setTimeout(() => {
+        axios.get(`${API}/articles/${a.article_id}`, { withCredentials: true }).catch(() => {});
+      }, i * 500);
+    });
+  }, [articles]);
+
   const handleCategoryChange = (category) => {
     const cat = category === "All" ? null : category;
     setActiveCategory(cat);
