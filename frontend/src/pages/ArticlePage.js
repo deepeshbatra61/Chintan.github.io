@@ -527,10 +527,16 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       )}
 
       {/* Actions sheet — one home for Discuss / Poll / Other Side / Ask AI + reactions */}
+      <AnimatePresence>
       {isActive && showActions && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
-          <div onClick={() => setShowActions(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab, 16px))' }}>
+        <motion.div key="actions-sheet" style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
+          <motion.div onClick={() => setShowActions(false)}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          <motion.div
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab, 16px))' }}>
             <div style={{ width: '38px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '6px auto 16px' }} />
             <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
               <button onClick={handleLike} data-testid="like-btn"
@@ -556,9 +562,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 <ChevronRight className="w-4 h-4" style={{ color: '#4A453F' }} />
               </button>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Comments Dialog */}
       <Dialog open={showComments} onOpenChange={setShowComments}>

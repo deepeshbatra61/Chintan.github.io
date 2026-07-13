@@ -342,23 +342,30 @@ const FeedPage = () => {
             </motion.div>
           )}
 
-          {/* Categories */}
+          {/* Categories — active pill glides between chips */}
           <div className="mb-6 overflow-x-auto hide-scrollbar">
             <div className="flex gap-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => handleCategoryChange(cat)}
-                  className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors ${
-                    (cat === "All" && !activeCategory) || activeCategory === cat
-                      ? "bg-red-600 text-white"
-                      : "bg-white/5 text-gray-400 hover:bg-white/10"
-                  }`}
-                  data-testid={`category-filter-${cat.toLowerCase()}`}
-                >
-                  {cat}
-                </button>
-              ))}
+              {categories.map((cat) => {
+                const active = (cat === "All" && !activeCategory) || activeCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => handleCategoryChange(cat)}
+                    className="relative rounded-full text-sm whitespace-nowrap"
+                    style={{ flexShrink: 0, padding: "8px 16px", border: "none", cursor: "pointer", background: active ? "transparent" : "rgba(255,255,255,0.05)", color: active ? "#fff" : "#9ca3af", transition: "color .3s ease" }}
+                    data-testid={`category-filter-${cat.toLowerCase()}`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="catPill"
+                        transition={{ type: "spring", stiffness: 400, damping: 34 }}
+                        style={{ position: "absolute", inset: 0, borderRadius: "9999px", background: "linear-gradient(180deg, #DC2626, #B91C1C)", zIndex: 0 }}
+                      />
+                    )}
+                    <span style={{ position: "relative", zIndex: 1 }}>{cat}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -370,9 +377,10 @@ const FeedPage = () => {
                   key={article.article_id}
                   className="news-card cursor-pointer"
                   onClick={() => navigate(`/article/${article.article_id}`)}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: Math.min(index, 8) * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  whileTap={{ scale: 0.98 }}
                   data-testid={`article-card-${article.article_id}`}
                 >
                   <div className="relative h-48 overflow-hidden">
