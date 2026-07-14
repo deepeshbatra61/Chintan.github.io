@@ -204,62 +204,56 @@ const FeedPage = () => {
                   <div style={{ position: 'absolute', top: '-2px', left: '50%', transform: 'translateX(-50%)', width: '5px', height: '5px', borderRadius: '50%', background: '#DC2626', boxShadow: '0 0 9px rgba(220,38,38,0.8)' }} />
                 </div>
 
-                {/* Scrollable nav */}
+                {/* Scrollable nav — Direction A: quiet monochrome icons, serif
+                    labels carry the hierarchy instead of per-item icon colors */}
                 <div style={{ flex: 1, overflowY: 'auto' }} className="hide-scrollbar">
-                  <div className="p-4 space-y-2">
-                    <p className="text-xs text-gray-500 uppercase tracking-wider px-3 py-2">Briefs</p>
+                  <div className="p-4 space-y-1">
+                    <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#524d47' }} className="px-3 py-2">Briefs</p>
                     <button
                       onClick={() => { navigate("/brief/morning"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="morning-brief-nav"
                     >
-                      <Sun className="w-5 h-5 text-amber-500" />
-                      <span className="text-gray-300">Morning Brief</span>
+                      <Sun className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Morning Brief</span>
                     </button>
                     <button
                       onClick={() => { navigate("/brief/midday"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="midday-brief-nav"
                     >
-                      <CloudSun className="w-5 h-5 text-orange-500" />
-                      <span className="text-gray-300">Midday Update</span>
+                      <CloudSun className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Midday Update</span>
                     </button>
                     <button
                       onClick={() => { navigate("/brief/night"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
                       data-testid="night-brief-nav"
                     >
-                      <Moon className="w-5 h-5 text-indigo-400" />
-                      <span className="text-gray-300">Night Summary</span>
+                      <Moon className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Night Summary</span>
                     </button>
 
                     <div className="h-px bg-white/10 my-4" />
                     {developingStories.length > 0 ? (
                       <button
                         onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
-                        className="w-full relative overflow-hidden"
+                        className="w-full"
                         data-testid="developing-stories-nav"
+                        style={{ padding: '12px 13px', borderRadius: '12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.22)', display: 'flex', alignItems: 'center', gap: '11px', textAlign: 'left' }}
                       >
-                        <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
-                          <div className="relative">
-                            <Radio className="w-5 h-5 text-red-500" />
-                            <div className="absolute inset-0 animate-pulse">
-                              <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
-                            </div>
-                          </div>
-                          <div className="flex-1 text-left">
-                            <span className="text-red-400 font-medium">Developing Stories</span>
-                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
-                          </div>
+                        <span className="animate-pulse" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626', flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: '13.5px', color: '#ECE0D6', fontWeight: 500 }}>Developing Stories</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#9a8d80', marginTop: '2px' }}>{developingStories.length} topic{developingStories.length !== 1 ? "s" : ""}</div>
                         </div>
-                        <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
                       </button>
                     ) : (
                       <div
                         className="w-full flex items-center gap-3 px-3 py-3 rounded-lg"
                         data-testid="developing-stories-empty"
                       >
-                        <Radio className="w-5 h-5" style={{ color: "#5B564F" }} />
+                        <Radio className="w-[18px] h-[18px]" style={{ color: "#5B564F", flexShrink: 0 }} />
                         <span style={{ color: "#6b625a", fontSize: "14px" }}>No developing story right now</span>
                       </div>
                     )}
