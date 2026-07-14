@@ -64,8 +64,14 @@ const FeedPage = () => {
     try {
       const response = await axios.get(`${API}/developing-stories`, { withCredentials: true });
       setDevelopingStories(response.data);
+      // An empty array here is a legitimate state (no cluster currently clears
+      // the auto-detection bar) — log it distinctly from a fetch failure so an
+      // empty banner is never mistaken for a broken one.
+      if (response.data.length === 0) {
+        console.info("Developing stories: 0 active (server-side auto-detection found no qualifying cluster, or the recurring ingest cycle is paused — check INGEST_SCHEDULE_ENABLED on the backend).");
+      }
     } catch (error) {
-      console.error("Error fetching developing stories:", error);
+      console.error("Error fetching developing stories:", error?.response?.status, error?.response?.data || error.message);
     }
   }, []);
 
