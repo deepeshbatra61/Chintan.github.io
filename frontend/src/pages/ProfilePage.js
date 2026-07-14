@@ -282,9 +282,10 @@ const ProfilePage = () => {
 
       {/* Edit Interests Dialog */}
       <Dialog open={showEditInterests} onOpenChange={setShowEditInterests}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-md">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit interests</DialogTitle>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Interests</div>
+            <DialogTitle>Edit interests</DialogTitle>
           </DialogHeader>
           <p className="text-gray-500 text-sm" style={{ marginTop: "2px" }}>
             Pick your topics — expand any for niches (up to {MAX_NICHES_PER_CATEGORY} each).
@@ -342,9 +343,10 @@ const ProfilePage = () => {
 
       {/* Poll History Dialog */}
       <Dialog open={showPolls} onOpenChange={setShowPolls}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>History</div>
+            <DialogTitle className="flex items-center gap-2">
               <BarChart2 className="w-5 h-5 text-red-500" /> Poll history
             </DialogTitle>
           </DialogHeader>

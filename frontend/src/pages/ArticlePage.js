@@ -569,9 +569,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
       {/* Comments Dialog */}
       <Dialog open={showComments} onOpenChange={setShowComments}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg max-h-[80vh]">
+        <DialogContent className="max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white">Discussion</DialogTitle>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Discussion</div>
+            <DialogTitle>What people are saying</DialogTitle>
           </DialogHeader>
           <div className="flex gap-2 mb-4">
             <input
@@ -653,9 +654,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
       {/* Poll Dialog */}
       <Dialog open={showPoll} onOpenChange={setShowPoll}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-lg" style={{ minWidth: '300px', minHeight: '200px', padding: '24px' }}>
+        <DialogContent className="max-w-lg" style={{ minWidth: '300px', minHeight: '200px' }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Poll</DialogTitle>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Poll</div>
+            <DialogTitle>Cast your vote</DialogTitle>
           </DialogHeader>
           {pollLoading ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -700,9 +702,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
       {/* Other Side Dialog */}
       <Dialog open={showOtherSide} onOpenChange={setShowOtherSide}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-2xl max-h-[80vh]">
+        <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Perspective</div>
+            <DialogTitle className="flex items-center gap-2">
               <BrainCircuit className="w-5 h-5 text-red-500" />
               The Other Side
             </DialogTitle>
@@ -909,10 +912,6 @@ const ArticlePage = () => {
         >
           <Home className="w-5 h-5 text-gray-400" />
         </button>
-
-        <span className="text-gray-500 text-xs font-mono">
-          {currentIndex + 1} / {allArticles.length}
-        </span>
 
         <div className="flex items-center gap-2">
           <button
