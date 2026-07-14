@@ -523,7 +523,7 @@ async def _detect_developing_stories() -> None:
                 {
                     "$set": {
                         "title": name, "theme": theme, "keywords": [c["term"]],
-                        "source": "auto", "is_active": True, "velocity": c["vel"],
+                        "source": "auto", "kind": "auto", "is_active": True, "velocity": c["vel"],
                         "last_updated": c["newest"] or now.isoformat(),
                         "detected_at": now.isoformat(),
                     },
@@ -542,6 +542,96 @@ async def _detect_developing_stories() -> None:
         logger.info(f"Developing detection: promoted {len(promoted)} auto stories")
     except Exception:
         logger.error(f"Developing detection failed: {traceback.format_exc()}")
+
+
+async def _scout_developing_candidates(api_articles: list) -> None:
+    """A second, DISTINCT pass from the volume-clustering above — its only
+    job is catching a developing story before it has accumulated enough
+    corroborating articles for that clustering heuristic to ever notice. A
+    major court verdict, a PIB press release, an opposition press conference
+    often produces exactly ONE article, from ONE source, at first — pure
+    volume counting structurally can't catch that, so this asks the LLM to
+    judge each fetch directly instead of waiting for a countable cluster.
+
+    Short-lived by design: flagged stories get a rolling few-hour expiry
+    (extended by _run_ingest_cycle_body's keyword-tagging step if a genuine
+    follow-up article appears) rather than the 18h/48h windows used for
+    auto-detected volume clusters, matching how these events actually play
+    out (a press conference is "developing" for hours, not days)."""
+    if not ANTHROPIC_API_KEY or not api_articles:
+        return
+    try:
+        # Screening pass, not exhaustive — cap the batch so cost stays
+        # bounded even as per-cycle fetch volume grows in production.
+        batch = api_articles[:40]
+        raw = await _llm(
+            system=(
+                "You scout for the EARLY signs of a developing news story from a "
+                "single fetch of articles — before it has accumulated multiple "
+                "corroborating reports. Flag ONLY genuinely major, currently-"
+                "unfolding events that people would want live updates on: "
+                "significant court judgments, PIB or government press releases "
+                "with national import, opposition/ruling-party press conferences, "
+                "breaking political or security incidents, major sports results "
+                "as they happen. Do NOT flag routine coverage, opinion pieces, "
+                "evergreen explainers, or anything already old news. It is "
+                "correct and expected to flag nothing most fetches. Respond "
+                "ONLY with JSON."
+            ),
+            user_content=(
+                "Articles (index: title):\n" +
+                "\n".join(f"{i}: {a.get('title', '')}" for i, a in enumerate(batch)) +
+                '\n\nReturn ONLY: {"flagged": [{"index": N, "title": "short specific '
+                'story title <=7 words", "theme": "one lowercase word"}]} '
+                "— empty list if nothing qualifies."
+            ),
+            max_tokens=300,
+        )
+        s = raw.strip()
+        st, en = s.find("{"), s.rfind("}") + 1
+        if st < 0 or en <= st:
+            return
+        data = json.loads(s[st:en])
+        now = datetime.now(timezone.utc)
+        flagged = 0
+        for f in data.get("flagged", [])[:5]:  # bound noise/cost per cycle
+            idx = f.get("index")
+            if not isinstance(idx, int) or idx < 0 or idx >= len(batch):
+                continue
+            art = batch[idx]
+            title = (str(f.get("title") or art.get("title", ""))).strip()[:80]
+            theme = (str(f.get("theme") or "news")).strip().lower()[:20]
+            story_id = "scout-" + re.sub(r"[^a-z0-9]+", "-", title.lower())[:40]
+            keywords = [w for w in re.sub(r"[^a-z0-9 ]", "", title.lower()).split() if len(w) > 3]
+            await db.developing_stories.update_one(
+                {"story_id": story_id},
+                {
+                    "$set": {
+                        "title": title, "theme": theme, "source": "scout", "kind": "scout",
+                        "is_active": True, "last_updated": now.isoformat(),
+                        "expires_at": (now + timedelta(hours=6)).isoformat(),
+                    },
+                    "$setOnInsert": {"keywords": keywords, "detected_at": now.isoformat()},
+                    "$addToSet": {"article_ids": art["article_id"]},
+                },
+                upsert=True,
+            )
+            flagged += 1
+        if flagged:
+            logger.info(f"Developing scout: flagged {flagged} early candidate(s)")
+    except Exception as e:
+        logger.warning(f"Developing scout: failed: {e}")
+
+
+async def _expire_scout_stories() -> None:
+    """Scout stories (kind='scout') hard-expire past their rolling TTL unless
+    a matching follow-up article extended it — a few-hours lifespan by
+    design, distinct from the 18h/48h windows auto-detected clusters use."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.developing_stories.update_many(
+        {"kind": "scout", "is_active": True, "expires_at": {"$lt": now_iso}},
+        {"$set": {"is_active": False}},
+    )
 
 
 async def _run_ingest_cycle() -> None:
@@ -685,11 +775,16 @@ async def _run_ingest_cycle_body() -> None:
                     )
                     logger.info(f"Marked claude_skip=True for {art['article_id']} after 3 failures")
 
-    # ── 5. Tag new articles to watched developing stories ────────────────────
+    # ── 5. Open/close calendar-known events before tagging, so a session that
+    #       just entered its lead window is already matchable this cycle ─────
+    await _sync_scheduled_events()
+
+    # ── 6. Tag new articles to watched/scheduled developing stories ─────────
     if api_articles:
         watched = await db.developing_stories.find(
-            {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1}
+            {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1, "kind": 1}
         ).to_list(100)
+        now_iso = datetime.now(timezone.utc).isoformat()
         for topic in watched:
             keywords = topic.get("keywords", [])
             matched_ids = []
@@ -700,17 +795,29 @@ async def _run_ingest_cycle_body() -> None:
                 if any(kw.lower() in haystack for kw in keywords):
                     matched_ids.append(article["article_id"])
             if matched_ids:
-                await db.developing_stories.update_one(
-                    {"story_id": topic["story_id"]},
-                    {
-                        "$addToSet": {"article_ids": {"$each": matched_ids}},
-                        "$set": {"last_updated": datetime.now(timezone.utc).isoformat()},
-                    },
-                )
+                update = {
+                    "$addToSet": {"article_ids": {"$each": matched_ids}},
+                    "$set": {"last_updated": now_iso},
+                }
+                # A genuine follow-up article is exactly the corroboration a
+                # scout candidate needed — extend its short TTL instead of
+                # letting it expire under a real, still-unfolding story.
+                if topic.get("kind") == "scout":
+                    update["$set"]["expires_at"] = (
+                        datetime.now(timezone.utc) + timedelta(hours=6)
+                    ).isoformat()
+                await db.developing_stories.update_one({"story_id": topic["story_id"]}, update)
                 logger.info(f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}")
 
-    # ── 6. Auto-detect fresh developing stories from recent article clusters ──
+    # ── 7. Scout pass — catch pre-volume candidates the tagging above and the
+    #       clustering below would both miss (see _scout_developing_candidates) ─
+    await _scout_developing_candidates(api_articles)
+
+    # ── 8. Auto-detect fresh developing stories from recent article clusters ──
     await _detect_developing_stories()
+
+    # ── 9. Expire scout stories past their rolling TTL ───────────────────────
+    await _expire_scout_stories()
 
 
 async def _run_cleanup_cycle() -> None:
@@ -867,33 +974,11 @@ async def lifespan(app: FastAPI):
     await db.developing_stories.create_index("story_id", unique=True)
     logger.info("MongoDB indexes created")
 
-    # Upsert watched topics — updates title/theme/keywords, preserves article_ids
-    for topic in WATCHED_TOPICS:
-        await db.developing_stories.update_one(
-            {"story_id": topic["story_id"]},
-            {
-                "$setOnInsert": {
-                    "article_ids": [],
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
-                    "is_active": True,
-                },
-                "$set": {
-                    "title": topic["title"],
-                    "theme": topic["theme"],
-                    "keywords": topic["keywords"],
-                    "source": "seed",
-                },
-            },
-            upsert=True,
-        )
-    # Deactivate any seed stories no longer in WATCHED_TOPICS (retires the old
-    # Iran-US / India-Pakistan / IPL seeds so they stop showing).
-    _seed_ids = [t["story_id"] for t in WATCHED_TOPICS]
-    await db.developing_stories.update_many(
-        {"source": "seed", "story_id": {"$nin": _seed_ids}},
-        {"$set": {"is_active": False}},
-    )
-    logger.info(f"Developing stories: upserted {len(WATCHED_TOPICS)} watched topics")
+    # Open/close calendar-known developing stories (parliament sessions,
+    # elections, major fixtures) per SCHEDULED_EVENTS — also re-run every
+    # ingest cycle so windows open/close on time, not just at boot.
+    await _sync_scheduled_events()
+    logger.info(f"Developing stories: synced {len(SCHEDULED_EVENTS)} scheduled events")
 
     # Reset claude_summarized on articles that don't yet have the contemplation
     # model (beats), so they re-summarize with the new prompt when credits return.
@@ -2436,13 +2521,87 @@ _INDIA_RELEVANCE_KEYWORDS = [
     "cancer india",
 ]
 
-# ── Developing-story topics ──────────────────────────────────────────────────
-# Upserted into the developing_stories collection on startup.
-# The background ingestor matches new articles against these keyword lists.
-# Optional hand-pinned stories (source="seed"). Left empty: the old Iran-US /
-# India-Pakistan / IPL seeds were stale ("dud") — developing stories are now
-# driven by auto-detection. Add an entry here only to pin a genuinely live topic.
-WATCHED_TOPICS = []
+# ── Scheduled developing-story calendar ──────────────────────────────────────
+# Recurring, date-KNOWN events (parliament sessions, elections, major sporting
+# fixtures) that are genuinely "developing" for their entire window regardless
+# of how much per-cycle article volume they generate — the old pure-volume
+# clustering heuristic structurally can't catch these, since a single major
+# event produces a slow trickle of articles, not an instant multi-source burst.
+#
+# Each entry is pre-created `lead_days` before `start` (so day-1 coverage is
+# captured by keyword matching immediately, not stuck waiting for volume) and
+# hard-closed at `end` regardless of velocity — a deterministic stop instead
+# of a staleness guess. Only add entries with CONFIRMED dates from an official
+# or clearly authoritative source; a wrong guess here is worse than an empty
+# slot, since it'll either miss the real window or fire at the wrong time.
+#
+# Add cricket fixtures / election dates here as BCCI/ECI/the relevant
+# authority confirms them — deliberately left as placeholders below rather
+# than guessed.
+SCHEDULED_EVENTS = [
+    {
+        "story_id": "parliament-monsoon-session-2026",
+        "title": "Monsoon Session of Parliament 2026",
+        "theme": "politics",
+        "keywords": [
+            "monsoon session", "parliament session", "lok sabha", "rajya sabha",
+            "special discussion parliament", "bill passed parliament",
+            "parliamentary affairs ministry", "opposition parliament",
+            "adjourned parliament", "parliament uproar",
+        ],
+        "start": "2026-07-20T00:00:00+05:30",
+        "end": "2026-08-13T23:59:59+05:30",
+        "lead_days": 3,
+    },
+    # {
+    #     "story_id": "india-vs-<opponent>-<series>-2026",
+    #     "title": "India tour of <Country> 2026",
+    #     "theme": "cricket",
+    #     "keywords": [...],
+    #     "start": "<confirmed start date>",
+    #     "end": "<confirmed end date>",
+    #     "lead_days": 2,
+    # },
+    # {
+    #     "story_id": "<state>-election-2026",
+    #     "title": "<State> Assembly Election 2026",
+    #     "theme": "election",
+    #     "keywords": [...],
+    #     "start": "<polling date, 00:00 local>",
+    #     "end": "<counting date, 23:59 local>",
+    #     "lead_days": 5,
+    # },
+]
+
+
+async def _sync_scheduled_events() -> None:
+    """Open/close calendar-known developing stories from SCHEDULED_EVENTS
+    based on their date windows. Runs on every ingest cycle (not just
+    startup) so a session opens the moment its lead window starts and closes
+    the moment it ends, independent of article volume."""
+    now = datetime.now(timezone.utc)
+    for ev in SCHEDULED_EVENTS:
+        start = datetime.fromisoformat(ev["start"])
+        end = datetime.fromisoformat(ev["end"])
+        lead = timedelta(days=ev.get("lead_days", 0))
+        if now < (start - lead) or now > end:
+            await db.developing_stories.update_one(
+                {"story_id": ev["story_id"]},
+                {"$set": {"is_active": False}},
+            )
+            continue
+        await db.developing_stories.update_one(
+            {"story_id": ev["story_id"]},
+            {
+                "$set": {
+                    "title": ev["title"], "theme": ev["theme"], "keywords": ev["keywords"],
+                    "source": "scheduled", "kind": "scheduled", "is_active": True,
+                    "window_end": ev["end"],
+                },
+                "$setOnInsert": {"article_ids": [], "last_updated": now.isoformat()},
+            },
+            upsert=True,
+        )
 
 
 async def fetch_from_newsapi() -> list:
@@ -3853,8 +4012,18 @@ async def admin_reset_summarization(body: dict, admin: dict = Depends(require_ad
 
 @api_router.get("/developing-stories")
 async def get_developing_stories_list(user: dict = Depends(require_auth)):
-    """Active developing stories that are genuinely fresh: at least 3 articles and
-    a newest update within the last 48h. Filters out stale/'dud' stories."""
+    """Active developing stories, filtered by rules matched to how each KIND
+    actually behaves — a single volume threshold doesn't fit all of them:
+    - scheduled (parliament sessions, elections, fixtures): the date window
+      IS the freshness signal, so show from the first matched article, no
+      minimum count or article-recency check needed.
+    - scout (court verdicts, press releases/conferences, early single-source
+      signals): also fine from 1 article, but must stay genuinely recent
+      (12h) since these are short-lived by design.
+    - auto (organic volume clusters, the legacy/fallback path): keep the
+      original bar — >=3 articles and a newest update within 48h — since
+      without a calendar or LLM screening backing it, raw volume is a weaker
+      signal and needs a higher bar to avoid 'dud' stories."""
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
     ).sort("last_updated", -1).to_list(100)
@@ -3872,20 +4041,29 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
 
     result = []
     for story in stories:
+        kind = story.get("kind", "auto")  # legacy docs predate the `kind` field
         article_ids = story.get("article_ids", [])
-        if len(article_ids) < 3:            # too thin to be a "story"
-            continue
+        min_articles = 1 if kind in ("scheduled", "scout") else 3
+        if len(article_ids) < min_articles:
+            continue                         # too thin to be a "story" yet
         latest_article = await db.articles.find_one(
             {"article_id": {"$in": article_ids}},
             {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
             sort=[("published_at", -1)],
         )
-        if not latest_article or not _fresh(latest_article.get("published_at")):
-            continue                         # newest update is stale → hide it
+        if kind == "scheduled":
+            pass  # the date window already IS the relevance/freshness signal
+        elif kind == "scout":
+            if not latest_article or not _fresh(latest_article.get("published_at"), hours=12):
+                continue                     # short-lived by design — stale means done
+        else:  # "auto" — organic volume clusters, weakest signal, needs the higher bar
+            if not latest_article or not _fresh(latest_article.get("published_at")):
+                continue
         result.append({
             "story_id": story["story_id"],
             "title": story["title"],
             "theme": story["theme"],
+            "kind": kind,
             "article_count": len(article_ids),
             "last_updated": story.get("last_updated"),
             "latest_article": latest_article,
