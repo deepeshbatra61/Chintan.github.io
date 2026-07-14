@@ -758,6 +758,7 @@ const ArticlePage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const swiperRef = useRef(null);
 
   // Load article list and find initial index
   useEffect(() => {
@@ -774,7 +775,13 @@ const ArticlePage = () => {
         }
         setAllArticles(list);
         const idx = list.findIndex(a => a.article_id === articleId);
-        if (idx !== -1) setCurrentIndex(idx);
+        if (idx !== -1) {
+          setCurrentIndex(idx);
+          // ArticlePage doesn't remount between /article/:id navigations (same
+          // route component), so the Swiper instance must be told to jump —
+          // initialSlide only ever applies on the very first mount.
+          swiperRef.current?.slideTo(idx, 0);
+        }
       } catch (e) {
         console.error("Error loading articles:", e);
         toast.error("Could not load articles");
@@ -923,6 +930,7 @@ const ArticlePage = () => {
         threshold={10}
         touchStartPreventDefault={false}
         nested={true}
+        onSwiper={(swiper) => { swiperRef.current = swiper; }}
         onSlideChange={(swiper) => handlePageChange(swiper.activeIndex)}
         style={{ height: 'calc(100vh - var(--sat, 44px) - 56px)' }}
       >
