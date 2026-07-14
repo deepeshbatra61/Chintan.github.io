@@ -16,13 +16,16 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props} />
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+// Bottom sheet, not a centered card — matches the app's existing actions-sheet
+// convention (ArticlePage's ⋯ menu) so every "thing slides up from an edge"
+// moment in the app behaves the same way.
 const DialogContent = React.forwardRef(({ className, children, style, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
@@ -30,37 +33,42 @@ const DialogContent = React.forwardRef(({ className, children, style, ...props }
       ref={ref}
       style={{
         position: 'fixed',
-        left: '50%',
-        top: 'calc(var(--sat, 44px) + 12px)',
-        transform: 'translateX(-50%)',
-        maxHeight: 'calc(100dvh - var(--sat, 44px) - var(--sab, 16px) - 24px)',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        margin: '0 auto',
+        maxHeight: 'calc(100dvh - var(--sat, 44px) - 40px)',
         overflowY: 'auto',
         zIndex: 50,
         ...style,
       }}
       className={cn(
-        "grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+        "grid w-full max-w-lg gap-4 border-t border-x-0 border-b-0 border-white/10 bg-[#131211] p-5 shadow-lg duration-300 rounded-t-[20px] rounded-b-none",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         className
       )}
       {...props}>
+      <div style={{ width: '34px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '-8px auto 2px' }} />
       {children}
       <DialogPrimitive.Close
         style={{
           position: 'absolute',
-          right: '16px',
-          top: '16px',
-          background: 'transparent',
-          border: '2px solid #dc2626',
-          borderRadius: '6px',
-          width: '28px',
-          height: '28px',
+          right: '14px',
+          top: '14px',
+          background: 'rgba(255,255,255,0.06)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '30px',
+          height: '30px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
           flexShrink: 0,
         }}>
-        <X size={16} color="#dc2626" />
+        <X size={14} color="#9A938A" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -88,10 +96,11 @@ const DialogFooter = ({
 )
 DialogFooter.displayName = "DialogFooter"
 
-const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
+const DialogTitle = React.forwardRef(({ className, style, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: '#F2EEE9', ...style }}
+    className={cn("leading-tight", className)}
     {...props} />
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
