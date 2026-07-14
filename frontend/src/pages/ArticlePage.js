@@ -773,14 +773,26 @@ const ArticlePage = () => {
           list = r.data;
           sessionStorage.setItem('articleList', JSON.stringify(list));
         }
-        setAllArticles(list);
         const idx = list.findIndex(a => a.article_id === articleId);
         if (idx !== -1) {
+          setAllArticles(list);
           setCurrentIndex(idx);
           // ArticlePage doesn't remount between /article/:id navigations (same
           // route component), so the Swiper instance must be told to jump —
           // initialSlide only ever applies on the very first mount.
           swiperRef.current?.slideTo(idx, 0);
+        } else {
+          // Not in the cached feed snapshot — happens whenever the link came
+          // from somewhere other than browsing the main feed (Brief page,
+          // developing stories, notifications). The old code silently did
+          // nothing here, leaving whatever article was already on screen —
+          // that's the "opens a different article" bug. Fetch this one
+          // article directly and show it as a standalone 1-item list instead
+          // of guessing its position in a feed it was never part of.
+          const single = await axios.get(`${API}/articles/${articleId}`, { withCredentials: true });
+          setAllArticles([single.data]);
+          setCurrentIndex(0);
+          swiperRef.current?.slideTo(0, 0);
         }
       } catch (e) {
         console.error("Error loading articles:", e);
