@@ -83,7 +83,7 @@ const BookmarksPage = () => {
       <main style={{ padding: "22px 22px 96px", maxWidth: "640px", margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: "20px" }}>
           <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "26px", color: "#F2EEE9", margin: "0 0 3px" }}>Saved articles</h1>
-          <p style={{ color: "#6E6862", fontSize: "13px", margin: 0 }}>
+          <p style={{ fontFamily: "'JetBrains Mono', monospace", color: "#6E6862", fontSize: "11px", letterSpacing: "0.02em", margin: 0 }}>
             {bookmarks.length} {bookmarks.length === 1 ? "story" : "stories"} kept for later
           </p>
         </motion.div>
@@ -94,32 +94,49 @@ const BookmarksPage = () => {
               {bookmarks.map((article, idx) => (
                 <motion.div
                   key={article.article_id}
-                  onClick={() => navigate(`/article/${article.article_id}`)}
                   data-testid={`bookmark-${article.article_id}`}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0, transition: { duration: 0.25 } }}
                   transition={{ duration: 0.35, delay: Math.min(idx, 8) * 0.04 }}
-                  style={{ display: "flex", gap: "13px", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", padding: "12px", cursor: "pointer", overflow: "hidden" }}
+                  style={{ position: "relative", borderRadius: "16px" }}
                 >
-                  <div style={{ width: "72px", height: "72px", borderRadius: "11px", overflow: "hidden", flexShrink: 0, background: "#1a1917" }}>
-                    {article.image_url && <img src={article.image_url} alt={article.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                  {/* Static reveal layer underneath — surfaces as the card is swiped left */}
+                  <div style={{ position: "absolute", inset: 0, borderRadius: "16px", background: "rgba(220,38,38,0.14)", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: "22px" }}>
+                    <Trash2 className="w-[18px] h-[18px]" style={{ color: "#DC6B5A" }} />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "5px" }}>
-                      {article.category && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.1em", color: "#DC2626", textTransform: "uppercase" }}>{article.category}</span>}
-                      {article.source && <><span style={{ color: "#3A362F" }}>·</span><span style={{ color: "#6E6862", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{article.source}</span></>}
-                    </div>
-                    <h3 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "15px", lineHeight: 1.32, color: "#ECE7E1", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{article.title}</h3>
-                  </div>
-                  <button
-                    onClick={(e) => removeBookmark(article, idx, e)}
-                    aria-label="Remove from saved"
-                    data-testid={`remove-bookmark-${article.article_id}`}
-                    style={{ alignSelf: "flex-start", width: "36px", height: "36px", flexShrink: 0, borderRadius: "10px", background: "#1a1917", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#8A847C" }}
+                  {/* Draggable foreground card */}
+                  <motion.div
+                    onClick={() => navigate(`/article/${article.article_id}`)}
+                    drag="x"
+                    dragDirectionLock
+                    dragConstraints={{ left: -84, right: 0 }}
+                    dragElastic={{ left: 0.15, right: 0.02 }}
+                    dragSnapToOrigin
+                    onDragEnd={(e, info) => {
+                      if (info.offset.x < -64) removeBookmark(article, idx, e);
+                    }}
+                    style={{ position: "relative", display: "flex", gap: "13px", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", padding: "12px", cursor: "pointer", touchAction: "pan-y" }}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <div style={{ width: "72px", height: "72px", borderRadius: "11px", overflow: "hidden", flexShrink: 0, background: "#1a1917" }}>
+                      {article.image_url && <img src={article.image_url} alt={article.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "5px" }}>
+                        {article.category && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.1em", color: "#DC2626", textTransform: "uppercase" }}>{article.category}</span>}
+                        {article.source && <><span style={{ color: "#3A362F" }}>·</span><span style={{ color: "#6E6862", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{article.source}</span></>}
+                      </div>
+                      <h3 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "15px", lineHeight: 1.32, color: "#ECE7E1", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{article.title}</h3>
+                    </div>
+                    <button
+                      onClick={(e) => removeBookmark(article, idx, e)}
+                      aria-label="Remove from saved"
+                      data-testid={`remove-bookmark-${article.article_id}`}
+                      style={{ alignSelf: "flex-start", width: "36px", height: "36px", flexShrink: 0, borderRadius: "10px", background: "#1a1917", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#8A847C" }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </motion.div>
                 </motion.div>
               ))}
             </AnimatePresence>
