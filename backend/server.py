@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import secrets
 import re
+import itertools
 import httpx
 import redis.asyncio as aioredis
 import anthropic
@@ -445,10 +446,16 @@ def _significant_terms(title: str) -> set:
 
 
 async def _detect_developing_stories() -> None:
-    """Cluster recent articles by shared terms, score by velocity/size/source
-    diversity, then name + validate the top few with Haiku and promote them as
-    auto developing stories. Stale auto stories are retired. Manual seeds
-    (source != 'auto') are never touched here."""
+    """Cluster recent articles by shared term PAIRS (not single words — a lone
+    word like "cricket" or "women" is generic enough to merge unrelated
+    events, which is exactly what happened before this guardrail existed:
+    a developing story about one match absorbed random updates from a
+    different one). Score by velocity/size/source diversity, then ask the
+    LLM to judge STRICTLY whether the cluster is genuinely one specific
+    event — and to name a tight, story-specific keyword set for ongoing
+    tagging, instead of reusing the loose clustering term. Stale auto
+    stories are retired. Scheduled/scout/manual stories are never touched
+    here."""
     try:
         now = datetime.now(timezone.utc)
         cutoff = (now - timedelta(hours=48)).isoformat()
@@ -459,14 +466,18 @@ async def _detect_developing_stories() -> None:
         if len(recent) < 6:
             return
 
-        term_articles: dict = {}
+        # Two shared specific words ("gill", "chennai") is a far stronger
+        # same-event signal than one shared word ("cricket"), which any
+        # unrelated match, series, or even different sport could share.
+        pair_articles: dict = {}
         for a in recent:
-            for term in _significant_terms(a.get("title", "")):
-                term_articles.setdefault(term, []).append(a)
+            terms = sorted(_significant_terms(a.get("title", "")))
+            for pair in itertools.combinations(terms, 2):
+                pair_articles.setdefault(pair, []).append(a)
 
         day_cut = (now - timedelta(hours=24)).isoformat()
         candidates = []
-        for term, arts in term_articles.items():
+        for pair, arts in pair_articles.items():
             if len(arts) < 4:
                 continue
             sources = {a.get("source") for a in arts if a.get("source")}
@@ -475,7 +486,7 @@ async def _detect_developing_stories() -> None:
             vel = sum(1 for a in arts if (a.get("published_at") or "") >= day_cut)
             score = vel * 3 + len(arts) + len(sources) * 2
             candidates.append({
-                "term": term, "arts": arts, "score": score, "vel": vel,
+                "term": " ".join(pair), "pair": pair, "arts": arts, "score": score, "vel": vel,
                 "newest": max((a.get("published_at") or "") for a in arts),
             })
         candidates.sort(key=lambda c: c["score"], reverse=True)
@@ -495,17 +506,33 @@ async def _detect_developing_stories() -> None:
         for c in chosen:
             story_id = "auto-" + re.sub(r"[^a-z0-9]+", "-", c["term"])[:40]
             name, theme, ok = c["term"].title(), "news", True
+            # Fallback keywords if the LLM is unavailable/fails: the two
+            # clustering words as SEPARATE entries (not the joined phrase),
+            # so the multi-keyword-match requirement in the tagging step
+            # still applies even without LLM-refined keywords.
+            keywords = list(c["pair"])
             if ANTHROPIC_API_KEY:
                 try:
                     raw = await _llm(
-                        system="You judge whether a set of news headlines is ONE genuine, currently-developing story (an ongoing event drawing fresh updates) rather than a stale evergreen topic or unrelated headlines. Respond ONLY with JSON.",
+                        system=(
+                            "You judge whether a set of news headlines are ALL about the "
+                            "SAME SPECIFIC currently-developing event — not just the same "
+                            "general topic, team, or sport. Two different cricket matches, "
+                            "two different court cases, or two different press conferences "
+                            "are NOT the same story even if they share a team, sport, or "
+                            "country. Be strict: if the headlines describe distinct events, "
+                            "return developing:false. Respond ONLY with JSON."
+                        ),
                         user_content=(
                             "Headlines:\n- " + "\n- ".join(a.get("title", "") for a in c["arts"][:8]) +
                             '\n\nReturn ONLY: {"developing": true or false, '
                             '"title": "a short specific story title, <=7 words", '
-                            '"theme": "one lowercase word: protest, politics, cricket, conflict, business, disaster, election, sports"}'
+                            '"theme": "one lowercase word: protest, politics, cricket, conflict, business, disaster, election, sports", '
+                            '"keywords": ["2 to 4 specific terms that together identify THIS '
+                            'exact event and would NOT match a different one — e.g. both team '
+                            'names plus a match/series identifier, not just the sport or one team"]}'
                         ),
-                        max_tokens=120,
+                        max_tokens=180,
                     )
                     s = raw.strip()
                     st, en = s.find("{"), s.rfind("}") + 1
@@ -514,6 +541,9 @@ async def _detect_developing_stories() -> None:
                         ok = bool(data.get("developing"))
                         name = (str(data.get("title") or name)).strip()[:80]
                         theme = (str(data.get("theme") or theme)).strip().lower()[:20]
+                        llm_keywords = data.get("keywords")
+                        if isinstance(llm_keywords, list) and len(llm_keywords) >= 2:
+                            keywords = [str(k).strip().lower()[:40] for k in llm_keywords if str(k).strip()][:4]
                 except Exception as e:
                     logger.warning(f"Developing detect: LLM validate failed for {story_id}: {e}")
             if not ok:
@@ -522,7 +552,7 @@ async def _detect_developing_stories() -> None:
                 {"story_id": story_id},
                 {
                     "$set": {
-                        "title": name, "theme": theme, "keywords": [c["term"]],
+                        "title": name, "theme": theme, "keywords": keywords,
                         "source": "auto", "kind": "auto", "is_active": True, "velocity": c["vel"],
                         "last_updated": c["newest"] or now.isoformat(),
                         "detected_at": now.isoformat(),
@@ -787,12 +817,21 @@ async def _run_ingest_cycle_body() -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
         for topic in watched:
             keywords = topic.get("keywords", [])
+            kind = topic.get("kind", "auto")
+            # "auto" stories are found via a loose clustering signal (see
+            # _detect_developing_stories), so require >=2 keyword hits to
+            # keep tagging them — a single generic word matching is exactly
+            # how unrelated updates used to glom onto the wrong story.
+            # scheduled/scout keyword lists are already hand-curated or
+            # LLM-scoped tightly, so one match is enough for those.
+            min_matches = 2 if kind == "auto" else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
                     article.get("title", "") + " " + article.get("description", "")
                 ).lower()
-                if any(kw.lower() in haystack for kw in keywords):
+                hits = sum(1 for kw in keywords if kw.lower() in haystack)
+                if hits >= min_matches:
                     matched_ids.append(article["article_id"])
             if matched_ids:
                 update = {
