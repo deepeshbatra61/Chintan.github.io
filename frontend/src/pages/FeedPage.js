@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import axios from "axios";
 import {
   Bell, User, Menu, Sun, CloudSun, Moon, Eye, Radio
@@ -27,6 +27,7 @@ const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" :
 const FeedPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const R = useReducedMotion();
   const [articles, setArticles] = useState([]);
   const [developingStories, setDevelopingStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -232,29 +233,35 @@ const FeedPage = () => {
                       <span className="text-gray-300">Night Summary</span>
                     </button>
 
-                    {developingStories.length > 0 && (
-                      <>
-                        <div className="h-px bg-white/10 my-4" />
-                        <button
-                          onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
-                          className="w-full relative overflow-hidden"
-                          data-testid="developing-stories-nav"
-                        >
-                          <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
-                            <div className="relative">
-                              <Radio className="w-5 h-5 text-red-500" />
-                              <div className="absolute inset-0 animate-pulse">
-                                <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
-                              </div>
-                            </div>
-                            <div className="flex-1 text-left">
-                              <span className="text-red-400 font-medium">Developing Stories</span>
-                              <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
+                    <div className="h-px bg-white/10 my-4" />
+                    {developingStories.length > 0 ? (
+                      <button
+                        onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
+                        className="w-full relative overflow-hidden"
+                        data-testid="developing-stories-nav"
+                      >
+                        <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-red-950/30 border border-red-900/50 relative z-10">
+                          <div className="relative">
+                            <Radio className="w-5 h-5 text-red-500" />
+                            <div className="absolute inset-0 animate-pulse">
+                              <div className="w-5 h-5 bg-red-500/30 rounded-full blur-sm" />
                             </div>
                           </div>
-                          <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
-                        </button>
-                      </>
+                          <div className="flex-1 text-left">
+                            <span className="text-red-400 font-medium">Developing Stories</span>
+                            <span className="text-red-500/60 text-xs ml-2">({developingStories.length} topic{developingStories.length !== 1 ? "s" : ""})</span>
+                          </div>
+                        </div>
+                        <div className="absolute inset-0 bg-red-500/5 animate-pulse rounded-lg" />
+                      </button>
+                    ) : (
+                      <div
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg"
+                        data-testid="developing-stories-empty"
+                      >
+                        <Radio className="w-5 h-5" style={{ color: "#5B564F" }} />
+                        <span style={{ color: "#6b625a", fontSize: "14px" }}>No developing story right now</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -308,13 +315,14 @@ const FeedPage = () => {
       {/* Main Content */}
       <main className="pb-24 px-4" style={{ paddingTop: '14px', height: '100vh', overflowY: 'auto' }}>
         <div className="max-w-6xl mx-auto">
-          {/* Developing Stories Banner */}
-          {developingStories.length > 0 && (
-            <motion.div
-              className="mb-5"
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
+          {/* Developing Stories Banner — always present: active state or a
+              calm "nothing right now" state, never silently absent */}
+          <motion.div
+            className="mb-5"
+            initial={R ? false : { opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {developingStories.length > 0 ? (
               <motion.div
                 animate={{ boxShadow: ['0 0 0px rgba(220,38,38,0)', '0 0 18px rgba(220,38,38,0.12)', '0 0 0px rgba(220,38,38,0)'] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -345,8 +353,23 @@ const FeedPage = () => {
                   </div>
                 </div>
               </motion.div>
-            </motion.div>
-          )}
+            ) : (
+              <div
+                style={{ background: '#131211', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}
+                data-testid="developing-banner-empty"
+              >
+                <motion.span
+                  animate={R ? {} : { opacity: [0.35, 0.75, 0.35] }}
+                  transition={R ? {} : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#5B564F', flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#6b625a', textTransform: 'uppercase', marginBottom: '2px' }}>Developing</div>
+                  <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: '13px', color: '#8A847C', margin: 0 }}>Nothing developing right now — we're watching.</p>
+                </div>
+              </div>
+            )}
+          </motion.div>
 
           {/* Categories — active pill glides between chips */}
           <div className="mb-6 overflow-x-auto hide-scrollbar">
