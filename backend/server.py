@@ -545,14 +545,24 @@ async def _detect_developing_stories() -> None:
 
 
 async def _run_ingest_cycle() -> None:
-    """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
-    # ── 0. Distributed lock (Redis only) ────────────────────────────────────
-    if _redis:
-        acquired = await _redis.set("ingestion:lock", "1", nx=True, ex=4 * 60 * 60)
-        if not acquired:
-            logger.info("Ingest cycle: lock held by another instance, skipping")
-            return
+    """Acquire the distributed ingestion lock (Redis only), run one pass, and
+    always release the lock when done — so a same-day restart isn't blocked
+    for the full 4h TTL just because an earlier process already ran once."""
+    if not _redis:
+        await _run_ingest_cycle_body()
+        return
+    acquired = await _redis.set("ingestion:lock", "1", nx=True, ex=4 * 60 * 60)
+    if not acquired:
+        logger.info("Ingest cycle: lock held by another instance, skipping")
+        return
+    try:
+        await _run_ingest_cycle_body()
+    finally:
+        await _redis.delete("ingestion:lock")
 
+
+async def _run_ingest_cycle_body() -> None:
+    """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
     # ── 1. Fetch & upsert articles ───────────────────────────────────────────
     api_articles = await fetch_from_newsapi()
     if api_articles:
