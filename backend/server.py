@@ -909,6 +909,13 @@ async def lifespan(app: FastAPI):
     migration_task = asyncio.create_task(_run_category_migration())
     app.state._migration_task = migration_task
 
+    # Clear any ingestion lock left over from a prior process — a fresh boot
+    # is never a genuine second instance racing this one, and the lock used
+    # to only clear via its 4h TTL (see _run_ingest_cycle), which could
+    # silently block ingestion for hours after a routine restart.
+    if _redis:
+        await _redis.delete("ingestion:lock")
+
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
 
