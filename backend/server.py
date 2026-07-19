@@ -2733,6 +2733,15 @@ WAVE_TOPICS = [
             "pakistan army", "ceasefire violation", "islamabad", "pok",
         ],
     },
+    {
+        "story_id": "iran-us-tensions",
+        "title": "Iran-US Tensions",
+        "theme": "conflict",
+        "keywords": [
+            "iran us", "tehran", "iranian nuclear", "us strike iran",
+            "irgc", "strait of hormuz", "iran sanctions", "khamenei",
+        ],
+    },
 ]
 
 
@@ -2772,7 +2781,9 @@ def _wave_intensity(articles: list) -> dict:
     ages = sorted(_age_h(a.get("published_at")) for a in articles)
     today = sum(1 for h in ages if h <= 24)
     week = sum(1 for h in ages if h <= 24 * 7)
-    quiet_days = int(ages[0] / 24) if ages else 9999
+    # Cap at a sane display ceiling (1 year) rather than a raw sentinel —
+    # "quiet 9999d" leaking straight into the UI is the bug this guards.
+    quiet_days = min(int(ages[0] / 24), 365) if ages else 365
     if today >= 2:
         state = "surging"
     elif week >= 1:
@@ -4228,21 +4239,33 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
         article_ids = story.get("article_ids", [])
 
         if kind == "wave":
+            # A wave topic with ZERO matched articles ever has no real signal
+            # it's currently relevant — it's dormant-from-birth, not a story
+            # to show. "Always shown" only applies once it has actually
+            # matched something at least once; require the same >=1-article
+            # floor scheduled/scout already use.
+            if not article_ids:
+                continue
             wave_articles = await db.articles.find(
                 {"article_id": {"$in": article_ids}},
                 {"_id": 0, "article_id": 1, "published_at": 1},
             ).to_list(200)
-            latest_article = None
-            if article_ids:
-                latest_article = await db.articles.find_one(
-                    {"article_id": {"$in": article_ids}},
-                    {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
-                    sort=[("published_at", -1)],
-                )
+            latest_article = await db.articles.find_one(
+                {"article_id": {"$in": article_ids}},
+                {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
+                sort=[("published_at", -1)],
+            )
+            # Sort/display by the latest MATCHED ARTICLE's time, not the
+            # story doc's own last_updated — that field is only touched by
+            # the sync/tagging steps and can read as "just now" right after
+            # a deploy even when the topic has had zero real activity in
+            # weeks, which is exactly what pushed an inactive wave topic
+            # above a genuinely fresh scout story in the feed.
+            effective_updated = (latest_article or {}).get("published_at") or story.get("last_updated")
             result.append({
                 "story_id": story["story_id"], "title": story["title"], "theme": story["theme"],
                 "kind": kind, "article_count": len(article_ids),
-                "last_updated": story.get("last_updated"), "latest_article": latest_article,
+                "last_updated": effective_updated, "latest_article": latest_article,
                 "intensity": _wave_intensity(wave_articles),
             })
             continue
@@ -4272,6 +4295,12 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
             "last_updated": story.get("last_updated"),
             "latest_article": latest_article,
         })
+
+    # Explicit final sort by effective recency — the initial Mongo query
+    # sorts by the raw last_updated field, which (as above) doesn't always
+    # reflect real content activity. Re-sorting here guarantees a genuinely
+    # fresh story always outranks a dormant one regardless of kind.
+    result.sort(key=lambda r: r.get("last_updated") or "", reverse=True)
     return result
 
 
