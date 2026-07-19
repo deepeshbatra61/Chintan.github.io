@@ -446,16 +446,25 @@ def _significant_terms(title: str) -> set:
 
 
 async def _detect_developing_stories() -> None:
-    """Cluster recent articles by shared term PAIRS (not single words — a lone
-    word like "cricket" or "women" is generic enough to merge unrelated
-    events, which is exactly what happened before this guardrail existed:
-    a developing story about one match absorbed random updates from a
-    different one). Score by velocity/size/source diversity, then ask the
-    LLM to judge STRICTLY whether the cluster is genuinely one specific
-    event — and to name a tight, story-specific keyword set for ongoing
-    tagging, instead of reusing the loose clustering term. Stale auto
-    stories are retired. Scheduled/scout/manual stories are never touched
-    here."""
+    """Cluster recent articles by shared significant terms, score by
+    velocity/size/source diversity, then ask the LLM to judge STRICTLY
+    whether the cluster is genuinely one specific event — and to name a
+    tight, story-specific keyword set for ongoing tagging, instead of
+    reusing the loose clustering term.
+
+    The specificity guardrail against merging distinct events (a real bug:
+    one developing story absorbing random unrelated updates) lives in the
+    LLM judgment below, NOT in the candidate filter. An earlier version of
+    this function required candidates to share a PAIR of specific words
+    before even asking the LLM — which fixed the merge bug but, at this
+    app's actual article volume, made candidate generation so strict it
+    almost never produced ANY candidate, silently killing developing
+    stories altogether. Single-term clustering here just generates
+    candidates for the LLM to judge; the LLM is what actually decides
+    "same event or not," and it doesn't need raw volume to do that well.
+
+    Stale auto stories are retired. Scheduled/scout/manual stories are
+    never touched here."""
     try:
         now = datetime.now(timezone.utc)
         cutoff = (now - timedelta(hours=48)).isoformat()
@@ -466,18 +475,14 @@ async def _detect_developing_stories() -> None:
         if len(recent) < 6:
             return
 
-        # Two shared specific words ("gill", "chennai") is a far stronger
-        # same-event signal than one shared word ("cricket"), which any
-        # unrelated match, series, or even different sport could share.
-        pair_articles: dict = {}
+        term_articles: dict = {}
         for a in recent:
-            terms = sorted(_significant_terms(a.get("title", "")))
-            for pair in itertools.combinations(terms, 2):
-                pair_articles.setdefault(pair, []).append(a)
+            for term in _significant_terms(a.get("title", "")):
+                term_articles.setdefault(term, []).append(a)
 
         day_cut = (now - timedelta(hours=24)).isoformat()
         candidates = []
-        for pair, arts in pair_articles.items():
+        for term, arts in term_articles.items():
             if len(arts) < 4:
                 continue
             sources = {a.get("source") for a in arts if a.get("source")}
@@ -486,7 +491,7 @@ async def _detect_developing_stories() -> None:
             vel = sum(1 for a in arts if (a.get("published_at") or "") >= day_cut)
             score = vel * 3 + len(arts) + len(sources) * 2
             candidates.append({
-                "term": " ".join(pair), "pair": pair, "arts": arts, "score": score, "vel": vel,
+                "term": term, "arts": arts, "score": score, "vel": vel,
                 "newest": max((a.get("published_at") or "") for a in arts),
             })
         candidates.sort(key=lambda c: c["score"], reverse=True)
@@ -506,11 +511,11 @@ async def _detect_developing_stories() -> None:
         for c in chosen:
             story_id = "auto-" + re.sub(r"[^a-z0-9]+", "-", c["term"])[:40]
             name, theme, ok = c["term"].title(), "news", True
-            # Fallback keywords if the LLM is unavailable/fails: the two
-            # clustering words as SEPARATE entries (not the joined phrase),
-            # so the multi-keyword-match requirement in the tagging step
-            # still applies even without LLM-refined keywords.
-            keywords = list(c["pair"])
+            # Fallback keyword if the LLM is unavailable/fails: just the one
+            # clustering term. The tagging step relaxes its multi-keyword
+            # requirement when fewer than 2 keywords exist, so this single
+            # generic word doesn't permanently under-match either.
+            keywords = [c["term"]]
             if ANTHROPIC_API_KEY:
                 try:
                     raw = await _llm(
@@ -598,14 +603,15 @@ async def _scout_developing_candidates(api_articles: list) -> None:
             system=(
                 "You scout for the EARLY signs of a developing news story from a "
                 "single fetch of articles — before it has accumulated multiple "
-                "corroborating reports. Flag ONLY genuinely major, currently-"
-                "unfolding events that people would want live updates on: "
-                "significant court judgments, PIB or government press releases "
-                "with national import, opposition/ruling-party press conferences, "
-                "breaking political or security incidents, major sports results "
-                "as they happen. Do NOT flag routine coverage, opinion pieces, "
-                "evergreen explainers, or anything already old news. It is "
-                "correct and expected to flag nothing most fetches. Respond "
+                "corroborating reports. Flag currently-unfolding events that "
+                "readers would want live updates on: court judgments, PIB or "
+                "government press releases, opposition/ruling-party press "
+                "conferences, protests and any action taken against protesters "
+                "or activists, political or security incidents, notable sports "
+                "results as they happen. This does not need to be the single "
+                "biggest story of the day — a genuinely newsworthy ongoing "
+                "event is enough. Do NOT flag routine coverage, opinion pieces, "
+                "or evergreen explainers with no ongoing development. Respond "
                 "ONLY with JSON."
             ),
             user_content=(
@@ -823,8 +829,11 @@ async def _run_ingest_cycle_body() -> None:
             # keep tagging them — a single generic word matching is exactly
             # how unrelated updates used to glom onto the wrong story.
             # scheduled/scout keyword lists are already hand-curated or
-            # LLM-scoped tightly, so one match is enough for those.
-            min_matches = 2 if kind == "auto" else 1
+            # LLM-scoped tightly, so one match is enough for those. Relax to
+            # 1 if the story only ever got a single fallback keyword (LLM
+            # was unavailable when it was detected) — requiring 2 hits
+            # against a 1-item list would make it permanently untaggable.
+            min_matches = min(2, len(keywords)) if kind == "auto" else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
@@ -929,7 +938,7 @@ async def _background_news_ingestor() -> None:
             await asyncio.sleep(3600)  # 1h back-off on unexpected error
 
 
-_CATEGORY_MIGRATION_VERSION = 5
+_CATEGORY_MIGRATION_VERSION = 6  # bumped: fixed World-as-default-fallback bug + added weather/business keywords
 
 
 async def _run_category_migration() -> None:
@@ -2357,6 +2366,12 @@ _CATEGORY_KEYWORDS = {
         "acquisition", "bank", "banking", "loan", "gst", "budget", "valuation",
         "adani", "ambani", "reliance", "infosys", "tcs", "wipro", "funding",
         "trade", "tariff", "export", "import", "shares", "mutual fund",
+        "petrol", "diesel", "fuel price", "forex", "reserves", "trade deficit",
+        "current account", "industrial policy", "manufacturing", "msme", "sme",
+        "retail", "e-commerce", "company", "companies", "corporate", "ceo",
+        "industry", "commerce ministry", "finance ministry", "customs duty",
+        "commodity", "crude oil", "gold price", "quarterly results", "q1 results",
+        "q2 results", "q3 results", "q4 results",
     ],
     "Technology": [
         "artificial intelligence", "machine learning", "software", "smartphone",
@@ -2383,6 +2398,9 @@ _CATEGORY_KEYWORDS = {
         "research", "scientist", "vaccine", "climate", "discovery", "experiment",
         "astronomy", "physics", "biology", "genome", "hospital", "aiims",
         "disease", "covid", "dengue", "cancer", "medicine", "health",
+        "monsoon", "heatwave", "cyclone", "imd", "rainfall", "flood", "drought",
+        "weather", "cold wave", "hailstorm", "landslide", "earthquake", "tremor",
+        "air quality", "aqi", "pollution", "wildlife", "forest", "biodiversity",
     ],
     "World": [
         "united nations", "g20", "brics", "pakistan", "china", "russia",
@@ -2474,10 +2492,20 @@ def detect_category(title: str, body: str) -> tuple:
     """Score every category by weighted keyword matches (title hits count double)
     and return the highest scorer, plus the best niche WITHIN that category (or
     None). Beats the old first-match-wins + substring approach that dumped nearly
-    everything into Technology."""
+    everything into Technology.
+
+    Default is "Politics" (general/national India news), NOT "World" — World's
+    own keyword list is specifically foreign/international terms (China,
+    Russia, Ukraine, Gaza...), so it must win on its own merits like every
+    other category. Defaulting zero-signal articles to World was the actual
+    bug behind Indian weather and business stories reading as World news:
+    anything that failed to hit a keyword (which used to include most weather
+    reports — "monsoon"/"heatwave"/"cyclone" lived only in a subcategory list,
+    never in the list that decides the primary category) silently became
+    "World" by fallback, not by any real signal that it was international."""
     title_s = title or ""
     body_s = body or ""
-    best_cat, best_score = "World", 0
+    best_cat, best_score = "Politics", 0
     for cat, patterns in _CATEGORY_PATTERNS.items():
         score = 0
         for pat in patterns:
