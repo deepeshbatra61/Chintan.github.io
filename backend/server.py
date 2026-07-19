@@ -431,7 +431,25 @@ async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
 _DEV_STOPWORDS = set(
     "the and for with that this from into over after before amid says said report reports "
     "will have has had not new latest their they what when where which more most about india "
-    "indian government minister national country people first year years today week month".split()
+    "indian government minister national country people first year years today week month "
+    # Common English verbs/function words — this list was reactively built one
+    # incident at a time (see 'take' below), which is exactly backwards. A
+    # single ordinary verb slipping through here becomes a clustering key
+    # that merges completely unrelated headlines just because they share it
+    # (e.g. "Zepto IPO... may TAKE 40-45%" and an unrelated NZ politics
+    # headline that happened to also contain "take off"). Cover the common
+    # verbs/function words up front instead of patching one word at a time.
+    "take takes taken taking make makes made making get gets got getting give "
+    "gives given giving keep keeps kept keeping come comes came coming want "
+    "wants wanted go goes went going look looks looked show shows showed "
+    "shown tell tells told find finds found could would should still also "
+    "just near likely expected reveals reveal visit visits dig digs off out "
+    "back down up near seen amid within without amidst upon than then some "
+    "such being been were does both each only every much many other another "
+    "here there now while during since across against between among per set "
+    "sets put puts turn turns move moves moved hold holds held bring brings "
+    "brought call calls called leave leaves left let lets stay stays stayed "
+    "way ways case cases part parts point points thing things time times".split()
 )
 
 
@@ -828,13 +846,20 @@ async def _run_ingest_cycle_body() -> None:
             # "auto" stories are found via a loose clustering signal (see
             # _detect_developing_stories), so require >=2 keyword hits to
             # keep tagging them — a single generic word matching is exactly
-            # how unrelated updates used to glom onto the wrong story.
+            # how unrelated updates used to glom onto the wrong story
+            # ("take" merged a Zepto IPO story with unrelated NZ politics
+            # and an AI conference, since it was the ONLY keyword after an
+            # LLM-unavailable fallback). If an auto story only ever got a
+            # single fallback keyword, skip tagging it entirely rather than
+            # relaxing to a 1-word match — an under-specified keyword set
+            # shouldn't be trusted to identify anything on its own; it'll
+            # get a real multi-term keyword set next cycle if it's
+            # re-promoted, or retire via the normal staleness rule if not.
             # scheduled/scout keyword lists are already hand-curated or
-            # LLM-scoped tightly, so one match is enough for those. Relax to
-            # 1 if the story only ever got a single fallback keyword (LLM
-            # was unavailable when it was detected) — requiring 2 hits
-            # against a 1-item list would make it permanently untaggable.
-            min_matches = min(2, len(keywords)) if kind == "auto" else 1
+            # LLM-scoped tightly, so one match is enough for those.
+            if kind == "auto" and len(keywords) < 2:
+                continue
+            min_matches = 2 if kind == "auto" else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
