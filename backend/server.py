@@ -811,11 +811,12 @@ async def _run_ingest_cycle_body() -> None:
                     )
                     logger.info(f"Marked claude_skip=True for {art['article_id']} after 3 failures")
 
-    # ── 5. Open/close calendar-known events before tagging, so a session that
-    #       just entered its lead window is already matchable this cycle ─────
+    # ── 5. Open/close calendar-known events + keep wave topics tracked,
+    #       before tagging, so anything new is matchable this cycle ─────────
     await _sync_scheduled_events()
+    await _sync_wave_topics()
 
-    # ── 6. Tag new articles to watched/scheduled developing stories ─────────
+    # ── 6. Tag new articles to watched/scheduled/wave developing stories ────
     if api_articles:
         watched = await db.developing_stories.find(
             {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1, "kind": 1}
@@ -1026,7 +1027,8 @@ async def lifespan(app: FastAPI):
     # elections, major fixtures) per SCHEDULED_EVENTS — also re-run every
     # ingest cycle so windows open/close on time, not just at boot.
     await _sync_scheduled_events()
-    logger.info(f"Developing stories: synced {len(SCHEDULED_EVENTS)} scheduled events")
+    await _sync_wave_topics()
+    logger.info(f"Developing stories: synced {len(SCHEDULED_EVENTS)} scheduled events, {len(WAVE_TOPICS)} wave topics")
 
     # Reset claude_summarized on articles that don't yet have the contemplation
     # model (beats), so they re-summarize with the new prompt when credits return.
@@ -2671,6 +2673,91 @@ async def _sync_scheduled_events() -> None:
         )
 
 
+# ── Wave topics: long-running situations that flare up and cool down over
+# weeks/months instead of resolving in a day (wars, sustained border tension,
+# major protest movements) — a fundamentally different shape from every other
+# developing-story kind here. These are curated by NAME, not discovered by
+# clustering (clustering's failure mode is exactly the kind of generic-term
+# false-merge that bit us twice already), with real specific keywords from
+# day one. They never auto-expire on staleness — a conflict can go silent for
+# weeks and resurge without warning, so "no recent articles" here means
+# "watching" or "simmering," never "inactive." Their CURRENT INTENSITY
+# (surging/simmering/watching, computed in _wave_intensity) is the signal
+# that changes, not their existence.
+#
+# Deliberately open-ended: this list will keep growing as new long-running
+# situations emerge. Add an entry with real, specific keywords (team names,
+# place names, leader names — not generic words like "conflict" or "war")
+# whenever a genuinely sustained situation is worth tracking long-term.
+WAVE_TOPICS = [
+    {
+        "story_id": "russia-ukraine-war",
+        "title": "Russia-Ukraine War",
+        "theme": "conflict",
+        "keywords": [
+            "russia ukraine", "kyiv", "moscow", "zelensky", "putin", "donbas",
+            "crimea", "kremlin", "russian forces", "ukrainian forces",
+        ],
+    },
+    {
+        "story_id": "india-pakistan-tensions",
+        "title": "India-Pakistan Tensions",
+        "theme": "conflict",
+        "keywords": [
+            "india pakistan", "line of control", "kashmir tension", "loc",
+            "pakistan army", "ceasefire violation", "islamabad", "pok",
+        ],
+    },
+]
+
+
+async def _sync_wave_topics() -> None:
+    """Keep WAVE_TOPICS persistently tracked, every cycle — unlike every
+    other kind here, existence is never in question; only intensity is."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for topic in WAVE_TOPICS:
+        await db.developing_stories.update_one(
+            {"story_id": topic["story_id"]},
+            {
+                "$set": {
+                    "title": topic["title"], "theme": topic["theme"], "keywords": topic["keywords"],
+                    "source": "wave", "kind": "wave", "is_active": True,
+                },
+                "$setOnInsert": {"article_ids": [], "last_updated": now_iso, "detected_at": now_iso},
+            },
+            upsert=True,
+        )
+
+
+def _wave_intensity(articles: list) -> dict:
+    """Classify a wave story's CURRENT intensity from recent article
+    velocity — surging/simmering/watching, never active/inactive. A wave
+    story going quiet for weeks is expected behavior, not staleness."""
+    now = datetime.now(timezone.utc)
+
+    def _age_h(iso):
+        try:
+            dt = datetime.fromisoformat((iso or "").replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (now - dt).total_seconds() / 3600.0
+        except (ValueError, TypeError):
+            return 999999.0
+
+    ages = sorted(_age_h(a.get("published_at")) for a in articles)
+    today = sum(1 for h in ages if h <= 24)
+    week = sum(1 for h in ages if h <= 24 * 7)
+    quiet_days = int(ages[0] / 24) if ages else 9999
+    if today >= 2:
+        state = "surging"
+    elif week >= 1:
+        state = "simmering"
+    else:
+        state = "watching"
+    return {"state": state, "updates_today": today, "updates_week": week,
+            "quiet_days": quiet_days if state == "watching" else 0}
+
+
 async def fetch_from_newsapi() -> list:
     """Fetch Indian news from NewsAPI.org (/v2/everything with fresh sortBy=publishedAt)."""
     if not NEWSAPI_KEY:
@@ -4081,6 +4168,10 @@ async def admin_reset_summarization(body: dict, admin: dict = Depends(require_ad
 async def get_developing_stories_list(user: dict = Depends(require_auth)):
     """Active developing stories, filtered by rules matched to how each KIND
     actually behaves — a single volume threshold doesn't fit all of them:
+    - wave (long-running conflicts/situations): ALWAYS shown regardless of
+      recent volume — a quiet week is "watching," not "gone." Carries an
+      `intensity` field (surging/simmering/watching) instead of being
+      filtered by freshness.
     - scheduled (parliament sessions, elections, fixtures): the date window
       IS the freshness signal, so show from the first matched article, no
       minimum count or article-recency check needed.
@@ -4110,6 +4201,27 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
     for story in stories:
         kind = story.get("kind", "auto")  # legacy docs predate the `kind` field
         article_ids = story.get("article_ids", [])
+
+        if kind == "wave":
+            wave_articles = await db.articles.find(
+                {"article_id": {"$in": article_ids}},
+                {"_id": 0, "article_id": 1, "published_at": 1},
+            ).to_list(200)
+            latest_article = None
+            if article_ids:
+                latest_article = await db.articles.find_one(
+                    {"article_id": {"$in": article_ids}},
+                    {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
+                    sort=[("published_at", -1)],
+                )
+            result.append({
+                "story_id": story["story_id"], "title": story["title"], "theme": story["theme"],
+                "kind": kind, "article_count": len(article_ids),
+                "last_updated": story.get("last_updated"), "latest_article": latest_article,
+                "intensity": _wave_intensity(wave_articles),
+            })
+            continue
+
         min_articles = 1 if kind in ("scheduled", "scout") else 3
         if len(article_ids) < min_articles:
             continue                         # too thin to be a "story" yet
@@ -4154,7 +4266,10 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
              "published_at": 1, "image_url": 1, "url": 1, "is_breaking": 1},
         ).sort("published_at", -1).to_list(50)
 
-    # ── Momentum: bucket updates over the last 48h + a trend label ────────────
+    # ── Momentum: bucket updates + a trend label. Wave stories get a much
+    #    wider daily-bucket window (weeks) instead of 48h/6×8h — the whole
+    #    point for this kind is showing crests and troughs over its full
+    #    life, not just what happened today ────────────────────────────────
     now = datetime.now(timezone.utc)
 
     def _age_h(iso):
@@ -4166,13 +4281,28 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
         except (ValueError, TypeError):
             return 9999.0
 
-    ages = [_age_h(a.get("published_at")) for a in articles]
-    today = sum(1 for h in ages if h <= 24)
-    prev = sum(1 for h in ages if 24 < h <= 48)
-    trend = "gaining" if today > prev else ("cooling" if today < prev else "steady")
-    buckets = [sum(1 for h in ages if b * 8 <= h < (b + 1) * 8) for b in range(6)]
-    buckets.reverse()  # oldest → newest, for the sparkline
-    momentum = {"today": today, "trend": trend, "buckets": buckets}
+    if story.get("kind") == "wave":
+        # Momentum here needs more history than the 50-article timeline
+        # fetch above carries — a separate lightweight fetch, age-only.
+        wave_articles = await db.articles.find(
+            {"article_id": {"$in": article_ids}},
+            {"_id": 0, "published_at": 1},
+        ).to_list(300)
+        ages = [_age_h(a.get("published_at")) for a in wave_articles]
+        intensity = _wave_intensity(wave_articles)
+        WAVE_DAYS = 21
+        buckets = [sum(1 for h in ages if d * 24 <= h < (d + 1) * 24) for d in range(WAVE_DAYS)]
+        buckets.reverse()  # oldest → newest, for the sparkline
+        momentum = {"today": intensity["updates_today"], "state": intensity["state"],
+                     "quiet_days": intensity["quiet_days"], "buckets": buckets}
+    else:
+        ages = [_age_h(a.get("published_at")) for a in articles]
+        today = sum(1 for h in ages if h <= 24)
+        prev = sum(1 for h in ages if 24 < h <= 48)
+        trend = "gaining" if today > prev else ("cooling" if today < prev else "steady")
+        buckets = [sum(1 for h in ages if b * 8 <= h < (b + 1) * 8) for b in range(6)]
+        buckets.reverse()  # oldest → newest, for the sparkline
+        momentum = {"today": today, "trend": trend, "buckets": buckets}
 
     # ── "Where it stands" one-liner, cached until new updates arrive ──────────
     count = len(article_ids)
@@ -4196,6 +4326,7 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
         "story_id": story["story_id"],
         "title": story["title"],
         "theme": story.get("theme", "news"),
+        "kind": story.get("kind", "auto"),
         "articles": articles,
         "article_count": count,
         "last_updated": story.get("last_updated"),
