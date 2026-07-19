@@ -18,11 +18,20 @@ function formatRelativeTime(isoString) {
 }
 
 const trendLabel = (m) => {
+  if (m?.state) {
+    // Wave kind: surging/simmering/watching, not gaining/cooling/steady —
+    // a quiet stretch is expected behavior for these stories, not decay.
+    const head = m.state === "surging" ? "Surging" : m.state === "simmering" ? "Simmering" : "Watching";
+    if (m.state === "watching") return `${head} · quiet ${m.quiet_days || 0}d`;
+    return `${head} · ${m.today} update${m.today === 1 ? "" : "s"} today`;
+  }
   const t = m?.trend;
   const n = m?.today || 0;
   const head = t === "gaining" ? "Gaining pace" : t === "cooling" ? "Cooling off" : "Holding steady";
   return `${head} · ${n} update${n === 1 ? "" : "s"} today`;
 };
+
+const WAVE_STATE_COLOR = { surging: "#DC2626", simmering: "#F59E0B", watching: "#4A453F" };
 
 const DevelopingStoryDetail = () => {
   const { storyId } = useParams();
@@ -110,10 +119,20 @@ const DevelopingStoryDetail = () => {
               <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "#ECE7E1" }}>{story.state_summary}</p>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: story.state_summary ? "12px" : 0 }}>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "18px" }}>
-                {buckets.map((b, i) => (
-                  <span key={i} style={{ width: "4px", borderRadius: "1px", height: `${Math.max(3, (b / maxBucket) * 18)}px`, background: i === buckets.length - 1 ? "#DC2626" : "#7A2A24" }} />
-                ))}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: story.kind === "wave" ? "1.5px" : "2px", height: story.kind === "wave" ? "30px" : "18px" }}>
+                {story.kind === "wave" ? (
+                  // Direction 1: Seismograph — a literal waveform of the story's
+                  // full life (weeks), not just today. Crests and troughs are
+                  // the whole point, so every bar is colored by the CURRENT
+                  // overall intensity rather than spotlighting only the newest.
+                  buckets.map((b, i) => (
+                    <span key={i} style={{ width: "3px", borderRadius: "2px 2px 0 0", minHeight: "2px", height: `${Math.max(2, (b / maxBucket) * 30)}px`, background: WAVE_STATE_COLOR[momentum.state] || "#4A453F" }} />
+                  ))
+                ) : (
+                  buckets.map((b, i) => (
+                    <span key={i} style={{ width: "4px", borderRadius: "1px", height: `${Math.max(3, (b / maxBucket) * 18)}px`, background: i === buckets.length - 1 ? "#DC2626" : "#7A2A24" }} />
+                  ))
+                )}
               </div>
               <span style={{ fontSize: "11px", color: "#8A847C", fontFamily: "'Manrope', sans-serif" }}>{trendLabel(momentum)}</span>
             </div>

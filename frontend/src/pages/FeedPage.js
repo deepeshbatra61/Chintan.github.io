@@ -24,6 +24,40 @@ const SIDEBAR_PHASES = {
 const sidebarPhase = (h) => (h < 5 ? "night" : h < 11 ? "dawn" : h < 17 ? "day" : h < 21 ? "dusk" : "night");
 const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night");
 
+// Wave-story intensity indicator ("Direction 2: Heartbeat" — approved design).
+// Reuses the pulsing-dot language already used everywhere else in the app;
+// only the pulse SPEED and color change with intensity, so a long-running
+// conflict reads as "surging/simmering/watching" at a glance without any
+// new visual vocabulary. "Watching" gets no pulse at all — a quiet stretch
+// is expected behavior for these stories, not a decayed/dead state.
+const WAVE_INTENSITY_COLOR = { surging: '#DC2626', simmering: '#F59E0B', watching: '#4A453F' };
+const WAVE_INTENSITY_LABEL = { surging: 'Surging', simmering: 'Simmering', watching: 'Watching' };
+const WaveHeartbeat = ({ intensity, reduced }) => {
+  const state = intensity?.state || 'watching';
+  const color = WAVE_INTENSITY_COLOR[state];
+  const label = WAVE_INTENSITY_LABEL[state];
+  const sub = state === 'watching'
+    ? (intensity?.quiet_days ? `quiet ${intensity.quiet_days}d` : 'quiet')
+    : `${intensity?.updates_today || 0} update${intensity?.updates_today === 1 ? '' : 's'} today`;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px' }}>
+      <span style={{ position: 'relative', width: '10px', height: '10px', flexShrink: 0 }}>
+        {!reduced && state !== 'watching' && (
+          <motion.span
+            animate={{ scale: [1, 1.9, 1], opacity: [0.7, 0, 0.7] }}
+            transition={{ duration: state === 'surging' ? 1.1 : 3.4, repeat: Infinity, ease: 'easeOut' }}
+            style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: `1.5px solid ${color}` }}
+          />
+        )}
+        <span style={{ position: 'absolute', inset: '2.5px', borderRadius: '50%', background: color }} />
+      </span>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label} · {sub}
+      </span>
+    </div>
+  );
+};
+
 const FeedPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -340,7 +374,11 @@ const FeedPage = () => {
                           <p className="group-hover:text-red-400 transition-colors" style={{ color: '#ECE7E1', fontSize: '13.5px', fontWeight: 500, lineHeight: 1.32, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {story.title}
                           </p>
-                          <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
+                          {story.kind === 'wave' ? (
+                            <WaveHeartbeat intensity={story.intensity} reduced={R} />
+                          ) : (
+                            <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
+                          )}
                         </button>
                       </React.Fragment>
                     ))}
