@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// Release signing — reads android/keystore.properties, which is gitignored
+// and must never be committed. If it's missing (e.g. a fresh clone without
+// the keystore), release builds fail with a clear Gradle error instead of
+// silently producing an unsigned/misconfigured bundle.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasKeystoreProperties = keystorePropertiesFile.exists()
+if (hasKeystoreProperties) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.chintan.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +27,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasKeystoreProperties) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig hasKeystoreProperties ? signingConfigs.release : null
         }
     }
 }
