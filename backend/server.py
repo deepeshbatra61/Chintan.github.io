@@ -1467,6 +1467,10 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class DeleteAccountRequest(BaseModel):
+    email: str
+    password: str
+
 class InterestsUpdate(BaseModel):
     interests: List[str]
 
@@ -2151,6 +2155,32 @@ async def logout(request: Request, response: Response):
 
     response.delete_cookie(key="session_token", path="/")
     return {"message": "Logged out"}
+
+
+@api_router.post("/account/delete")
+@limiter.limit("5/minute")
+async def delete_account(request: Request, payload: DeleteAccountRequest):
+    """Permanently delete an account and all associated data. Verifies
+    identity via email + password rather than the session cookie, so this
+    also works from the public web deletion form at chintan.news/data-safety
+    (a different origin with no access to the app's session cookie), not
+    just from inside the app itself."""
+    email = (payload.email or "").strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not _verify_password(payload.password or "", user.get("password_salt", ""), user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    user_id = user["user_id"]
+    await db.users.delete_one({"user_id": user_id})
+    await db.bookmarks.delete_many({"user_id": user_id})
+    await db.comments.delete_many({"user_id": user_id})
+    await db.poll_votes.delete_many({"user_id": user_id})
+    await db.refresh_tokens.delete_many({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+
+    return {"message": "Account and all associated data deleted"}
 
 
 @api_router.post("/auth/refresh")
