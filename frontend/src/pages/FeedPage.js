@@ -10,7 +10,7 @@ import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Share } from "@capacitor/share";
 import { toast } from "sonner";
 import { useAuth, SuryaLogo } from "../App";
-import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "../components/ui/sheet";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
@@ -674,6 +674,8 @@ const FeedPage = () => {
         <SheetContent side="bottom" className="bg-[#0A0A0A] border-white/10 rounded-t-2xl">
           {actionSheetArticle && (
             <div className="pt-2 pb-2">
+              <SheetTitle className="sr-only">{actionSheetArticle.title}</SheetTitle>
+              <SheetDescription className="sr-only">Quick actions for this article</SheetDescription>
               <p className="font-serif text-sm text-white/90 line-clamp-2 mb-5 pr-8">
                 {actionSheetArticle.title}
               </p>
