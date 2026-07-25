@@ -1510,7 +1510,7 @@ class InterestsUpdate(BaseModel):
     interests: List[str]
 
 class ArticleInteraction(BaseModel):
-    action: str  # "like", "dislike", "view"
+    action: str  # "like", "dislike", "view", "save_for_brief"
 
 class PollVote(BaseModel):
     option: str
@@ -3213,6 +3213,20 @@ async def interact_with_article(
             "dislikes_count": max(0, updated.get("dislikes", 0)),
         }
 
+    elif interaction.action == "save_for_brief":
+        # A long-press "save for my next Brief" — distinct from bookmarking
+        # (indefinite) and from like (a ranking signal). Delivered exactly
+        # once, via _attach_saved_for_brief in get_brief, then cleared.
+        uid, aid = user["user_id"], article_id
+        existing = await db.saved_for_brief.find_one({"user_id": uid, "article_id": aid})
+        if existing:
+            return {"saved_for_brief": True}
+        await db.saved_for_brief.insert_one({
+            "user_id": uid, "article_id": aid,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {"saved_for_brief": True}
+
     elif interaction.action == "dislike":
         uid, aid = user["user_id"], article_id
         already_disliked = await db.article_dislikes.find_one({"user_id": uid, "article_id": aid})
@@ -3288,6 +3302,28 @@ async def update_reading_time(
 
 # ===================== BRIEFS ROUTES =====================
 
+async def _attach_saved_for_brief(brief: dict, user_id: Optional[str]) -> dict:
+    """Attach any articles the user long-press-saved for their next brief,
+    then clear them so each one is delivered exactly once. Kept separate from
+    the cached narrative/summary (which is regenerated hourly) so a save
+    always shows up in the very next brief the user opens, regardless of
+    whether that brief's narrative was served from cache."""
+    brief["saved_for_you"] = []
+    if not user_id:
+        return brief
+    pending = await db.saved_for_brief.find({"user_id": user_id}, {"_id": 0, "article_id": 1}).to_list(20)
+    if not pending:
+        return brief
+    saved_ids = [p["article_id"] for p in pending]
+    saved_articles = await db.articles.find(
+        {"article_id": {"$in": saved_ids}},
+        {"_id": 0, "article_id": 1, "title": 1, "source": 1, "image_url": 1, "category": 1},
+    ).to_list(len(saved_ids))
+    brief["saved_for_you"] = saved_articles
+    await db.saved_for_brief.delete_many({"user_id": user_id, "article_id": {"$in": saved_ids}})
+    return brief
+
+
 @api_router.get("/briefs/{brief_type}")
 async def get_brief(brief_type: str, request: Request = None):
     """Get morning/midday/night brief with Claude-generated narrative."""
@@ -3309,7 +3345,7 @@ async def get_brief(brief_type: str, request: Request = None):
             _gen = _cached.get("generated_at")
             _gen_dt = datetime.fromisoformat(_gen) if isinstance(_gen, str) else _gen
             if _gen_dt and (datetime.now(timezone.utc) - _gen_dt).total_seconds() < 3600:
-                return _cached["brief"]
+                return await _attach_saved_for_brief(_cached["brief"], _user_id)
         except Exception:
             pass
 
@@ -3370,7 +3406,7 @@ async def get_brief(brief_type: str, request: Request = None):
     if not top_cats:
         any_articles = await db.articles.find({}, {"_id": 0}).sort(
             "published_at", -1).limit(3).to_list(3)
-        return {
+        return await _attach_saved_for_brief({
             "greeting": greeting,
             "subtitle": subtitle,
             "summary": "No stories are available right now. Check back soon.",
@@ -3380,7 +3416,7 @@ async def get_brief(brief_type: str, request: Request = None):
                 for a in any_articles
             ],
             "read_time": "1 min read",
-        }
+        }, _user_id)
 
     # ── 4. Up to 3 articles per category for Claude context ──────────────────
     cat_articles: Dict[str, list] = {cat: by_category[cat][:3] for cat in top_cats}
@@ -3460,12 +3496,15 @@ async def get_brief(brief_type: str, request: Request = None):
         "referenced_stories": referenced_stories,
         "read_time":          read_time,
     }
+    # Cache BEFORE attaching saved_for_you -- that field must never be
+    # persisted into brief_cache, or a delivered-once save would incorrectly
+    # keep reappearing on every cache hit for the next hour.
     await db.brief_cache.update_one(
         {"_id": _brief_cache_key},
         {"$set": {"brief": brief, "generated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
-    return brief
+    return await _attach_saved_for_brief(brief, _user_id)
 
 # ===================== AI ROUTES =====================
 
