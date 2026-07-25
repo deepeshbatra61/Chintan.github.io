@@ -14,7 +14,10 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
-import { getFeedCache, setFeedCache } from "../lib/feedCache";
+import {
+  getFeedCache, setFeedCache,
+  setLatestSeenArticleId, setNewArticlesAvailable,
+} from "../lib/feedCache";
 
 const SHARE_BASE = "https://chintan.news";
 
@@ -63,6 +66,11 @@ function useLongPress(onLongPress, threshold = 500, moveThreshold = 10) {
     onMouseMove: move,
     onMouseUp: clear,
     onMouseLeave: clear,
+    // The OS/WebView's own long-press (text-selection callout, context menu)
+    // fires its own haptic tick a beat after ours, which read as a "double
+    // nudge" -- suppressing it here leaves just the one, deliberate buzz.
+    onContextMenu: (e) => e.preventDefault(),
+    style: { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" },
   });
 
   return { bind, didFire: () => firedRef.current };
@@ -133,12 +141,18 @@ const FeedPage = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionSheetArticle, setActionSheetArticle] = useState(null);
   const sentinelRef = useRef(null);
+  const mainRef = useRef(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pulling = useRef(false);
+  const pullStartY = useRef(0);
+  const PULL_THRESHOLD = 64;
 
   const PAGE_LIMIT = 20;
   const categories = ["All", "Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
 
   const longPress = useLongPress((article) => {
-    triggerHaptic(ImpactStyle.Medium);
+    triggerHaptic(ImpactStyle.Light);
     setActionSheetArticle(article);
   });
 
@@ -223,6 +237,13 @@ const FeedPage = () => {
       } else {
         setArticles(data);
         setFeedCache({ articles: data, page: pageNum, activeCategory: category ?? null });
+        // A full (non-append) load reflects everything currently at the top
+        // of the feed -- record it so BottomNav's poll knows what "new"
+        // means, and clear any dot from before this load.
+        if (data.length > 0) {
+          setLatestSeenArticleId(data[0].article_id);
+          setNewArticlesAvailable(false);
+        }
       }
       const more = data.length === PAGE_LIMIT;
       setHasMore(more);
@@ -276,6 +297,60 @@ const FeedPage = () => {
     };
     loadData();
   }, [fetchArticles, fetchDevelopingStories, fetchNotifications]);
+
+  // Shared by pull-to-refresh and the bottom-nav Feed tab (tapped while
+  // already on the feed) -- both just want a full, fresh reload.
+  const doRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    triggerHaptic(ImpactStyle.Light);
+    setPage(1);
+    setHasMore(true);
+    await Promise.all([
+      fetchArticles(activeCategory, 1, false),
+      fetchDevelopingStories(),
+      fetchNotifications(),
+    ]);
+    setRefreshing(false);
+    setPullDistance(0);
+  }, [refreshing, activeCategory, fetchArticles, fetchDevelopingStories, fetchNotifications]);
+
+  // Tapping "Feed" in the bottom nav while already on the feed page has
+  // nowhere to navigate to, so it refreshes instead -- BottomNav dispatches
+  // this event since it has no direct reference to this page's fetch logic.
+  useEffect(() => {
+    const handler = () => doRefresh();
+    window.addEventListener("chintan:feed-refresh", handler);
+    return () => window.removeEventListener("chintan:feed-refresh", handler);
+  }, [doRefresh]);
+
+  const handlePullStart = (e) => {
+    if (!refreshing && mainRef.current && mainRef.current.scrollTop <= 0) {
+      pulling.current = true;
+      pullStartY.current = e.touches[0].clientY;
+    }
+  };
+
+  const handlePullMove = (e) => {
+    if (!pulling.current || refreshing) return;
+    const dy = e.touches[0].clientY - pullStartY.current;
+    if (dy > 0 && mainRef.current && mainRef.current.scrollTop <= 0) {
+      setPullDistance(Math.min(dy * 0.45, 88));
+    } else {
+      pulling.current = false;
+      setPullDistance(0);
+    }
+  };
+
+  const handlePullEnd = () => {
+    if (!pulling.current) return;
+    pulling.current = false;
+    if (pullDistance > PULL_THRESHOLD) {
+      doRefresh();
+    } else {
+      setPullDistance(0);
+    }
+  };
 
   // Warm the AI content for the articles most likely to be opened next: hitting
   // GET /articles/:id triggers (and caches) the contemplation beats server-side,
@@ -349,6 +424,11 @@ const FeedPage = () => {
   const _greeting = sidebarGreeting(_hour);
   const _firstName = user?.name?.split(" ")[0] || "";
   const _timeStr = _now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // Same morning/midday/night split BottomNav uses for its single Briefs tab —
+  // here there are three links at once, so only the one matching the phone's
+  // current local time stays fully lit; the other two are dimmed instead of
+  // all three competing for attention around the clock.
+  const _currentBrief = _hour >= 5 && _hour < 12 ? "morning" : _hour >= 12 && _hour < 18 ? "midday" : "night";
 
   if (loading) {
     return (
@@ -392,30 +472,28 @@ const FeedPage = () => {
                 <div style={{ flex: 1, overflowY: 'auto' }} className="hide-scrollbar">
                   <div className="p-4 space-y-1">
                     <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#524d47' }} className="px-3 py-2">Briefs</p>
-                    <button
-                      onClick={() => { navigate("/brief/morning"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid="morning-brief-nav"
-                    >
-                      <Sun className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Morning Brief</span>
-                    </button>
-                    <button
-                      onClick={() => { navigate("/brief/midday"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid="midday-brief-nav"
-                    >
-                      <CloudSun className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Midday Update</span>
-                    </button>
-                    <button
-                      onClick={() => { navigate("/brief/night"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid="night-brief-nav"
-                    >
-                      <Moon className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Night Summary</span>
-                    </button>
+                    {[
+                      { key: "morning", label: "Morning Brief", Icon: Sun },
+                      { key: "midday", label: "Midday Update", Icon: CloudSun },
+                      { key: "night", label: "Night Summary", Icon: Moon },
+                    ].map(({ key, label, Icon }) => {
+                      const isNow = key === _currentBrief;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => { navigate(`/brief/${key}`); setSidebarOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
+                          data-testid={`${key}-brief-nav`}
+                          style={{ opacity: isNow ? 1 : 0.42 }}
+                        >
+                          <Icon className="w-[18px] h-[18px]" style={{ color: isNow ? '#DC6B5A' : '#6b625a', flexShrink: 0 }} />
+                          <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: isNow ? '#F2EEE9' : '#C9BFB4', flex: 1 }}>{label}</span>
+                          {isNow && (
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: '#DC6B5A', textTransform: 'uppercase' }}>Now</span>
+                          )}
+                        </button>
+                      );
+                    })}
 
                     <div className="h-px bg-white/10 my-4" />
                     {developingStories.length > 0 ? (
@@ -490,7 +568,27 @@ const FeedPage = () => {
       </header>
 
       {/* Main Content */}
-      <main className="pb-24 px-4" style={{ paddingTop: '14px', height: '100vh', overflowY: 'auto' }}>
+      <main
+        ref={mainRef}
+        className="pb-24 px-4"
+        style={{ paddingTop: '14px', height: '100vh', overflowY: 'auto' }}
+        onTouchStart={handlePullStart}
+        onTouchMove={handlePullMove}
+        onTouchEnd={handlePullEnd}
+      >
+        {(pullDistance > 0 || refreshing) && (
+          <div
+            style={{
+              display: 'flex', justifyContent: 'center', alignItems: 'center',
+              height: refreshing ? '52px' : `${pullDistance}px`,
+              transition: refreshing ? 'height .2s ease' : 'none',
+              overflow: 'hidden',
+            }}
+            data-testid="pull-to-refresh-indicator"
+          >
+            <SuryaLogo className="w-8 h-8 animate-spin-slow" />
+          </div>
+        )}
         <div className="max-w-6xl mx-auto">
           {/* Developing Stories Banner — always present: active state or a
               calm "nothing right now" state, never silently absent */}

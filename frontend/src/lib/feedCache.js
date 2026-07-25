@@ -16,3 +16,25 @@ export function setFeedCache(patch) {
 export function clearFeedCache() {
   feedCache = null;
 }
+
+// Tracks the newest article_id the user has actually loaded into the feed, so
+// BottomNav can poll the backend independently and light up a dot the moment
+// a newer top article shows up -- without needing FeedPage to be mounted.
+let latestSeenArticleId = null;
+let newArticlesAvailable = false;
+
+export function getLatestSeenArticleId() {
+  return latestSeenArticleId;
+}
+
+export function setLatestSeenArticleId(id) {
+  latestSeenArticleId = id;
+}
+
+export function getNewArticlesAvailable() {
+  return newArticlesAvailable;
+}
+
+export function setNewArticlesAvailable(value) {
+  newArticlesAvailable = value;
+}
