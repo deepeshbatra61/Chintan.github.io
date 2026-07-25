@@ -3,14 +3,70 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import axios from "axios";
 import {
-  Bell, User, Menu, Sun, CloudSun, Moon, Eye, Radio
+  Bell, User, Menu, Sun, CloudSun, Moon, Eye, Radio,
+  Bookmark, Share2, ThumbsUp, ThumbsDown, Sunrise
 } from "lucide-react";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { Share } from "@capacitor/share";
+import { toast } from "sonner";
 import { useAuth, SuryaLogo } from "../App";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
 import { getFeedCache, setFeedCache } from "../lib/feedCache";
+
+const SHARE_BASE = "https://chintan.news";
+
+const triggerHaptic = async (style = ImpactStyle.Light) => {
+  if (window.Capacitor?.isNativePlatform()) {
+    try { await Haptics.impact({ style }); } catch {}
+  }
+};
+
+// Long-press (mobile) / long-mousedown (desktop preview) detector. Cancels on
+// meaningful finger/cursor movement so it never fires mid-scroll, and never
+// fires twice for the same press.
+function useLongPress(onLongPress, threshold = 500, moveThreshold = 10) {
+  const timerRef = useRef(null);
+  const startPos = useRef({ x: 0, y: 0 });
+  const firedRef = useRef(false);
+
+  const clear = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+
+  const start = (e, payload) => {
+    firedRef.current = false;
+    const point = e.touches ? e.touches[0] : e;
+    startPos.current = { x: point.clientX, y: point.clientY };
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true;
+      onLongPress(payload);
+    }, threshold);
+  };
+
+  const move = (e) => {
+    if (!timerRef.current) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dx = Math.abs(point.clientX - startPos.current.x);
+    const dy = Math.abs(point.clientY - startPos.current.y);
+    if (dx > moveThreshold || dy > moveThreshold) clear();
+  };
+
+  const bind = (payload) => ({
+    onTouchStart: (e) => start(e, payload),
+    onTouchMove: move,
+    onTouchEnd: clear,
+    onMouseDown: (e) => start(e, payload),
+    onMouseMove: move,
+    onMouseUp: clear,
+    onMouseLeave: clear,
+  });
+
+  return { bind, didFire: () => firedRef.current };
+}
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -75,10 +131,82 @@ const FeedPage = () => {
   const [page, setPage] = useState(() => cached?.page ?? 1);
   const [hasMore, setHasMore] = useState(() => cached?.hasMore ?? true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [actionSheetArticle, setActionSheetArticle] = useState(null);
   const sentinelRef = useRef(null);
 
   const PAGE_LIMIT = 20;
   const categories = ["All", "Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
+
+  const longPress = useLongPress((article) => {
+    triggerHaptic(ImpactStyle.Medium);
+    setActionSheetArticle(article);
+  });
+
+  const closeActionSheet = () => setActionSheetArticle(null);
+
+  const handleBookmark = async (article) => {
+    try {
+      await axios.post(`${API}/bookmarks/${article.article_id}`, {}, { withCredentials: true });
+      toast.success("Saved to bookmarks");
+    } catch (error) {
+      if (error?.response?.status === 400) {
+        toast.info("Already in your bookmarks");
+      } else {
+        console.error("Bookmark error:", error);
+        toast.error("Couldn't save — try again");
+      }
+    }
+    closeActionSheet();
+  };
+
+  const handleShare = async (article) => {
+    const category = article.category ? `${article.category} · ` : "";
+    try {
+      await Share.share({
+        title: article.title,
+        text: `${article.title}\n\n${category}Read it on Chintan — don't just consume, contemplate.`,
+        url: `${SHARE_BASE}/article/${article.article_id}`,
+        dialogTitle: "Share this story",
+      });
+    } catch {
+      // user dismissed or share not available — no feedback needed
+    }
+    closeActionSheet();
+  };
+
+  // "More/less like this" reuses the same like/dislike endpoint and scoring
+  // that already powers feed personalization -- a deliberate, subtle nudge to
+  // ranking (never a hard filter), consistent with how likes/dislikes already
+  // behave everywhere else in the app.
+  const handleMoreLikeThis = async (article) => {
+    try {
+      await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "like" }, { withCredentials: true });
+      toast.success(`Showing more ${article.category || "stories like this"}`);
+    } catch (error) {
+      console.error("More-like-this error:", error);
+    }
+    closeActionSheet();
+  };
+
+  const handleLessLikeThis = async (article) => {
+    try {
+      await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "dislike" }, { withCredentials: true });
+      toast.success(`Showing less ${article.category || "stories like this"}`);
+    } catch (error) {
+      console.error("Less-like-this error:", error);
+    }
+    closeActionSheet();
+  };
+
+  const handleSaveForBrief = async (article) => {
+    try {
+      await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "save_for_brief" }, { withCredentials: true });
+      toast.success("We'll bring this back in your next Brief");
+    } catch (error) {
+      console.error("Save-for-brief error:", error);
+    }
+    closeActionSheet();
+  };
 
   const fetchArticles = useCallback(async (category = null, pageNum = 1, append = false) => {
     try {
@@ -458,7 +586,11 @@ const FeedPage = () => {
                 <motion.article
                   key={article.article_id}
                   className="news-card cursor-pointer"
-                  onClick={() => navigate(`/article/${article.article_id}`)}
+                  onClick={() => {
+                    if (longPress.didFire()) return; // long-press opened the action sheet, not navigation
+                    navigate(`/article/${article.article_id}`);
+                  }}
+                  {...longPress.bind(article)}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(index, 8) * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
@@ -535,6 +667,58 @@ const FeedPage = () => {
       </main>
 
       <BottomNav />
+
+      {/* Long-press quick actions — headline + photo is enough signal to
+          decide these, no need to open the article first. */}
+      <Sheet open={!!actionSheetArticle} onOpenChange={(open) => !open && closeActionSheet()}>
+        <SheetContent side="bottom" className="bg-[#0A0A0A] border-white/10 rounded-t-2xl">
+          {actionSheetArticle && (
+            <div className="pt-2 pb-2">
+              <p className="font-serif text-sm text-white/90 line-clamp-2 mb-5 pr-8">
+                {actionSheetArticle.title}
+              </p>
+              <div className="flex flex-col gap-1">
+                <button
+                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  onClick={() => handleBookmark(actionSheetArticle)}
+                >
+                  <Bookmark className="w-5 h-5 text-gray-400" />
+                  <span>Add to bookmarks</span>
+                </button>
+                <button
+                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  onClick={() => handleShare(actionSheetArticle)}
+                >
+                  <Share2 className="w-5 h-5 text-gray-400" />
+                  <span>Share</span>
+                </button>
+                <button
+                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  onClick={() => handleSaveForBrief(actionSheetArticle)}
+                >
+                  <Sunrise className="w-5 h-5 text-gray-400" />
+                  <span>Save for my next Brief</span>
+                </button>
+                <div className="h-px bg-white/10 my-1" />
+                <button
+                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  onClick={() => handleMoreLikeThis(actionSheetArticle)}
+                >
+                  <ThumbsUp className="w-5 h-5 text-gray-400" />
+                  <span>Show more like this</span>
+                </button>
+                <button
+                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  onClick={() => handleLessLikeThis(actionSheetArticle)}
+                >
+                  <ThumbsDown className="w-5 h-5 text-gray-400" />
+                  <span>Show less like this</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Notifications Dialog */}
       <Dialog open={showNotifications} onOpenChange={setShowNotifications}>
