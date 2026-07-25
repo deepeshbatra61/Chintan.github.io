@@ -84,7 +84,7 @@ def _int_env(name: str, default: int) -> int:
 # For a low-cost testing week set: INGEST_FETCH_LIMIT=15, INGEST_SUMMARIZE_LIMIT=8,
 # INGEST_SCHEDULE_ENABLED=false, AI_MODEL=sonnet. Volume is the real cost lever;
 # the model is a rounding error at single-tester volume.
-INGEST_FETCH_LIMIT = _int_env("INGEST_FETCH_LIMIT", 200)         # max articles stored per cycle
+INGEST_FETCH_LIMIT = _int_env("INGEST_FETCH_LIMIT", 400)         # max articles stored per cycle (doubled)
 INGEST_SUMMARIZE_LIMIT = _int_env("INGEST_SUMMARIZE_LIMIT", 30)  # max LLM summaries per cycle
 INGEST_SCHEDULE_ENABLED = os.environ.get("INGEST_SCHEDULE_ENABLED", "true").lower() != "false"
 
@@ -912,11 +912,10 @@ async def _run_cleanup_cycle() -> None:
 
 
 async def _background_news_ingestor() -> None:
-    """IST time-based scheduler: ingest at 6 AM, 1 PM, 8 PM; cleanup at 3 AM."""
+    """Hourly ingest schedule (IST-aware); daily cleanup at 3 AM IST runs
+    alongside that hour's ingest rather than replacing it."""
     IST = pytz.timezone("Asia/Kolkata")
-    INGEST_HOURS  = [6, 13, 20]
-    CLEANUP_HOUR  = 3
-    ALL_RUN_HOURS = sorted(INGEST_HOURS + [CLEANUP_HOUR])  # [3, 6, 13, 20]
+    CLEANUP_HOUR = 3
 
     # Run one ingest immediately on startup to populate fresh content
     try:
@@ -934,27 +933,16 @@ async def _background_news_ingestor() -> None:
     while True:
         try:
             now = datetime.now(IST)
-            next_hour = next((h for h in ALL_RUN_HOURS if now.hour < h), None)
+            next_run = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            sleep_seconds = (next_run - now).total_seconds()
 
-            if next_hour is None:
-                # Past 8 PM — sleep until 3 AM tomorrow
-                tomorrow = (now + timedelta(days=1)).replace(
-                    hour=3, minute=0, second=0, microsecond=0
-                )
-                sleep_seconds = (tomorrow - now).total_seconds()
-                next_hour = 3
-            else:
-                next_run = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
-                sleep_seconds = (next_run - now).total_seconds()
-
-            logger.info(f"Ingestor: next run at {next_hour:02d}:00 IST in {sleep_seconds/3600:.1f}h")
+            logger.info(f"Ingestor: next run at {next_run.strftime('%H:%M')} IST in {sleep_seconds/3600:.1f}h")
             await asyncio.sleep(sleep_seconds)
 
             now_run = datetime.now(IST)
             if now_run.hour == CLEANUP_HOUR:
                 await _run_cleanup_cycle()
-            else:
-                await _run_ingest_cycle()
+            await _run_ingest_cycle()
 
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
@@ -2842,53 +2830,60 @@ async def fetch_from_newsapi() -> list:
             "Adani OR Tata OR Reliance OR startup OR budget"
             ")"
         )
-        try:
-            resp = await client.get(
-                "https://newsapi.org/v2/everything",
-                params={
-                    "q": _q,
-                    "language": "en",
-                    "sortBy": "publishedAt",
-                    "pageSize": 100,
-                    "apiKey": NEWSAPI_KEY,
-                },
-            )
-            logger.info(f"NewsAPI everything?q=India status={resp.status_code}")
-            if resp.status_code == 200:
-                articles_returned = resp.json().get("articles", [])
-                logger.info(f"NewsAPI everything?q=India returned {len(articles_returned)} articles")
-                for a in articles_returned:
-                    url = a.get("url") or ""
-                    if url and url not in seen:
-                        seen[url] = a
-            else:
-                logger.warning(f"NewsAPI everything?q=India {resp.status_code}: {resp.text[:300]}")
-        except Exception as e:
-            logger.error(f"NewsAPI everything?q=India error: {e}")
+        # NewsAPI caps pageSize at 100 per request, so doubling volume per
+        # logical query means pulling a second page (101-200), not a bigger
+        # pageSize. Costs one extra request per query per cycle.
+        for page in (1, 2):
+            try:
+                resp = await client.get(
+                    "https://newsapi.org/v2/everything",
+                    params={
+                        "q": _q,
+                        "language": "en",
+                        "sortBy": "publishedAt",
+                        "pageSize": 100,
+                        "page": page,
+                        "apiKey": NEWSAPI_KEY,
+                    },
+                )
+                logger.info(f"NewsAPI everything?q=India page={page} status={resp.status_code}")
+                if resp.status_code == 200:
+                    articles_returned = resp.json().get("articles", [])
+                    logger.info(f"NewsAPI everything?q=India page={page} returned {len(articles_returned)} articles")
+                    for a in articles_returned:
+                        url = a.get("url") or ""
+                        if url and url not in seen:
+                            seen[url] = a
+                else:
+                    logger.warning(f"NewsAPI everything?q=India page={page} {resp.status_code}: {resp.text[:300]}")
+            except Exception as e:
+                logger.error(f"NewsAPI everything?q=India page={page} error: {e}")
 
         # 2. Latest from major Indian news domains
-        try:
-            resp = await client.get(
-                "https://newsapi.org/v2/everything",
-                params={
-                    "domains": "thehindu.com,livemint.com,indianexpress.com,ndtv.com,hindustantimes.com,timesofindia.indiatimes.com,business-standard.com,financialexpress.com,scroll.in,thewire.in,deccanherald.com,telegraphindia.com,theprint.in,firstpost.com,outlookindia.com",
-                    "sortBy": "publishedAt",
-                    "pageSize": 100,
-                    "apiKey": NEWSAPI_KEY,
-                },
-            )
-            logger.info(f"NewsAPI everything?domains=indian-press status={resp.status_code}")
-            if resp.status_code == 200:
-                articles_returned = resp.json().get("articles", [])
-                logger.info(f"NewsAPI everything?domains returned {len(articles_returned)} articles")
-                for a in articles_returned:
-                    url = a.get("url") or ""
-                    if url and url not in seen:
-                        seen[url] = a
-            else:
-                logger.warning(f"NewsAPI everything?domains {resp.status_code}: {resp.text[:300]}")
-        except Exception as e:
-            logger.error(f"NewsAPI everything?domains error: {e}")
+        for page in (1, 2):
+            try:
+                resp = await client.get(
+                    "https://newsapi.org/v2/everything",
+                    params={
+                        "domains": "thehindu.com,livemint.com,indianexpress.com,ndtv.com,hindustantimes.com,timesofindia.indiatimes.com,business-standard.com,financialexpress.com,scroll.in,thewire.in,deccanherald.com,telegraphindia.com,theprint.in,firstpost.com,outlookindia.com",
+                        "sortBy": "publishedAt",
+                        "pageSize": 100,
+                        "page": page,
+                        "apiKey": NEWSAPI_KEY,
+                    },
+                )
+                logger.info(f"NewsAPI everything?domains=indian-press page={page} status={resp.status_code}")
+                if resp.status_code == 200:
+                    articles_returned = resp.json().get("articles", [])
+                    logger.info(f"NewsAPI everything?domains page={page} returned {len(articles_returned)} articles")
+                    for a in articles_returned:
+                        url = a.get("url") or ""
+                        if url and url not in seen:
+                            seen[url] = a
+                else:
+                    logger.warning(f"NewsAPI everything?domains page={page} {resp.status_code}: {resp.text[:300]}")
+            except Exception as e:
+                logger.error(f"NewsAPI everything?domains page={page} error: {e}")
 
     results = []
     for url, a in list(seen.items())[:INGEST_FETCH_LIMIT]:
@@ -4230,14 +4225,20 @@ async def admin_reset_summarization(body: dict, admin: dict = Depends(require_ad
 
 # ===================== DEVELOPING STORIES =====================
 
+WAVE_FEED_BAR_STALE_DAYS = 60  # quiet this long (~2 months) => tuck into /developing, off the feed bar
+
 @api_router.get("/developing-stories")
-async def get_developing_stories_list(user: dict = Depends(require_auth)):
+async def get_developing_stories_list(user: dict = Depends(require_auth), feed_bar: bool = False):
     """Active developing stories, filtered by rules matched to how each KIND
     actually behaves — a single volume threshold doesn't fit all of them:
-    - wave (long-running conflicts/situations): ALWAYS shown regardless of
-      recent volume — a quiet week is "watching," not "gone." Carries an
-      `intensity` field (surging/simmering/watching) instead of being
-      filtered by freshness.
+    - wave (long-running conflicts/situations): ALWAYS shown on the full
+      /developing page regardless of recent volume — a quiet week is
+      "watching," not "gone." Carries an `intensity` field
+      (surging/simmering/watching) instead of being filtered by freshness.
+      The compact feed-page bar (`feed_bar=true`) is real estate-constrained
+      and meant to surface what's actually moving right now, so a wave gone
+      quiet for WAVE_FEED_BAR_STALE_DAYS is tucked away there — still fully
+      visible on /developing, just not competing for a slot on the feed.
     - scheduled (parliament sessions, elections, fixtures): the date window
       IS the freshness signal, so show from the first matched article, no
       minimum count or article-recency check needed.
@@ -4292,11 +4293,14 @@ async def get_developing_stories_list(user: dict = Depends(require_auth)):
             # weeks, which is exactly what pushed an inactive wave topic
             # above a genuinely fresh scout story in the feed.
             effective_updated = (latest_article or {}).get("published_at") or story.get("last_updated")
+            intensity = _wave_intensity(wave_articles)
+            if feed_bar and intensity["state"] == "watching" and intensity["quiet_days"] >= WAVE_FEED_BAR_STALE_DAYS:
+                continue  # quiet for months — still on /developing, just not the feed bar
             result.append({
                 "story_id": story["story_id"], "title": story["title"], "theme": story["theme"],
                 "kind": kind, "article_count": len(article_ids),
                 "last_updated": effective_updated, "latest_article": latest_article,
-                "intensity": _wave_intensity(wave_articles),
+                "intensity": intensity,
             })
             continue
 

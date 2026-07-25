@@ -97,7 +97,7 @@ const FeedPage = () => {
 
   const fetchDevelopingStories = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/developing-stories`, { withCredentials: true });
+      const response = await axios.get(`${API}/developing-stories?feed_bar=true`, { withCredentials: true });
       setDevelopingStories(response.data);
       // An empty array here is a legitimate state (no cluster currently clears
       // the auto-detection bar) — log it distinctly from a fetch failure so an

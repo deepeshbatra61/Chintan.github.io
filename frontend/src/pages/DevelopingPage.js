@@ -13,7 +13,10 @@ function formatRelativeTime(isoString) {
   const diff = (Date.now() - new Date(isoString).getTime()) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  // Real developing-story updates are typically 1-2 days old, so switching to
+  // "1d ago" right at 24h flattened almost everything to the same label.
+  // Stay in hours out to 72h for real precision, then fall back to days.
+  if (diff < 86400 * 3) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
