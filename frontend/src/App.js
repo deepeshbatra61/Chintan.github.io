@@ -7,6 +7,7 @@ import { Browser } from "@capacitor/browser";
 import "./App.css";
 import WelcomeSplash from "./components/WelcomeSplash";
 import { loadToken, getCachedToken, getRefreshToken, setTokens, clearToken } from "./lib/tokenStore";
+import { clearFeedCache } from "./lib/feedCache";
 
 const REFRESH_URL = "https://chintangithubio-production.up.railway.app/api/auth/refresh";
 
@@ -131,6 +132,7 @@ const AuthProvider = ({ children }) => {
       console.error("Logout error:", error);
     }
     await clearToken();
+    clearFeedCache();
     setUser(null);
   };
 

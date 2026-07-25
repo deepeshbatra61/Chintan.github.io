@@ -856,16 +856,26 @@ async def _run_ingest_cycle_body() -> None:
             # get a real multi-term keyword set next cycle if it's
             # re-promoted, or retire via the normal staleness rule if not.
             # scheduled/scout keyword lists are already hand-curated or
-            # LLM-scoped tightly, so one match is enough for those.
+            # LLM-scoped tightly, so one match is enough for those. "wave"
+            # topics run for weeks/months and lean on broad single-word
+            # keywords (country/leader/capital names like "islamabad" or
+            # "tehran") that, on their own, will eventually collide with an
+            # unrelated story — so treat them like "auto" and require 2 hits.
             if kind == "auto" and len(keywords) < 2:
                 continue
-            min_matches = 2 if kind == "auto" else 1
+            min_matches = 2 if kind in ("auto", "wave") else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
                     article.get("title", "") + " " + article.get("description", "")
                 ).lower()
-                hits = sum(1 for kw in keywords if kw.lower() in haystack)
+                # Word-boundary match, not plain substring — a bare "in"
+                # check let short keywords match inside unrelated words
+                # (e.g. "loc" inside "location"/"local", "pok" inside
+                # "spoke"/"spokesperson"), which is how unrelated domestic,
+                # business, and sports stories got tagged onto conflict
+                # wave topics like india-pakistan-tensions.
+                hits = sum(1 for kw in keywords if _kw_pattern(kw).search(haystack))
                 if hits >= min_matches:
                     matched_ids.append(article["article_id"])
             if matched_ids:
@@ -882,6 +892,43 @@ async def _run_ingest_cycle_body() -> None:
                     ).isoformat()
                 await db.developing_stories.update_one({"story_id": topic["story_id"]}, update)
                 logger.info(f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}")
+
+    # ── 6.5. Reconcile wave-topic tags against the current (stricter) matcher.
+    #       Wave stories accumulate article_ids over months via $addToSet,
+    #       which never removes anything — so articles mistagged under an
+    #       older, looser matching rule (e.g. the substring-match bug that let
+    #       "loc"/"pok" match inside "location"/"spokesperson") stay attached
+    #       forever unless something re-checks them. Re-run every cycle so a
+    #       future matching-rule change self-heals instead of needing another
+    #       one-off manual cleanup. Scoped to "wave" only: auto/scheduled/scout
+    #       stories retire on staleness anyway, so a stale mismatch there ages
+    #       out naturally; wave stories are the only kind that never expire.
+    wave_topics_active = await db.developing_stories.find(
+        {"is_active": True, "kind": "wave"}, {"_id": 0, "story_id": 1, "keywords": 1}
+    ).to_list(100)
+    for topic in wave_topics_active:
+        keywords = topic.get("keywords", [])
+        if not keywords:
+            continue
+        story_doc = await db.developing_stories.find_one({"story_id": topic["story_id"]}, {"_id": 0, "article_ids": 1})
+        article_ids = (story_doc or {}).get("article_ids", [])
+        if not article_ids:
+            continue
+        tagged_articles = await db.articles.find(
+            {"article_id": {"$in": article_ids}}, {"_id": 0, "article_id": 1, "title": 1, "description": 1}
+        ).to_list(len(article_ids))
+        still_valid = []
+        for article in tagged_articles:
+            haystack = (article.get("title", "") + " " + article.get("description", "")).lower()
+            hits = sum(1 for kw in keywords if _kw_pattern(kw).search(haystack))
+            if hits >= 2:
+                still_valid.append(article["article_id"])
+        dropped = [aid for aid in article_ids if aid not in still_valid]
+        if dropped:
+            await db.developing_stories.update_one(
+                {"story_id": topic["story_id"]}, {"$set": {"article_ids": still_valid}}
+            )
+            logger.info(f"Wave reconcile: dropped {len(dropped)} mistagged article(s) from {topic['story_id']}")
 
     # ── 7. Scout pass — catch pre-volume candidates the tagging above and the
     #       clustering below would both miss (see _scout_developing_candidates) ─
@@ -1925,7 +1972,7 @@ async def google_auth(request: Request, response: Response):
     app_access, app_refresh = await _issue_tokens(user_id)
     _set_session_cookie(response, app_access)
 
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
@@ -2221,7 +2268,10 @@ async def update_interests(interests_update: InterestsUpdate, user: dict = Depen
         }}
     )
     
-    updated_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    updated_user = await db.users.find_one(
+        {"user_id": user["user_id"]},
+        {"_id": 0, "password_hash": 0, "password_salt": 0}
+    )
     return updated_user
 
 # The categories a reader can actually filter/receive (matches the feed + interests).

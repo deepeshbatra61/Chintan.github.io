@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
+import { getFeedCache, setFeedCache } from "../lib/feedCache";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -62,16 +63,17 @@ const FeedPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const R = useReducedMotion();
-  const [articles, setArticles] = useState([]);
-  const [developingStories, setDevelopingStories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getFeedCache();
+  const [articles, setArticles] = useState(() => cached?.articles ?? []);
+  const [developingStories, setDevelopingStories] = useState(() => cached?.developingStories ?? []);
+  const [loading, setLoading] = useState(() => !cached);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategory, setActiveCategory] = useState(() => cached?.activeCategory ?? null);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [notifications, setNotifications] = useState(() => cached?.notifications ?? []);
+  const [unreadCount, setUnreadCount] = useState(() => cached?.unreadCount ?? 0);
+  const [page, setPage] = useState(() => cached?.page ?? 1);
+  const [hasMore, setHasMore] = useState(() => cached?.hasMore ?? true);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef(null);
 
@@ -85,11 +87,18 @@ const FeedPage = () => {
       const response = await axios.get(`${API}/articles?${params}`, { withCredentials: true });
       const data = response.data;
       if (append) {
-        setArticles(prev => [...prev, ...data]);
+        setArticles(prev => {
+          const next = [...prev, ...data];
+          setFeedCache({ articles: next, page: pageNum });
+          return next;
+        });
       } else {
         setArticles(data);
+        setFeedCache({ articles: data, page: pageNum, activeCategory: category ?? null });
       }
-      setHasMore(data.length === PAGE_LIMIT);
+      const more = data.length === PAGE_LIMIT;
+      setHasMore(more);
+      setFeedCache({ hasMore: more });
     } catch (error) {
       console.error("Error fetching articles:", error);
     }
@@ -99,6 +108,7 @@ const FeedPage = () => {
     try {
       const response = await axios.get(`${API}/developing-stories?feed_bar=true`, { withCredentials: true });
       setDevelopingStories(response.data);
+      setFeedCache({ developingStories: response.data });
       // An empty array here is a legitimate state (no cluster currently clears
       // the auto-detection bar) — log it distinctly from a fetch failure so an
       // empty banner is never mistaken for a broken one.
@@ -113,14 +123,24 @@ const FeedPage = () => {
   const fetchNotifications = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/notifications`, { withCredentials: true });
-      setNotifications(response.data.notifications || []);
-      setUnreadCount(response.data.unread_count || 0);
+      const notifs = response.data.notifications || [];
+      const unread = response.data.unread_count || 0;
+      setNotifications(notifs);
+      setUnreadCount(unread);
+      setFeedCache({ notifications: notifs, unreadCount: unread });
     } catch (error) {
       console.error("Error fetching notifications:", error);
     }
   }, []);
 
   useEffect(() => {
+    // Already have a cached feed from a prior mount this session (e.g.
+    // returning from an article) — show it as-is instead of refetching, so
+    // navigating back never reshuffles or reloads what the user was reading.
+    if (getFeedCache()) {
+      setLoading(false);
+      return;
+    }
     const loadData = async () => {
       setLoading(true);
       await Promise.all([fetchArticles(), fetchDevelopingStories(), fetchNotifications()]);
@@ -182,6 +202,7 @@ const FeedPage = () => {
     try {
       await axios.post(`${API}/notifications/read`, {}, { withCredentials: true });
       setUnreadCount(0);
+      setFeedCache({ unreadCount: 0 });
     } catch (error) {
       console.error("Error marking notifications read:", error);
     }
