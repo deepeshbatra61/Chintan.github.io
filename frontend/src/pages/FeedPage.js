@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import axios from "axios";
 import {
   Bell, User, Menu, Sun, CloudSun, Moon, Eye, Radio,
-  Bookmark, Share2, ThumbsUp, ThumbsDown, Sunrise
+  Bookmark, Share2, ThumbsUp, ThumbsDown, Sunrise, Mail
 } from "lucide-react";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Share } from "@capacitor/share";
@@ -518,6 +518,16 @@ const FeedPage = () => {
                         <span style={{ color: "#6b625a", fontSize: "14px" }}>No developing story right now</span>
                       </div>
                     )}
+
+                    <div className="h-px bg-white/10 my-4" />
+                    <button
+                      onClick={() => { navigate("/contact"); setSidebarOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
+                      data-testid="contact-sidebar-nav"
+                    >
+                      <Mail className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Contact us</span>
+                    </button>
                   </div>
                 </div>
 

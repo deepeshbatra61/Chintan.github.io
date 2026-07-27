@@ -73,6 +73,7 @@ import ArticlePage from "./pages/ArticlePage";
 import BriefPage from "./pages/BriefPage";
 import BookmarksPage from "./pages/BookmarksPage";
 import ProfilePage from "./pages/ProfilePage";
+import ContactPage from "./pages/ContactPage";
 import AskAIPage from "./pages/AskAIPage";
 import DevelopingPage from "./pages/DevelopingPage";
 import DevelopingStoryDetail from "./pages/DevelopingStoryDetail";
@@ -433,6 +434,11 @@ function AppRouter() {
       <Route path="/ask-ai/:articleId" element={
         <ProtectedRoute>
           <AskAIPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/contact" element={
+        <ProtectedRoute>
+          <ContactPage />
         </ProtectedRoute>
       } />
       <Route path="/" element={<Navigate to="/feed" replace />} />

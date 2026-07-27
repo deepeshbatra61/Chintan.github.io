@@ -10,8 +10,9 @@ import {
   Home, Bookmark, BookmarkCheck, Share2, MessageCircle,
   BarChart2, Sparkles, BrainCircuit,
   ThumbsUp, ThumbsDown, Send, Clock, Loader2,
-  ChevronRight, MoreHorizontal
+  ChevronRight, MoreHorizontal, ArrowUpRight
 } from "lucide-react";
+import { Browser } from "@capacitor/browser";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -34,6 +35,100 @@ const triggerHaptic = (type = 'light') => {
     };
     navigator.vibrate(patterns[type] || patterns.light);
   }
+};
+
+const timeAgo = (iso) => {
+  if (!iso) return null;
+  const then = new Date(iso);
+  if (isNaN(then.getTime())) return null;
+  const mins = Math.floor((Date.now() - then.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
+const openSource = async (url) => {
+  if (!url) return;
+  triggerHaptic('light');
+  if (window.Capacitor?.isNativePlatform()) {
+    try { await Browser.open({ url }); return; } catch { /* fall through */ }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
+// ── The Dawn line ───────────────────────────────────────────────────────────
+// Chintan gives you a take on a story, never the story itself, so every article
+// needs an honest handoff back to whoever actually reported it. Drawn as a sun
+// cresting a horizon: the story rose from there. Reuses the red-glow hairline
+// the feed sidebar already uses, so it reads as Chintan rather than as a
+// generic "read more" button.
+//
+//            ·   ·   ·        <- motes drifting up
+//     ───────────◉───────────  <- horizon, Surya cresting it
+//      ORIGINALLY REPORTED BY
+//        The Times of India
+//      Dharmendra Pradhan · 4h
+//       Read it at the source ↗
+//
+// Also carries the source attribution Google Play's News & Magazines policy
+// requires on every article, which is why it renders even when `url` is absent
+// (older rows) — minus the tap target, so a dead link is never offered.
+const SourceOrigin = ({ article }) => {
+  const publisher = article.source || article.domain || article.publisher;
+  if (!publisher) return null;
+
+  const url = article.url;
+  const byline = [article.author, timeAgo(article.published_at)].filter(Boolean).join(' · ');
+
+  const body = (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginBottom: '11px' }}>
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            animate={{ opacity: [0.15, 0.5, 0.15], y: [0, -3, 0] }}
+            transition={{ duration: 3.2, repeat: Infinity, delay: i * 0.45, ease: 'easeInOut' }}
+            style={{ width: '2px', height: '2px', borderRadius: '50%', background: '#DC6B5A' }}
+          />
+        ))}
+      </div>
+      <div style={{ position: 'relative', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(220,38,38,0.55) 50%, transparent)', marginBottom: '21px' }}>
+        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', background: '#0A0A0A', padding: '0 9px' }}>
+          <SuryaLogo className="w-[22px] h-[22px]" />
+        </div>
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6E6862', textTransform: 'uppercase', marginBottom: '8px' }}>
+          Originally reported by
+        </div>
+        <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: '#F2EEE9', lineHeight: 1.25 }}>
+          {publisher}
+        </div>
+        {byline && <div style={{ fontSize: '12px', color: '#82828A', marginTop: '6px' }}>{byline}</div>}
+        {url && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '15px', color: '#DC6B5A', fontSize: '13.5px', fontFamily: "'Manrope', sans-serif" }}>
+            Read it at the source <ArrowUpRight className="w-4 h-4" />
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  if (!url) {
+    return <div style={{ padding: '28px 0 8px' }} data-testid="source-origin">{body}</div>;
+  }
+  return (
+    <motion.button
+      onClick={() => openSource(url)}
+      whileTap={{ scale: 0.985 }}
+      data-testid="source-origin"
+      style={{ display: 'block', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '28px 0 8px' }}
+    >
+      {body}
+    </motion.button>
+  );
 };
 
 // Deeper expandable layers below the Gist. The contemplation model produces
@@ -391,6 +486,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 {article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
                 {article.is_developing && !article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
                 {(article.source || article.domain || article.publisher) && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.source || article.domain || article.publisher}</span></>}
+                {article.author && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.author}</span></>}
               </div>
               <h1 style={{ fontSize: 'clamp(1.5rem, 5.5vw, 1.95rem)', fontWeight: 600, lineHeight: 1.18, color: '#F2EEE9', margin: '0 0 16px', fontFamily: "'Playfair Display', 'Georgia', serif" }}>
                 {article.title}
@@ -412,6 +508,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                   ))}
                 </div>
               )}
+              <SourceOrigin article={article} />
               <div style={{ height: '20px' }} />
             </div>
           </motion.div>
@@ -443,6 +540,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             )) : gistText ? (
               <p style={{ color: '#B6AFA6', fontFamily: "'Manrope', sans-serif", fontSize: '15px', lineHeight: 1.65 }}>{gistText}</p>
             ) : null}
+            <SourceOrigin article={article} />
             <div style={{ height: '8px' }} />
           </motion.div>
         ) : (
@@ -470,6 +568,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                     {idx === 0 ? p.slice(1) : p}
                   </p>
                 ))}
+                <SourceOrigin article={article} />
                 <div style={{ height: '8px' }} />
               </>
             ) : (

@@ -262,6 +262,16 @@ const LoginPage = () => {
           </motion.button>
         </motion.div>
 
+        {/* Contact route sits behind auth, so the address is repeated here as
+            plain text: anyone who cannot get past this screen (locked out, or
+            a store reviewer whose test login fails) can still reach a human. */}
+        <p style={{ textAlign: 'center', marginTop: '26px', fontSize: '11.5px', color: '#4A453F' }}>
+          Questions?{' '}
+          <a href="mailto:team@chintan.news" style={{ color: '#6E6862', textDecoration: 'underline' }} data-testid="login-contact-email">
+            team@chintan.news
+          </a>
+        </p>
+
       </div>
     </div>
   );

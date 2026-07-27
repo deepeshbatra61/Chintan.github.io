@@ -1434,6 +1434,11 @@ class Article(BaseModel):
     subcategory: Optional[str] = None
     image_url: str
     source: str
+    # Publisher attribution. `url` points at the publisher's own article and is
+    # surfaced in the app on every story -- Google Play's News & Magazines policy
+    # requires an original source on all articles, so this is not optional data
+    # even though older rows may predate it.
+    url: Optional[str] = None
     author: Optional[str] = None
     published_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_developing: bool = False

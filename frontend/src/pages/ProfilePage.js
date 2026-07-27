@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight, ChevronDown,
-  Edit3, Check, Loader2, Sparkles, Flame, BookOpen
+  Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -264,6 +264,14 @@ const ProfilePage = () => {
             <div style={{ flex: 1, textAlign: "left" }}>
               <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Poll history</div>
               <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Where you stood</div>
+            </div>
+            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+          </button>
+          <button onClick={() => navigate("/contact")} data-testid="contact-nav-btn" style={actionStyle}>
+            <Mail className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Contact us</div>
+              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Reach the team behind Chintan</div>
             </div>
             <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
           </button>
