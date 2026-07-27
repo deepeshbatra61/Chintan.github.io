@@ -214,6 +214,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [commentReactions, setCommentReactions] = useState({}); // { [commentId]: 'agree'|'disagree'|null }
   const [showComments, setShowComments] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [openCommentMenu, setOpenCommentMenu] = useState(null); // comment_id, or null
+  const { user: currentUser } = useAuth();
   const [showPoll, setShowPoll] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [commentSubmitState, setCommentSubmitState] = useState('idle'); // 'idle'|'loading'|'success'
@@ -391,6 +393,29 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       setCommentReactions(prev => ({ ...prev, [commentId]: r.data.reaction }));
     } catch {
       toast.error("Couldn't update reaction");
+    }
+  };
+
+  const handleReportComment = async (commentId) => {
+    try {
+      const r = await axios.post(`${API}/comments/${commentId}/report`, {}, { withCredentials: true });
+      toast.success(r.data.already_reported ? "Already reported" : "Reported — thanks for flagging it");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Couldn't report this comment");
+    }
+  };
+
+  const handleBlockCommentAuthor = async (commentId) => {
+    try {
+      await axios.post(`${API}/comments/${commentId}/block-author`, {}, { withCredentials: true });
+      // Drop every comment from that same author here and now, not just this one.
+      setComments(prev => {
+        const authorId = prev.find(c => c.comment_id === commentId)?.user_id;
+        return authorId ? prev.filter(c => c.user_id !== authorId) : prev;
+      });
+      toast.success("You won't see their comments anymore");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Couldn't block this user");
     }
   };
 
@@ -699,8 +724,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           </div>
           <ScrollArea className="h-[400px]">
             <div className="space-y-4">
-              {comments.map(comment => (
-                <div key={comment.comment_id} className="p-4 rounded-lg bg-white/5">
+              {comments.map(comment => {
+                const isOwnComment = currentUser && comment.user_id === currentUser.user_id;
+                return (
+                <div key={comment.comment_id} className="p-4 rounded-lg bg-white/5" style={{ position: 'relative' }}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden">
                       {comment.user_picture ? (
@@ -711,7 +738,42 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                         </div>
                       )}
                     </div>
-                    <p className="text-white text-sm font-medium">{comment.user_name}</p>
+                    <p className="text-white text-sm font-medium flex-1">{comment.user_name}</p>
+                    {!isOwnComment && (
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={() => setOpenCommentMenu(openCommentMenu === comment.comment_id ? null : comment.comment_id)}
+                          data-testid={`comment-menu-${comment.comment_id}`}
+                          style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#6E6862' }}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                        {openCommentMenu === comment.comment_id && (
+                          <div
+                            style={{
+                              position: 'absolute', right: 0, top: '100%', marginTop: '4px', zIndex: 20,
+                              background: '#1a1917', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
+                              overflow: 'hidden', minWidth: '150px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                            }}
+                          >
+                            <button
+                              onClick={() => { setOpenCommentMenu(null); handleReportComment(comment.comment_id); }}
+                              data-testid={`report-comment-${comment.comment_id}`}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer', color: '#DEDEE4', fontSize: '13px' }}
+                            >
+                              Report comment
+                            </button>
+                            <button
+                              onClick={() => { setOpenCommentMenu(null); handleBlockCommentAuthor(comment.comment_id); }}
+                              data-testid={`block-author-${comment.comment_id}`}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', color: '#DC6B5A', fontSize: '13px' }}
+                            >
+                              Block {comment.user_name}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
                   <div className="flex items-center gap-3 pt-2 border-t border-white/5">
@@ -742,7 +804,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                     })()}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {comments.length === 0 && (
                 <p className="text-gray-500 text-center py-8">Be the first to comment!</p>
               )}

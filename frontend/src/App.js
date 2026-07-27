@@ -74,6 +74,7 @@ import BriefPage from "./pages/BriefPage";
 import BookmarksPage from "./pages/BookmarksPage";
 import ProfilePage from "./pages/ProfilePage";
 import ContactPage from "./pages/ContactPage";
+import AboutPage from "./pages/AboutPage";
 import AskAIPage from "./pages/AskAIPage";
 import DevelopingPage from "./pages/DevelopingPage";
 import DevelopingStoryDetail from "./pages/DevelopingStoryDetail";
@@ -439,6 +440,11 @@ function AppRouter() {
       <Route path="/contact" element={
         <ProtectedRoute>
           <ContactPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/about" element={
+        <ProtectedRoute>
+          <AboutPage />
         </ProtectedRoute>
       } />
       <Route path="/" element={<Navigate to="/feed" replace />} />

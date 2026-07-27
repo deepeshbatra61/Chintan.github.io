@@ -1072,6 +1072,15 @@ async def lifespan(app: FastAPI):
     await db.article_dislikes.create_index(
         [("user_id", 1), ("article_id", 1)], unique=True
     )
+    # One report per user per comment; report_comment relies on this to no-op
+    # a duplicate report instead of double-counting it.
+    await db.comment_reports.create_index(
+        [("comment_id", 1), ("user_id", 1)], unique=True
+    )
+    # get_comments filters by blocker_id on every fetch; block/unblock key on both.
+    await db.blocked_users.create_index(
+        [("blocker_id", 1), ("blocked_user_id", 1)], unique=True
+    )
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     # Session lookups run on every authenticated request — index the token.
     await db.user_sessions.create_index("session_token")
@@ -2216,6 +2225,8 @@ async def delete_account(request: Request, payload: DeleteAccountRequest):
     await db.users.delete_one({"user_id": user_id})
     await db.bookmarks.delete_many({"user_id": user_id})
     await db.comments.delete_many({"user_id": user_id})
+    await db.comment_reports.delete_many({"user_id": user_id})
+    await db.blocked_users.delete_many({"$or": [{"blocker_id": user_id}, {"blocked_user_id": user_id}]})
     await db.poll_votes.delete_many({"user_id": user_id})
     await db.refresh_tokens.delete_many({"user_id": user_id})
     await db.user_sessions.delete_many({"user_id": user_id})
@@ -3851,13 +3862,27 @@ async def vote_poll(poll_id: str, vote: PollVote, user: dict = Depends(require_a
 
 # ===================== COMMENTS ROUTES =====================
 
+# UGC moderation (Google Play requires both a report path and a way to block
+# abusive users on any app with user-generated content). Auto-hide rather than
+# a manual review queue: a comment disappears once enough distinct users flag
+# it, with no admin dashboard to build or staff.
+COMMENT_REPORT_HIDE_THRESHOLD = 3
+
 @api_router.get("/comments/{article_id}")
-async def get_comments(article_id: str, limit: int = 20, skip: int = 0):
-    """Get comments for article"""
-    comments = await db.comments.find(
-        {"article_id": article_id},
-        {"_id": 0}
-    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+async def get_comments(request: Request, article_id: str, limit: int = 20, skip: int = 0):
+    """Get comments for article, minus auto-hidden ones and anyone the viewer has blocked."""
+    query = {"article_id": article_id, "hidden": {"$ne": True}}
+
+    viewer = await get_current_user(request)
+    if viewer:
+        blocked = await db.blocked_users.find(
+            {"blocker_id": viewer["user_id"]}, {"_id": 0, "blocked_user_id": 1}
+        ).to_list(1000)
+        blocked_ids = [b["blocked_user_id"] for b in blocked]
+        if blocked_ids:
+            query["user_id"] = {"$nin": blocked_ids}
+
+    comments = await db.comments.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     return comments
 
 @api_router.post("/comments/{article_id}")
@@ -3949,6 +3974,73 @@ async def agree_comment(comment_id: str, user: dict = Depends(require_auth)):
 async def disagree_comment(comment_id: str, user: dict = Depends(require_auth)):
     """Disagree with a comment (toggles off if already disagreed, switches if agreed)."""
     return await _set_comment_reaction(comment_id, user["user_id"], "disagree")
+
+
+@api_router.post("/comments/{comment_id}/report")
+async def report_comment(comment_id: str, user: dict = Depends(require_auth)):
+    """Flag a comment as abusive. One report per user per comment; once distinct
+    reports reach COMMENT_REPORT_HIDE_THRESHOLD the comment is auto-hidden from
+    everyone's view (see get_comments), no manual moderation step required."""
+    comment = await db.comments.find_one({"comment_id": comment_id}, {"_id": 0, "user_id": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment["user_id"] == user["user_id"]:
+        raise HTTPException(status_code=400, detail="You can't report your own comment")
+
+    existing = await db.comment_reports.find_one({"comment_id": comment_id, "user_id": user["user_id"]})
+    if existing:
+        return {"reported": True, "already_reported": True}
+
+    await db.comment_reports.insert_one({
+        "comment_id": comment_id, "user_id": user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    report_count = await db.comment_reports.count_documents({"comment_id": comment_id})
+    if report_count >= COMMENT_REPORT_HIDE_THRESHOLD:
+        await db.comments.update_one({"comment_id": comment_id}, {"$set": {"hidden": True}})
+
+    return {"reported": True, "already_reported": False}
+
+
+@api_router.post("/comments/{comment_id}/block-author")
+async def block_comment_author(comment_id: str, user: dict = Depends(require_auth)):
+    """Mute a comment's author for the current viewer only (not an app-wide
+    suspension) -- their comments stop showing up in get_comments for this user
+    from now on, everywhere in the app, not just on this article."""
+    comment = await db.comments.find_one({"comment_id": comment_id}, {"_id": 0, "user_id": 1, "user_name": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    blocked_id = comment["user_id"]
+    if blocked_id == user["user_id"]:
+        raise HTTPException(status_code=400, detail="You can't block yourself")
+
+    await db.blocked_users.update_one(
+        {"blocker_id": user["user_id"], "blocked_user_id": blocked_id},
+        {"$setOnInsert": {
+            "blocker_id": user["user_id"], "blocked_user_id": blocked_id,
+            "blocked_user_name": comment.get("user_name", ""),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"blocked": True}
+
+
+@api_router.get("/users/blocked")
+async def list_blocked_users(user: dict = Depends(require_auth)):
+    """Who this user has muted, for a Profile settings screen -- blocking with
+    no way to see or undo it is a trap, not a feature."""
+    blocked = await db.blocked_users.find(
+        {"blocker_id": user["user_id"]}, {"_id": 0, "blocked_user_id": 1, "blocked_user_name": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(500)
+    return blocked
+
+
+@api_router.post("/users/blocked/{blocked_user_id}/remove")
+async def unblock_user(blocked_user_id: str, user: dict = Depends(require_auth)):
+    """Undo a mute."""
+    await db.blocked_users.delete_one({"blocker_id": user["user_id"], "blocked_user_id": blocked_user_id})
+    return {"unblocked": True}
 
 
 @api_router.get("/comments/{article_id}/my-reactions")

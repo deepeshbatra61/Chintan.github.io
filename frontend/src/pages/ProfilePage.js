@@ -5,7 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight, ChevronDown,
-  Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail
+  Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail, UserX, X, Info
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -42,6 +42,9 @@ const ProfilePage = () => {
   const [votedPolls, setVotedPolls] = useState([]);
   const [loadingPolls, setLoadingPolls] = useState(false);
   const [selectedPoll, setSelectedPoll] = useState(null);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -121,6 +124,33 @@ const ProfilePage = () => {
   const openPollsHistory = () => {
     setShowPolls(true);
     fetchVotedPolls();
+  };
+
+  const fetchBlockedUsers = useCallback(async () => {
+    setLoadingBlocked(true);
+    try {
+      const response = await axios.get(`${API}/users/blocked`, { withCredentials: true });
+      setBlockedUsers(response.data || []);
+    } catch (error) {
+      console.error("Error fetching blocked users:", error);
+    } finally {
+      setLoadingBlocked(false);
+    }
+  }, []);
+
+  const openBlockedUsers = () => {
+    setShowBlocked(true);
+    fetchBlockedUsers();
+  };
+
+  const unblockUser = async (blockedUserId) => {
+    try {
+      await axios.post(`${API}/users/blocked/${blockedUserId}/remove`, {}, { withCredentials: true });
+      setBlockedUsers((prev) => prev.filter((b) => b.blocked_user_id !== blockedUserId));
+      toast.success("Unblocked");
+    } catch {
+      toast.error("Couldn't unblock — try again");
+    }
   };
 
   const getPollStatus = (poll) => {
@@ -267,6 +297,22 @@ const ProfilePage = () => {
             </div>
             <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
           </button>
+          <button onClick={openBlockedUsers} data-testid="blocked-users-btn" style={actionStyle}>
+            <UserX className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Blocked users</div>
+              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Comments you've muted</div>
+            </div>
+            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+          </button>
+          <button onClick={() => navigate("/about")} data-testid="about-nav-btn" style={actionStyle}>
+            <Info className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>About Chintan</div>
+              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Who we are, how the app works</div>
+            </div>
+            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+          </button>
           <button onClick={() => navigate("/contact")} data-testid="contact-nav-btn" style={actionStyle}>
             <Mail className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
@@ -409,6 +455,44 @@ const ProfilePage = () => {
                 <BarChart2 className="w-12 h-12 text-gray-700 mx-auto mb-4" />
                 <p className="text-gray-500">No polls voted in yet</p>
                 <p className="text-gray-600 text-sm mt-1">Vote on polls in articles to see them here</p>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Blocked Users Dialog */}
+      <Dialog open={showBlocked} onOpenChange={setShowBlocked}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Moderation</div>
+            <DialogTitle className="flex items-center gap-2">
+              <UserX className="w-5 h-5 text-red-500" /> Blocked users
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {loadingBlocked ? (
+              <div className="flex items-center justify-center py-12"><SuryaLogo className="w-12 h-12 animate-spin-slow" /></div>
+            ) : blockedUsers.length > 0 ? (
+              <div className="space-y-2 py-4">
+                {blockedUsers.map((b) => (
+                  <div key={b.blocked_user_id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                    <span className="text-white text-sm">{b.blocked_user_name || "Unknown user"}</span>
+                    <button
+                      onClick={() => unblockUser(b.blocked_user_id)}
+                      data-testid={`unblock-${b.blocked_user_id}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-3 h-3" /> Unblock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <UserX className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No one blocked</p>
+                <p className="text-gray-600 text-sm mt-1">You can block a commenter from the "···" menu on their comment</p>
               </div>
             )}
           </ScrollArea>
