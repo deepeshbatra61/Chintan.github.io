@@ -3071,22 +3071,21 @@ async def get_articles(
         ).skip(skip).limit(limit).to_list(limit)
 
     # ── Authenticated path: fetch candidates, score, paginate ─────────────────
+    # candidates / affinity / relevance_docs don't depend on each other -- each
+    # was a separate sequential await, paying full DB round-trip latency three
+    # times over on every single feed load. Firing them together turns three
+    # round trips into one (bounded by the slowest of the three, not the sum).
     CANDIDATE_LIMIT = max(200, skip + limit + 50)
-    candidates = await db.articles.find(query, {"_id": 0}).sort(
-        "published_at", -1
-    ).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT)
+    candidates, affinity, relevance_docs = await asyncio.gather(
+        db.articles.find(query, {"_id": 0}).sort("published_at", -1).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT),
+        _get_user_affinity_scores(user["user_id"]),
+        db.relevance_feedback.find(
+            {"user_id": user["user_id"]}, {"_id": 0, "article_id": 1, "is_relevant": 1}
+        ).to_list(5000),
+    )
 
     if not candidates:
         return []
-
-    # 1. Category affinity + engagement (cached 5 min)
-    affinity = await _get_user_affinity_scores(user["user_id"])
-
-    # 2. Relevance feedback — aggregate avg(is_relevant) per category
-    relevance_docs = await db.relevance_feedback.find(
-        {"user_id": user["user_id"]},
-        {"_id": 0, "article_id": 1, "is_relevant": 1}
-    ).to_list(5000)
 
     # Build article_id→category map from candidates + any extras
     cat_map: Dict[str, str] = {
