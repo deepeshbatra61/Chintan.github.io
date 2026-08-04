@@ -1059,7 +1059,22 @@ async def lifespan(app: FastAPI):
     logger.info("Anthropic client initialised")
 
     await db.users.create_index("email", unique=True)
+    # get_current_user looks users up by user_id on nearly every authenticated
+    # request in the app -- this collection had no index for that field at all,
+    # so every one of those lookups was a full collection scan. Confirmed via
+    # timing: an auth-only endpoint doing nothing else was costing ~1s just to
+    # resolve who the caller is.
+    await db.users.create_index("user_id", unique=True)
     await db.articles.create_index("article_id")
+    # Same missing-index pattern on two other hot paths: opening a comment
+    # thread queries by article_id, and bookmark checks/toggles query by
+    # user_id (bookmarks) or (user_id, article_id) together.
+    await db.comments.create_index("article_id")
+    await db.comments.create_index("comment_id")
+    # Not unique: the app already checks for an existing bookmark in code
+    # before inserting, so this index only needs to make the lookup fast, not
+    # add a new constraint that could fail to build against existing data.
+    await db.bookmarks.create_index([("user_id", 1), ("article_id", 1)])
     await db.reading_history.create_index(
         [("user_id", 1), ("article_id", 1)], unique=True
     )
