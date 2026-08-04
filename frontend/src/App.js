@@ -67,6 +67,7 @@ axios.interceptors.response.use(
 
 // Pages
 import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import FeedPage from "./pages/FeedPage";
 import ArticlePage from "./pages/ArticlePage";
@@ -391,6 +392,7 @@ function AppRouter() {
       <NativeAuthHandler />
       <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/onboarding" element={
         <ProtectedRoute>

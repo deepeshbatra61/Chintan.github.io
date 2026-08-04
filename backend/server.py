@@ -61,6 +61,12 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
+# Transactional email (password reset). Optional, same pattern as REDIS_URL --
+# the feature degrades to a logged warning instead of a crash when unset, so
+# a missing key never takes the whole app down.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "Chintan <noreply@chintan.news>")
+
 # Admin allowlist — comma-separated emails in ADMIN_EMAILS env var. Only these
 # users may call /admin/* routes. Empty set => admin routes are locked to nobody.
 ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
@@ -1097,6 +1103,11 @@ async def lifespan(app: FastAPI):
         [("blocker_id", 1), ("blocked_user_id", 1)], unique=True
     )
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_reset_tokens.create_index("token_hash", unique=True)
+    # TTL requires an actual BSON date, not the isoformat() string used
+    # elsewhere in this file for expires_at -- storing a plain string here
+    # would silently make this index a no-op index rather than an expiring one.
+    await db.password_reset_tokens.create_index("created_at_dt", expireAfterSeconds=_PASSWORD_RESET_TOKEN_TTL_MIN * 60 + 3600)
     # Session lookups run on every authenticated request — index the token.
     await db.user_sessions.create_index("session_token")
     # Refresh-token lookups happen on every /auth/refresh — index the hash.
@@ -1535,6 +1546,13 @@ class DeleteAccountRequest(BaseModel):
     email: str
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class InterestsUpdate(BaseModel):
     interests: List[str]
 
@@ -1874,6 +1892,29 @@ SESSION_COOKIE_MAX_AGE = int(ACCESS_TOKEN_TTL.total_seconds())
 def _hash_token(token: str) -> str:
     """SHA-256 a refresh token so the DB never stores a usable secret."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _send_email(to: str, subject: str, html: str) -> bool:
+    """Send a transactional email via Resend. Returns False (never raises) when
+    RESEND_API_KEY isn't set or the send fails -- callers treat email delivery
+    as best-effort so a provider outage can't turn into a 500 for the user."""
+    if not RESEND_API_KEY:
+        logger.warning(f"RESEND_API_KEY not set — skipping email to {to}: {subject}")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+                json={"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html},
+            )
+            if r.status_code >= 400:
+                logger.error(f"Resend send failed ({r.status_code}) to {to}: {r.text[:300]}")
+                return False
+            return True
+    except Exception as e:
+        logger.error(f"Resend send error to {to}: {e}")
+        return False
 
 
 _PWD_ITERATIONS = 200_000
@@ -2221,6 +2262,91 @@ async def logout(request: Request, response: Response):
     return {"message": "Logged out"}
 
 
+_PASSWORD_RESET_TOKEN_TTL_MIN = 30
+
+@api_router.post("/auth/forgot-password")
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, payload: ForgotPasswordRequest):
+    """Request a password-reset link. Always returns the same generic message
+    regardless of whether the email exists -- a differing response would let
+    an attacker enumerate registered accounts by email address."""
+    email = (payload.email or "").strip().lower()
+    generic_response = {"message": "If an account exists for that email, a reset link is on its way."}
+
+    if not _EMAIL_RE.match(email):
+        return generic_response
+
+    user = await db.users.find_one({"email": email}, {"_id": 0, "user_id": 1, "name": 1, "password_hash": 1})
+    # No account, or a Google-only account with no password to reset -- same
+    # response either way, silently, so this stays unenumerable from outside.
+    if not user or not user.get("password_hash"):
+        return generic_response
+
+    raw_token = f"prt_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "user_id": user["user_id"],
+        "token_hash": _hash_token(raw_token),
+        "expires_at": (now + timedelta(minutes=_PASSWORD_RESET_TOKEN_TTL_MIN)).isoformat(),
+        "created_at": now.isoformat(),
+        # A real BSON date, not the isoformat() string above -- the TTL index
+        # on this field needs an actual date type or it silently never expires.
+        "created_at_dt": now,
+        "used": False,
+    })
+
+    reset_url = f"https://chintan.news/reset-password?token={raw_token}"
+    first_name = (user.get("name") or "").split(" ")[0] or "there"
+    await _send_email(
+        to=email,
+        subject="Reset your Chintan password",
+        html=(
+            f"<p>Hi {first_name},</p>"
+            f"<p>Someone requested a password reset for your Chintan account. "
+            f"This link expires in {_PASSWORD_RESET_TOKEN_TTL_MIN} minutes:</p>"
+            f'<p><a href="{reset_url}">{reset_url}</a></p>'
+            f"<p>If you didn't request this, you can safely ignore this email — "
+            f"your password won't change unless you open the link above.</p>"
+        ),
+    )
+    return generic_response
+
+
+@api_router.post("/auth/reset-password")
+@limiter.limit("10/minute")
+async def reset_password(request: Request, payload: ResetPasswordRequest):
+    """Complete a password reset. Single-use token, short TTL, and every
+    existing session + refresh token for the account is revoked on success --
+    a password reset is exactly the moment an attacker may have been sitting
+    in an already-logged-in session, so this is the point to kick them out."""
+    if len(payload.new_password or "") < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    token_hash = _hash_token(payload.token or "")
+    entry = await db.password_reset_tokens.find_one({"token_hash": token_hash})
+    if not entry or entry.get("used"):
+        raise HTTPException(status_code=400, detail="This reset link is invalid or already used")
+
+    expires_at = entry["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=400, detail="This reset link has expired — request a new one")
+
+    user_id = entry["user_id"]
+    salt, pwd_hash = _hash_password(payload.new_password)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"password_salt": salt, "password_hash": pwd_hash}})
+    await db.password_reset_tokens.update_one({"token_hash": token_hash}, {"$set": {"used": True}})
+
+    # Reset = assume compromise. Sign out everywhere, not just this device.
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.refresh_tokens.delete_many({"user_id": user_id})
+
+    return {"message": "Password updated — sign in with your new password"}
+
+
 @api_router.post("/account/delete")
 @limiter.limit("5/minute")
 async def delete_account(request: Request, payload: DeleteAccountRequest):
@@ -2245,6 +2371,7 @@ async def delete_account(request: Request, payload: DeleteAccountRequest):
     await db.poll_votes.delete_many({"user_id": user_id})
     await db.refresh_tokens.delete_many({"user_id": user_id})
     await db.user_sessions.delete_many({"user_id": user_id})
+    await db.password_reset_tokens.delete_many({"user_id": user_id})
 
     return {"message": "Account and all associated data deleted"}
 

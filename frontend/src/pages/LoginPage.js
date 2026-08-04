@@ -226,6 +226,14 @@ const LoginPage = () => {
                 {showPassword ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}
               </button>
             </div>
+            {mode !== "register" && (
+              <div style={{ textAlign: "right", marginBottom: "14px", marginTop: "-6px" }}>
+                <button type="button" onClick={() => navigate("/forgot-password")} data-testid="forgot-password-link"
+                  style={{ background: "none", border: "none", color: "#8A847C", cursor: "pointer", fontSize: "12.5px", padding: 0 }}>
+                  Forgot password?
+                </button>
+              </div>
+            )}
             <motion.button type="submit" disabled={submitting} data-testid="email-auth-btn"
               whileTap={R ? undefined : { scale: 0.97 }} transition={{ duration: 0.1, ease: EASE }}
               style={{ width: "100%", background: "linear-gradient(180deg, #DC2626, #B91C1C)", color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "15px", fontWeight: 600, cursor: "pointer", opacity: submitting ? 0.6 : 1, fontFamily: "'Manrope', sans-serif" }}>
