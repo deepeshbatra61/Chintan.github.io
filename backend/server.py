@@ -1945,8 +1945,8 @@ def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tupl
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%;">
 
-<tr><td align="center" style="padding-bottom:22px;">
-  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:#DC2626;"></span>
+<tr><td align="center" style="padding-bottom:14px;">
+  <img src="https://chintan.news/email-logo.png" width="48" height="48" alt="Chintan" style="display:block; width:48px; height:48px; border:0;">
 </td></tr>
 
 <tr><td align="center" style="padding-bottom:8px; font-family:'Courier New',monospace; font-size:11px; letter-spacing:3px; color:#6E6862; text-transform:uppercase;">
@@ -1963,14 +1963,10 @@ def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tupl
       Hi {first_name}, someone requested a password reset for your Chintan account.
       This link expires in {ttl_min} minutes.
     </td></tr>
-    <tr><td align="center" style="padding-bottom:22px;">
+    <tr><td align="center">
       <a href="{reset_url}" style="display:inline-block; background-color:#DC2626; color:#ffffff; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; text-decoration:none; padding:13px 32px; border-radius:10px;">
         Set a new password
       </a>
-    </td></tr>
-    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.5; color:#5A544D; word-break:break-all;">
-      Or paste this link into your browser:<br>
-      <a href="{reset_url}" style="color:#DC6B5A; text-decoration:underline;">{reset_url}</a>
     </td></tr>
   </table>
 
