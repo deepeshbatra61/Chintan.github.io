@@ -1894,19 +1894,24 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def _send_email(to: str, subject: str, html: str) -> bool:
+async def _send_email(to: str, subject: str, html: str, text: str = "") -> bool:
     """Send a transactional email via Resend. Returns False (never raises) when
     RESEND_API_KEY isn't set or the send fails -- callers treat email delivery
-    as best-effort so a provider outage can't turn into a 500 for the user."""
+    as best-effort so a provider outage can't turn into a 500 for the user.
+    `text` is an optional plain-text part -- clients that can't/won't render
+    HTML fall back to it, and having one improves spam-filter scoring."""
     if not RESEND_API_KEY:
         logger.warning(f"RESEND_API_KEY not set — skipping email to {to}: {subject}")
         return False
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            payload = {"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html}
+            if text:
+                payload["text"] = text
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-                json={"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html},
+                json=payload,
             )
             if r.status_code >= 400:
                 logger.error(f"Resend send failed ({r.status_code}) to {to}: {r.text[:300]}")
@@ -1915,6 +1920,86 @@ async def _send_email(to: str, subject: str, html: str) -> bool:
     except Exception as e:
         logger.error(f"Resend send error to {to}: {e}")
         return False
+
+
+def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tuple[str, str]:
+    """Render the password-reset email as (html, text). Table-based layout with
+    every style inline -- email clients (Outlook's Word engine especially)
+    don't reliably support <style> blocks or modern CSS, so inline is the only
+    styling that's guaranteed to survive. Matches the app's own dark/red/serif
+    palette (#0A0A0A / #131211 / #DC2626 / #F2EEE9) rather than a generic
+    template, with web-safe font stacks standing in for Playfair/JetBrains
+    Mono/Manrope since custom web fonts don't load in most mail clients."""
+    html = f"""\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Reset your Chintan password</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0A0A0A;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%;">
+
+<tr><td align="center" style="padding-bottom:22px;">
+  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:#DC2626;"></span>
+</td></tr>
+
+<tr><td align="center" style="padding-bottom:8px; font-family:'Courier New',monospace; font-size:11px; letter-spacing:3px; color:#6E6862; text-transform:uppercase;">
+  Chintan
+</td></tr>
+
+<tr><td style="background-color:#131211; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:34px 28px;">
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; color:#F2EEE9; padding-bottom:14px;">
+      Reset your password
+    </td></tr>
+    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#B6AFA6; padding-bottom:26px;">
+      Hi {first_name}, someone requested a password reset for your Chintan account.
+      This link expires in {ttl_min} minutes.
+    </td></tr>
+    <tr><td align="center" style="padding-bottom:22px;">
+      <a href="{reset_url}" style="display:inline-block; background-color:#DC2626; color:#ffffff; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; text-decoration:none; padding:13px 32px; border-radius:10px;">
+        Set a new password
+      </a>
+    </td></tr>
+    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.5; color:#5A544D; word-break:break-all;">
+      Or paste this link into your browser:<br>
+      <a href="{reset_url}" style="color:#DC6B5A; text-decoration:underline;">{reset_url}</a>
+    </td></tr>
+  </table>
+
+</td></tr>
+
+<tr><td align="center" style="padding-top:26px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:12.5px; line-height:1.6; color:#6E6862;">
+  Didn't request this? You can safely ignore this email — your password won't change unless you open the link above.
+</td></tr>
+
+<tr><td align="center" style="padding-top:30px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:11px; color:#4A453F;">
+  Chintan &middot; Don't just consume. Contemplate.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+    text = (
+        f"Reset your Chintan password\n\n"
+        f"Hi {first_name}, someone requested a password reset for your Chintan account. "
+        f"This link expires in {ttl_min} minutes:\n\n"
+        f"{reset_url}\n\n"
+        f"Didn't request this? You can safely ignore this email — your password won't "
+        f"change unless you open the link above.\n\n"
+        f"Chintan — Don't just consume. Contemplate."
+    )
+    return html, text
 
 
 _PWD_ITERATIONS = 200_000
@@ -2297,18 +2382,8 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
 
     reset_url = f"https://chintan.news/reset-password?token={raw_token}"
     first_name = (user.get("name") or "").split(" ")[0] or "there"
-    await _send_email(
-        to=email,
-        subject="Reset your Chintan password",
-        html=(
-            f"<p>Hi {first_name},</p>"
-            f"<p>Someone requested a password reset for your Chintan account. "
-            f"This link expires in {_PASSWORD_RESET_TOKEN_TTL_MIN} minutes:</p>"
-            f'<p><a href="{reset_url}">{reset_url}</a></p>'
-            f"<p>If you didn't request this, you can safely ignore this email — "
-            f"your password won't change unless you open the link above.</p>"
-        ),
-    )
+    html, text = _password_reset_email(first_name, reset_url, _PASSWORD_RESET_TOKEN_TTL_MIN)
+    await _send_email(to=email, subject="Reset your Chintan password", html=html, text=text)
     return generic_response
 
 
