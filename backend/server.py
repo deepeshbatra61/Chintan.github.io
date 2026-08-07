@@ -43,7 +43,8 @@ ALLOWED_ORIGINS = list({
     "http://localhost",        # Capacitor WebView fallback
 })
 
-import brief  # pure brief-assembly logic, no I/O — see backend/brief.py
+import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
+import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -2510,10 +2511,6 @@ async def update_interests(interests_update: InterestsUpdate, user: dict = Depen
     )
     return updated_user
 
-# The categories a reader can actually filter/receive (matches the feed + interests).
-_CANON_CATEGORIES = ["Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"]
-
-
 @api_router.get("/users/stats")
 async def get_user_stats(user: dict = Depends(require_auth)):
     """User reading stats + a couple of genuinely useful signals (streak, blind
@@ -2554,7 +2551,6 @@ async def get_user_stats(user: dict = Depends(require_auth)):
             ).to_list(len(read_ids))
         }
     category_counts: dict = {}
-    cat_last: dict = {}  # category -> most recent read date (YYYY-MM-DD)
     read_dates: set = set()
     for h in history:
         day = (h.get("created_at") or "")[:10]
@@ -2564,8 +2560,6 @@ async def get_user_stats(user: dict = Depends(require_auth)):
         if art:
             cat = art.get("category") or "Other"
             category_counts[cat] = category_counts.get(cat, 0) + 1
-            if day and (cat not in cat_last or day > cat_last[cat]):
-                cat_last[cat] = day
 
     # ── Reading streak: consecutive days with activity, ending today/yesterday ─
     today = datetime.now(timezone.utc).date()
@@ -2576,23 +2570,35 @@ async def get_user_stats(user: dict = Depends(require_auth)):
         streak += 1
         d -= timedelta(days=1)
 
-    # ── Blind spot: a canonical category you read least (never > stale) ────────
+    # ── Top category (kept: it's the one thing the old card got right) ────────
     top_category, top_pct = None, 0
     if category_counts:
         top_category = max(category_counts, key=category_counts.get)
         top_pct = round(category_counts[top_category] / max(1, articles_read) * 100)
-    never = [c for c in _CANON_CATEGORIES if category_counts.get(c, 0) == 0]
-    blind_spot, blind_spot_days = None, None
-    if never:
-        blind_spot = never[0]
-    elif cat_last:
-        blind_spot = min(_CANON_CATEGORIES, key=lambda c: cat_last.get(c, "0000-00-00"))
-        last = cat_last.get(blind_spot)
-        if last:
-            try:
-                blind_spot_days = (today - datetime.fromisoformat(last[:10]).date()).days
-            except ValueError:
-                blind_spot_days = None
+
+    # ── Observations: earned, or absent ───────────────────────────────────────
+    # `blind_spot` / `blind_spot_days` are deliberately GONE, not renamed. They
+    # produced "You haven't opened a Politics story in 0 days" on a profile
+    # where Politics was 58% of all reading -- the category was picked by list
+    # order, the gap by a tie in min(), and nothing stopped it being the top
+    # category as well. See backend/insights.py for the full autopsy.
+    #
+    # Dropping the fields rather than fixing them in place also repairs app
+    # builds already in the field: BriefPage-style guards mean the client only
+    # renders that sentence when the field is present, so older installs stop
+    # showing the false line the moment this deploys, without an app update.
+    reads_for_insight = [
+        {
+            "category": (arts_by_id.get(h["article_id"], {}) or {}).get("category") or "Other",
+            "at": h.get("created_at"),
+            "completed": bool(h.get("completed")),
+        }
+        for h in history
+        if h["article_id"] in arts_by_id
+    ]
+    observations = insights.observe(
+        reads_for_insight, bookmarks_count, datetime.now(timezone.utc)
+    )
 
     return {
         "total_reading_time": total_time,
@@ -2604,8 +2610,7 @@ async def get_user_stats(user: dict = Depends(require_auth)):
         "streak_days": streak,
         "top_category": top_category,
         "top_pct": top_pct,
-        "blind_spot": blind_spot,
-        "blind_spot_days": blind_spot_days,
+        "observations": observations,
     }
 
 @api_router.get("/users/weekly-report")
