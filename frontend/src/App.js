@@ -94,6 +94,7 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeDest, setWelcomeDest] = useState("/feed");
+  const [isGuest, setIsGuest] = useState(false);
 
   const checkAuth = async () => {
     try {
@@ -118,6 +119,7 @@ const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (userData, access = null, refresh = null) => {
+    setIsGuest(false);
     setUser(userData);
     if (access) {
       await setTokens(access, refresh);
@@ -139,8 +141,12 @@ const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Lets someone browse without an account -- read-only, no personalization
+  // or write actions (those still require a real sign-in, see SignInPrompt).
+  const continueAsGuest = () => setIsGuest(true);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth, showWelcome, setShowWelcome, welcomeDest, setWelcomeDest }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, checkAuth, showWelcome, setShowWelcome, welcomeDest, setWelcomeDest, isGuest, continueAsGuest }}>
       {children}
     </AuthContext.Provider>
   );
@@ -233,6 +239,35 @@ const ProtectedRoute = ({ children }) => {
 
   // Check onboarding
   if (!user.onboarding_completed && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return children;
+};
+
+// Same as ProtectedRoute, but a guest (skipped-login) session is let through
+// too -- for the read-only surfaces (feed, article) that work unauthenticated
+// on the backend. Onboarding is real-account-only, so guests skip that check.
+const GuestOrProtectedRoute = ({ children }) => {
+  const { user, loading, isGuest } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <div className="text-center">
+          <SuryaLogo className="w-16 h-16 mx-auto animate-spin-slow" />
+          <p className="mt-4 text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && !isGuest) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user && !user.onboarding_completed && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -400,14 +435,14 @@ function AppRouter() {
         </ProtectedRoute>
       } />
       <Route path="/feed" element={
-        <ProtectedRoute>
+        <GuestOrProtectedRoute>
           <FeedPage />
-        </ProtectedRoute>
+        </GuestOrProtectedRoute>
       } />
       <Route path="/article/:articleId" element={
-        <ProtectedRoute>
+        <GuestOrProtectedRoute>
           <ArticlePage />
-        </ProtectedRoute>
+        </GuestOrProtectedRoute>
       } />
       <Route path="/brief/:briefType" element={
         <ProtectedRoute>
@@ -462,7 +497,7 @@ function App() {
       <AuthProvider>
         <Toaster
           position="top-center"
-          offset="calc(var(--sat, 44px) + 12px)"
+          offset="calc(var(--sat) + 12px)"
           toastOptions={{
             style: {
               background: '#171717',

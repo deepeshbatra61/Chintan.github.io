@@ -50,7 +50,7 @@ const ForgotPasswordPage = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 22px" }}>
       <button onClick={() => navigate(-1)} data-testid="back-btn"
-        style={{ position: "fixed", top: "var(--sat, 44px)", left: "16px", padding: "8px", background: "none", border: "none", cursor: "pointer" }}>
+        style={{ position: "fixed", top: "var(--sat)", left: "16px", padding: "8px", background: "none", border: "none", cursor: "pointer" }}>
         <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
       </button>
 

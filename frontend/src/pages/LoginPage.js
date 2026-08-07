@@ -48,7 +48,7 @@ const API = "https://chintangithubio-production.up.railway.app/api";
 const isNative = () => !!window.Capacitor?.isNativePlatform();
 
 const LoginPage = () => {
-  const { login, setShowWelcome, setWelcomeDest } = useAuth();
+  const { login, setShowWelcome, setWelcomeDest, continueAsGuest } = useAuth();
   const navigate = useNavigate();
   const pollingRef = useRef(null);
 
@@ -114,14 +114,27 @@ const LoginPage = () => {
 
   const startNativePoll = (state) => {
     sessionStorage.setItem("native_auth_pending", "true");
-    const deadline = Date.now() + 60000;
+    // 3 min, not 60s -- a real human picking an account and reading a consent
+    // screen for the first time is slower than however this was last timed.
+    // The backend's own cache entry lives 5 minutes, so this stays safely
+    // inside that window rather than giving up while a valid token still sits
+    // there waiting to be claimed.
+    const deadline = Date.now() + 180000;
     pollingRef.current = setInterval(async () => {
       if (!sessionStorage.getItem("native_auth_pending")) { stopPolling(); return; }
       if (Date.now() > deadline) { stopPolling(); toast.error("Sign-in timed out — please try again"); return; }
       try {
         const resp = await axios.get(`${API}/auth/native-poll?state=${state}`);
         if (resp.data?.session_token) await finishNativeAuth(resp.data.session_token, resp.data.refresh_token);
-      } catch (e) { /* 404 = not ready yet */ }
+      } catch (e) {
+        // A 404 here means "not ready yet" -- that's the expected, silent
+        // case on every poll until the backend has a token. Anything else
+        // (network failure, 500, CORS) was previously swallowed identically,
+        // which made a real failure indistinguishable from normal waiting.
+        if (e.response?.status !== 404) {
+          console.error("native-poll error (not a simple 'not ready yet'):", e.message, e.response?.status);
+        }
+      }
     }, 2000);
   };
 
@@ -163,6 +176,26 @@ const LoginPage = () => {
         {...(R ? { initial: false } : { initial: { opacity: 0, scale: 0.6 }, animate: { opacity: 1, scale: 1 }, transition: { duration: 1, ease: EASE } })}
         style={{ position: "fixed", top: "8%", left: "50%", marginLeft: "-180px", width: "360px", height: "300px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.16), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }}
       />
+
+      {/* Fixed at the top-right rather than appended below the sign-in stack:
+          that stack already fills a phone screen (~790px of content against a
+          640px viewport), so anything after it sits below the fold and is
+          invisible without scrolling. Mirrors ForgotPasswordPage's fixed back
+          button, safe-area inset included -- including its lack of an entrance
+          animation: this is the escape hatch off this screen, so it must never
+          depend on a fade completing to be visible. */}
+      <motion.button
+        onClick={() => { continueAsGuest(); navigate("/feed"); }}
+        data-testid="skip-login-btn"
+        whileTap={R ? undefined : { scale: 0.96 }}
+        style={{
+          position: "fixed", top: "var(--sat)", right: "8px", zIndex: 2,
+          padding: "12px 14px", background: "none", border: "none", cursor: "pointer",
+          color: "#8A847C", fontSize: "13px", fontFamily: "'Manrope', sans-serif",
+        }}
+      >
+        Skip for now
+      </motion.button>
 
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: "360px", textAlign: "center" }}>
         {/* Mark — rays radiate in, then the wrapper breathes */}

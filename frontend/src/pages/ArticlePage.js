@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
+import SignInPrompt from "../components/SignInPrompt";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -216,6 +217,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [showActions, setShowActions] = useState(false);
   const [openCommentMenu, setOpenCommentMenu] = useState(null); // comment_id, or null
   const { user: currentUser } = useAuth();
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
+  const promptSignIn = () => setSignInPromptOpen(true);
   const [showPoll, setShowPoll] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [commentSubmitState, setCommentSubmitState] = useState('idle'); // 'idle'|'loading'|'success'
@@ -241,21 +244,28 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       .then(r => setArticle(r.data))
       .catch(e => console.error("Article fetch:", e));
 
-    // Track view
-    axios.post(`${API}/articles/${articleId}/interact`, { action: "view" }, { withCredentials: true })
-      .catch(() => {});
+    // Track view, reaction state, and per-comment reaction highlight -- all
+    // require a real account server-side, so skip them entirely for guests
+    // rather than firing requests that only ever 401.
+    if (currentUser) {
+      axios.post(`${API}/articles/${articleId}/interact`, { action: "view" }, { withCredentials: true })
+        .catch(() => {});
 
-    // Reaction state
-    axios.get(`${API}/articles/${articleId}/reaction`, { withCredentials: true })
-      .then(r => {
-        setUserReaction({ liked: r.data.liked, disliked: r.data.disliked });
-        setArticle(prev => prev ? {
-          ...prev,
-          likes: r.data.likes_count,
-          dislikes: r.data.dislikes_count,
-        } : prev);
-      })
-      .catch(() => {});
+      axios.get(`${API}/articles/${articleId}/reaction`, { withCredentials: true })
+        .then(r => {
+          setUserReaction({ liked: r.data.liked, disliked: r.data.disliked });
+          setArticle(prev => prev ? {
+            ...prev,
+            likes: r.data.likes_count,
+            dislikes: r.data.dislikes_count,
+          } : prev);
+        })
+        .catch(() => {});
+
+      axios.get(`${API}/comments/${articleId}/my-reactions`, { withCredentials: true })
+        .then(r => setCommentReactions(r.data.reactions || {}))
+        .catch(() => {});
+    }
 
     // Poll
     setPollLoading(true);
@@ -270,16 +280,12 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     axios.get(`${API}/comments/${articleId}`, { withCredentials: true })
       .then(r => setComments(r.data))
       .catch(e => console.error("Comments fetch:", e));
-
-    // This user's existing agree/disagree per comment (for highlight state)
-    axios.get(`${API}/comments/${articleId}/my-reactions`, { withCredentials: true })
-      .then(r => setCommentReactions(r.data.reactions || {}))
-      .catch(() => {});
-  }, [isActive, articleId]);
+  }, [isActive, articleId, currentUser]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleLike = async () => {
+    if (!currentUser) return promptSignIn();
     const wasLiked = userReaction.liked;
     const wasDisliked = userReaction.disliked;
     setUserReaction({ liked: !wasLiked, disliked: false });
@@ -305,6 +311,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleDislike = async () => {
+    if (!currentUser) return promptSignIn();
     const wasDisliked = userReaction.disliked;
     const wasLiked = userReaction.liked;
     setUserReaction({ liked: false, disliked: !wasDisliked });
@@ -331,6 +338,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
   const handleVote = async (option) => {
     if (userVoted || !poll) return;
+    if (!currentUser) return promptSignIn();
     setSelectedOption(option);
     if (window.Capacitor?.isNativePlatform()) {
       try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
@@ -363,6 +371,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
 
   const submitComment = async () => {
     if (!newComment.trim() || commentSubmitState !== 'idle') return;
+    if (!currentUser) return promptSignIn();
     setCommentSubmitState('loading');
     try {
       const r = await axios.post(`${API}/comments/${articleId}`, { content: newComment, stance: "neutral" }, { withCredentials: true });
@@ -382,6 +391,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleCommentReaction = async (commentId, reaction) => {
+    if (!currentUser) return promptSignIn();
     triggerHaptic('light');
     try {
       // Server toggles/switches and returns authoritative counts + the user's
@@ -397,6 +407,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleReportComment = async (commentId) => {
+    if (!currentUser) return promptSignIn();
     try {
       const r = await axios.post(`${API}/comments/${commentId}/report`, {}, { withCredentials: true });
       toast.success(r.data.already_reported ? "Already reported" : "Reported — thanks for flagging it");
@@ -406,6 +417,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleBlockCommentAuthor = async (commentId) => {
+    if (!currentUser) return promptSignIn();
     try {
       await axios.post(`${API}/comments/${commentId}/block-author`, {}, { withCredentials: true });
       // Drop every comment from that same author here and now, not just this one.
@@ -484,7 +496,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       <main
         ref={scrollRef}
         style={{
-          height: 'calc(100vh - var(--sat, 44px) - 56px)',
+          height: 'calc(100vh - var(--sat) - 56px)',
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
@@ -605,9 +617,13 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
         )}
       </main>
 
-      {/* Depth rail + single actions trigger — the only bottom control (active slide) */}
+      {/* Depth rail + single actions trigger — the only bottom control (active slide).
+          Fixed to the bottom edge, so it needs the same inset treatment as
+          BottomNav: the bottom inset for three-button navigation, and the side
+          insets for landscape where that bar moves to an edge. This previously
+          used flat padding and sat underneath the system bar. */}
       {isActive && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, padding: '8px 16px 10px', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, paddingTop: '8px', paddingRight: 'calc(16px + var(--sar))', paddingBottom: 'calc(10px + var(--sab))', paddingLeft: 'calc(16px + var(--sal))', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-evenly', alignItems: 'center', padding: '5px' }}>
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
@@ -660,7 +676,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab, 16px))' }}>
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab))' }}>
             <div style={{ width: '38px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '6px auto 16px' }} />
             <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
               <button onClick={handleLike} data-testid="like-btn"
@@ -907,6 +923,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      <SignInPrompt open={signInPromptOpen} onOpenChange={setSignInPromptOpen} reason="action" />
     </>
   );
 };
@@ -923,6 +941,7 @@ const ArticlePage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
   const swiperRef = useRef(null);
 
   // Load article list and find initial index
@@ -973,11 +992,11 @@ const ArticlePage = () => {
   // Fetch bookmark state for current article
   useEffect(() => {
     const id = allArticles[currentIndex]?.article_id;
-    if (!id) return;
+    if (!id || !user) return;
     axios.get(`${API}/bookmarks/check/${id}`, { withCredentials: true })
       .then(r => setIsBookmarked(r.data.bookmarked))
       .catch(() => {});
-  }, [currentIndex, allArticles]);
+  }, [currentIndex, allArticles, user]);
 
   // Warm the NEXT article's AI beats so swiping forward is instant, not a wait.
   useEffect(() => {
@@ -990,6 +1009,7 @@ const ArticlePage = () => {
   }, [currentIndex, allArticles]);
 
   const toggleBookmark = async () => {
+    if (!user) { setSignInPromptOpen(true); return; }
     const id = allArticles[currentIndex]?.article_id;
     if (!id) return;
     try {
@@ -1050,7 +1070,7 @@ const ArticlePage = () => {
         style={{
           position: 'sticky',
           top: 0,
-          paddingTop: 'var(--sat, 44px)',
+          paddingTop: 'var(--sat)',
           paddingBottom: '12px',
           paddingLeft: '16px',
           paddingRight: '16px',
@@ -1105,7 +1125,7 @@ const ArticlePage = () => {
         nested={true}
         onSwiper={(swiper) => { swiperRef.current = swiper; }}
         onSlideChange={(swiper) => handlePageChange(swiper.activeIndex)}
-        style={{ height: 'calc(100vh - var(--sat, 44px) - 56px)' }}
+        style={{ height: 'calc(100vh - var(--sat) - 56px)' }}
       >
         {allArticles.map((art, idx) => (
           <SwiperSlide key={art.article_id}>
@@ -1117,6 +1137,8 @@ const ArticlePage = () => {
           </SwiperSlide>
         ))}
       </Swiper>
+
+      <SignInPrompt open={signInPromptOpen} onOpenChange={setSignInPromptOpen} reason="action" />
     </div>
   );
 };

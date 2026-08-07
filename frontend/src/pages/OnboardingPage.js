@@ -117,7 +117,7 @@ const OnboardingPage = () => {
         />
       </div>
 
-      <div className="relative z-10 max-w-2xl mx-auto px-6 pb-16" style={{ paddingTop: 'calc(var(--sat, 44px) + 28px)' }}>
+      <div className="relative z-10 max-w-2xl mx-auto px-6 pb-16" style={{ paddingTop: 'calc(var(--sat) + 28px)' }}>
         <AnimatePresence mode="wait">
           {/* Step 1: Welcome */}
           {step === 1 && (

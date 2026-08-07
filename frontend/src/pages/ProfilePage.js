@@ -17,6 +17,40 @@ const API = `${BACKEND_URL}/api`;
 
 const MAX_NICHES_PER_CATEGORY = 3;
 
+// "What Chintan noticed" copy. The backend decides WHAT is true (see
+// backend/insights.py, which only emits an observation when the data earns
+// it); this decides how to say it, so the numbers can carry emphasis.
+//
+// Every line is about something the reader actually does. The card used to
+// pair a real observation with an invented one -- it once reported Politics as
+// both the top category and "your quietest corner, 0 days" on the same profile
+// -- because it always filled two slots whether or not it had two things to
+// say. If nothing is earned now, the card says less.
+const em = { color: "#F0A090", fontWeight: 600 };
+const B = ({ children }) => <b style={em}>{children}</b>;
+
+const renderObservation = (o) => {
+  // "recent" means the last 30 days; "all" means the window was too thin to
+  // claim recency, so the wording widens rather than overstating.
+  const lately = o.scope === "recent" ? "lately" : "so far";
+  switch (o.kind) {
+    case "beat":
+      return <><B>{o.category}</B> is <B>{o.pct}%</B> of your reading {lately} — you've built a real beat there.</>;
+    case "rising":
+      return <><B>{o.category}</B> is climbing — <B>{o.hits}</B> of your last <B>{o.of}</B> stories.</>;
+    case "depth":
+      return <>You finish <B>{o.pct}%</B> of what you open.</>;
+    case "saving":
+      return <>You've kept <B>{o.count}</B> stories to come back to.</>;
+    case "range":
+      // No scope word here on purpose: this usually follows the beat, which
+      // already established the timeframe, and "lately ... lately" reads badly.
+      return <>You've ranged across <B>{o.count}</B> sections.</>;
+    default:
+      return null;   // unknown kind from a newer backend: say nothing, never guess
+  }
+};
+
 // Fallback taxonomy if /interests/categories can't be fetched (mirrors backend).
 const FALLBACK_TAXONOMY = {
   Politics: ["Parliament", "Elections", "Judiciary", "International Relations", "State Politics"],
@@ -176,7 +210,7 @@ const ProfilePage = () => {
 
   const breakdown = stats?.category_breakdown ? Object.entries(stats.category_breakdown).sort(([, a], [, b]) => b - a) : [];
   const breakdownTotal = breakdown.reduce((sum, [, c]) => sum + c, 0);
-  const hasInsight = stats && stats.articles_read > 0 && (stats.top_category || stats.blind_spot);
+  const observations = stats?.observations || [];
 
   const statTile = (num, label, Icon, onClick) => (
     <button
@@ -197,7 +231,7 @@ const ProfilePage = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="profile-page">
       {/* Header */}
-      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat, 44px)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
         <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
             <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
@@ -234,18 +268,9 @@ const ProfilePage = () => {
             <Sparkles className="w-3 h-3" /> What Chintan noticed
           </div>
           <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "#ECE7E1" }}>
-            {hasInsight ? (
-              <>
-                {stats.top_category && (stats.top_pct >= 30
-                  ? <>You leaned <b style={{ color: "#F0A090", fontWeight: 600 }}>{stats.top_pct}% into {stats.top_category}</b> recently. </>
-                  : <><b style={{ color: "#F0A090", fontWeight: 600 }}>{stats.top_category}</b> led your reading recently. </>)}
-                {stats.blind_spot && (stats.blind_spot_days == null
-                  ? <>You haven't opened a <b style={{ color: "#F0A090", fontWeight: 600 }}>{stats.blind_spot}</b> story yet — your quietest corner.</>
-                  : <>You haven't opened a <b style={{ color: "#F0A090", fontWeight: 600 }}>{stats.blind_spot}</b> story in {stats.blind_spot_days} days — your quietest corner.</>)}
-              </>
-            ) : (
-              <>Read a few stories and Chintan will start spotting your patterns here.</>
-            )}
+            {observations.length > 0
+              ? observations.map((o, i) => <span key={o.kind}>{i > 0 && " "}{renderObservation(o)}</span>)
+              : <>Read a few stories and Chintan will start spotting your patterns here.</>}
           </p>
         </motion.div>
 

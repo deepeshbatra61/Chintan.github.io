@@ -83,7 +83,10 @@ const BottomNav = () => {
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
         background: "rgba(10,10,10,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
         borderTop: "1px solid rgba(255,255,255,0.06)",
-        paddingTop: "8px", paddingBottom: "calc(6px + var(--sab, 8px))",
+        paddingTop: "8px", paddingBottom: "calc(6px + var(--sab))",
+        // Landscape with three-button navigation puts the system bar on a SIDE
+        // edge, not the bottom. Without these the last tab sits underneath it.
+        paddingLeft: "var(--sal)", paddingRight: "var(--sar)",
       }}
       data-testid="bottom-nav"
     >

@@ -33,8 +33,17 @@ const briefMeta = {
 
 const cleanText = (text) => (text || "").replace(/^#+\s*/gm, "").replace(/\*\*/g, "").trim();
 
-// The backend writes exactly 3 sentences, one per top category, index-aligned
-// with `categories` and `referenced_stories`.
+// LEGACY FALLBACK ONLY — do not build on this.
+//
+// Each story now arrives with its own `take`, written from the same article the
+// card links to, so there is nothing to reconstruct. This splitter exists purely
+// for briefs served from a cache entry written before that field existed.
+//
+// It is kept as a reminder of why: recovering per-card text by splitting one
+// prose blob on ". " is what made cards describe one story and open another.
+// "The U.S. Fed cut rates. Arsenal won." is two sentences but splits into three
+// fragments, silently shifting every card after it. The backend now guarantees
+// no take contains an internal ". ", so even this path lines up.
 const splitSentences = (text) =>
   cleanText(text).split(/\.\s+/).map((s) => s.trim()).filter(Boolean).slice(0, 3).map((s) => s.replace(/\.$/, "") + ".");
 
@@ -96,7 +105,7 @@ const BriefPage = () => {
       </svg>
 
       {/* Header */}
-      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat, 44px)", paddingBottom: "12px", background: "rgba(10,10,10,0.55)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.55)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
         <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
             <ArrowLeft className="w-5 h-5" style={{ color: "#C9BFB4" }} />
@@ -156,7 +165,10 @@ const BriefPage = () => {
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {stories.map((story, idx) => {
               const category = categories[idx];
-              const take = sentences[idx] || story.title;
+              // story.take is authoritative: the backend wrote it from the same
+              // article this card links to. The other two are fallbacks for
+              // briefs cached before that field existed.
+              const take = story.take || sentences[idx] || story.title;
               return (
                 <motion.button
                   key={story.article_id || idx}

@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
+import SignInPrompt from "../components/SignInPrompt";
 import {
   getFeedCache, setFeedCache,
   setLatestSeenArticleId, setNewArticlesAvailable,
@@ -125,8 +126,25 @@ const WaveHeartbeat = ({ intensity, reduced }) => {
 
 const FeedPage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isGuest } = useAuth();
   const R = useReducedMotion();
+  const [signInPromptOpen, setSignInPromptOpen] = useState(false);
+  const [signInPromptReason, setSignInPromptReason] = useState("action");
+
+  const promptSignIn = (reason = "action") => {
+    setSignInPromptReason(reason);
+    setSignInPromptOpen(true);
+    closeActionSheet();
+  };
+
+  // One nudge per guest session, shown a beat after the feed settles rather
+  // than the instant it mounts.
+  useEffect(() => {
+    if (!isGuest) return;
+    const t = setTimeout(() => promptSignIn("personalize"), 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGuest]);
   const cached = getFeedCache();
   const [articles, setArticles] = useState(() => cached?.articles ?? []);
   const [developingStories, setDevelopingStories] = useState(() => cached?.developingStories ?? []);
@@ -159,6 +177,7 @@ const FeedPage = () => {
   const closeActionSheet = () => setActionSheetArticle(null);
 
   const handleBookmark = async (article) => {
+    if (!user) return promptSignIn("action");
     try {
       await axios.post(`${API}/bookmarks/${article.article_id}`, {}, { withCredentials: true });
       toast.success("Saved to bookmarks");
@@ -193,6 +212,7 @@ const FeedPage = () => {
   // ranking (never a hard filter), consistent with how likes/dislikes already
   // behave everywhere else in the app.
   const handleMoreLikeThis = async (article) => {
+    if (!user) return promptSignIn("action");
     try {
       await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "like" }, { withCredentials: true });
       toast.success(`Showing more ${article.category || "stories like this"}`);
@@ -203,6 +223,7 @@ const FeedPage = () => {
   };
 
   const handleLessLikeThis = async (article) => {
+    if (!user) return promptSignIn("action");
     try {
       await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "dislike" }, { withCredentials: true });
       toast.success(`Showing less ${article.category || "stories like this"}`);
@@ -213,6 +234,7 @@ const FeedPage = () => {
   };
 
   const handleSaveForBrief = async (article) => {
+    if (!user) return promptSignIn("action");
     try {
       await axios.post(`${API}/articles/${article.article_id}/interact`, { action: "save_for_brief" }, { withCredentials: true });
       toast.success("We'll bring this back in your next Brief");
@@ -270,6 +292,7 @@ const FeedPage = () => {
   }, []);
 
   const fetchNotifications = useCallback(async () => {
+    if (!user) return;
     try {
       const response = await axios.get(`${API}/notifications`, { withCredentials: true });
       const notifs = response.data.notifications || [];
@@ -280,7 +303,7 @@ const FeedPage = () => {
     } catch (error) {
       console.error("Error fetching notifications:", error);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Already have a cached feed from a prior mount this session (e.g.
@@ -441,7 +464,7 @@ const FeedPage = () => {
   return (
     <div className="min-h-screen bg-[#0A0A0A]" data-testid="feed-page">
       {/* Header */}
-      <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat, 44px)', paddingBottom: '12px' }}>
+      <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat)', paddingBottom: '12px' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -452,7 +475,7 @@ const FeedPage = () => {
               </SheetTrigger>
               <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
                 {/* Time-aware crown */}
-                <div style={{ flexShrink: 0, background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat, 44px) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px' }}>
+                <div style={{ flexShrink: 0, background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px' }}>
                   <SuryaLogo className="w-11 h-11 animate-spin-slow" />
                   <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: '#F2EEE9', margin: '14px 0 0' }}>
                     {_greeting}{_firstName ? `, ${_firstName}` : ''}
@@ -532,14 +555,14 @@ const FeedPage = () => {
                 </div>
 
                 {/* Sign out — a flex row, so it never overlaps the list */}
-                <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', paddingBottom: 'calc(12px + var(--sab, 8px))' }}>
+                <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', paddingBottom: 'calc(12px + var(--sab))' }}>
                   <button
-                    onClick={handleLogout}
+                    onClick={user ? handleLogout : () => navigate("/login")}
                     className="w-full rounded-lg transition-colors hover:bg-red-500/10"
                     style={{ padding: '11px', color: '#DC6B5A', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
                     data-testid="logout-btn"
                   >
-                    Sign Out
+                    {user ? "Sign Out" : "Sign in"}
                   </button>
                 </div>
               </SheetContent>
@@ -884,6 +907,8 @@ const FeedPage = () => {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      <SignInPrompt open={signInPromptOpen} onOpenChange={setSignInPromptOpen} reason={signInPromptReason} />
     </div>
   );
 };

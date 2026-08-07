@@ -5,7 +5,27 @@
 @tailwind utilities;
 
 :root {
-  --sat: 44px;
+  /* Safe-area insets — the single source of truth for system-bar spacing.
+   *
+   * Read straight from the platform rather than measured once in JavaScript.
+   * env() is recomputed by the OS on every change that matters: rotation,
+   * fold/unfold, switching between gesture and three-button navigation,
+   * split-screen, keyboard, display cutouts. A value sampled at startup is
+   * wrong the moment any of those happen.
+   *
+   * NO max() floors here, deliberately. @capacitor-community/safe-area is a
+   * polyfill: on Chromium < 140 it pads the webview natively and forces these
+   * to 0px. A floor would stack visible dead space on top of padding that is
+   * already correct. 0px is the right answer in that case.
+   *
+   * The inner 0px fallback matters too: without it, a browser that does not
+   * understand env() makes the whole declaration invalid, leaving the variable
+   * unset and collapsing every consumer to nothing.
+   */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
   --obsidian: #0A0A0A;
   --obsidian-light: #171717;
   --obsidian-lighter: #262626;
@@ -18,6 +38,16 @@
   --text-primary: #EDEDED;
   --text-secondary: #A1A1AA;
   --text-muted: #525252;
+}
+
+/* Browsers have no system bars, so every inset above resolves to 0 and headers
+ * would sit flush against the viewport edge. Give the top a little breathing
+ * room on web only. Keyed off a class set once at startup by index.js — a
+ * plain platform check, never a measured inset value. Native keeps the real
+ * env() numbers untouched.
+ */
+html:not(.native-platform) {
+  --sat: 12px;
 }
 
 * {
@@ -383,7 +413,7 @@ body {
    sonner `offset` prop is unreliable, so pin the container below the safe area
    here — this covers all toasts app-wide. */
 [data-sonner-toaster][data-y-position="top"] {
-  top: calc(var(--sat, 44px) + 10px) !important;
+  top: calc(var(--sat) + 10px) !important;
 }
 
 /* Base layer */

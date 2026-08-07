@@ -37,7 +37,7 @@ const DialogContent = React.forwardRef(({ className, children, style, ...props }
         right: 0,
         bottom: 0,
         margin: '0 auto',
-        maxHeight: 'calc(100dvh - var(--sat, 44px) - 40px)',
+        maxHeight: 'calc(100dvh - var(--sat) - 40px)',
         overflowY: 'auto',
         zIndex: 50,
         ...style,

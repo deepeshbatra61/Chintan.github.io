@@ -33,7 +33,7 @@ const AboutPage = () => {
       <header
         className="sticky z-40 px-4"
         style={{
-          top: 0, paddingTop: "var(--sat, 44px)", paddingBottom: "12px",
+          top: 0, paddingTop: "var(--sat)", paddingBottom: "12px",
           background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
         }}
       >
