@@ -43,6 +43,8 @@ ALLOWED_ORIGINS = list({
     "http://localhost",        # Capacitor WebView fallback
 })
 
+import brief  # pure brief-assembly logic, no I/O — see backend/brief.py
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -1081,6 +1083,11 @@ async def lifespan(app: FastAPI):
     # before inserting, so this index only needs to make the lookup fast, not
     # add a new constraint that could fail to build against existing data.
     await db.bookmarks.create_index([("user_id", 1), ("article_id", 1)])
+    # brief_cache entries are keyed by schema version + brief type + user, so
+    # bumping the schema prefix orphans every previous document. Nothing else
+    # ever deletes them, unlike articles which get pruned. Expire them an hour
+    # past their own freshness window so a version bump cleans up after itself.
+    await db.brief_cache.create_index("generated_at_dt", expireAfterSeconds=7200)
     await db.reading_history.create_index(
         [("user_id", 1), ("article_id", 1)], unique=True
     )
@@ -3566,7 +3573,12 @@ async def get_brief(brief_type: str, request: Request = None):
     # Cache the generated brief for 1 hour, per user + brief type. Briefs don't
     # change minute to minute, so this avoids a fresh LLM call on every open.
     _user_id = user.get("user_id") if user else None
-    _brief_cache_key = f"{brief_type}:{_user_id or 'anon'}"
+    # The "v2:" prefix is a schema version, not decoration. Brief documents now
+    # carry a per-story `take`; without bumping the key, cached v1 documents
+    # would be served for up to an hour after deploy and the client would fall
+    # back to re-deriving card text by splitting prose — the exact bug this
+    # change removes. Bumping the prefix makes every stale-shape entry a miss.
+    _brief_cache_key = f"v2:{brief_type}:{_user_id or 'anon'}"
     _cached = await db.brief_cache.find_one({"_id": _brief_cache_key})
     if _cached and _cached.get("brief"):
         try:
@@ -3634,105 +3646,73 @@ async def get_brief(brief_type: str, request: Request = None):
     if not top_cats:
         any_articles = await db.articles.find({}, {"_id": 0}).sort(
             "published_at", -1).limit(3).to_list(3)
+        # Same shape as the main path, deliberately. This branch previously
+        # omitted `categories` entirely, so BriefPage's categories[idx] lookup
+        # silently dropped every card's label, and it carried no `take` either.
+        # Two response shapes from one endpoint is how that stayed unnoticed.
         return await _attach_saved_for_brief({
             "greeting": greeting,
             "subtitle": subtitle,
             "summary": "No stories are available right now. Check back soon.",
+            "categories": [a.get("category", "") for a in any_articles],
             "referenced_stories": [
                 {"title": a.get("title", ""), "source": a.get("source", ""),
-                 "article_id": a.get("article_id", "")}
+                 "article_id": a.get("article_id", ""),
+                 "take": brief.fallback_take(a)}
                 for a in any_articles
             ],
             "read_time": "1 min read",
         }, _user_id)
 
-    # ── 4. Up to 3 articles per category for Claude context ──────────────────
-    cat_articles: Dict[str, list] = {cat: by_category[cat][:3] for cat in top_cats}
+    # ── 4. One ranked article per category ───────────────────────────────────
+    # Exactly one, deliberately. The card's link and the card's text are both
+    # written from this single object, so they cannot disagree. Showing Claude
+    # three candidates while hardcoding the link to the first is what made
+    # brief cards open a different story than the one they described.
+    # (category, article) pairs — never two parallel lists that could drift.
+    pairs = brief.select_stories(top_cats, by_category, user_interests, datetime.now(timezone.utc))
 
-    referenced_stories = [
-        {
-            "title":      cat_articles[cat][0].get("title", ""),
-            "source":     cat_articles[cat][0].get("source", ""),
-            "article_id": cat_articles[cat][0].get("article_id", ""),
-        }
-        for cat in top_cats
-    ]
-
-    # ── 5. Build Claude prompt ────────────────────────────────────────────────
-    articles_text = ""
-    for cat in top_cats:
-        for a in cat_articles[cat]:
-            articles_text += (
-                f"Category: {cat}\n"
-                f"Title: {a.get('title', '')}\n"
-                f"Summary: {a.get('what') or a.get('description') or ''}\n\n"
-            )
-
-    prompt = (
-        f"You are writing a personalized {brief_type} brief for {user_name}.\n"
-        f"Their top interests are: {', '.join(top_cats)}.\n"
-        f"Here are today's top stories:\n\n{articles_text}"
-        f"Write EXACTLY 3 sentences total — one sentence per category in this order: {', '.join(top_cats)}.\n"
-        f"Each sentence covers exactly ONE specific story from that category.\n"
-        f"Be specific: use actual names, places, and numbers from the articles.\n"
-        f"RULES: No markdown (no #, no **). Maximum 90 words total.\n"
-        f"Do NOT start with the user's name or any title like 'Your Night Brief' or '{user_name}'s Night Brief'. Start directly with the news content.\n"
-        f"Each sentence must end with a period. Output only the 3 sentences, nothing else."
-    )
-
-    summary = ""
+    # ── 5. Ask Claude for one line per story ─────────────────────────────────
+    llm_text = None
     try:
         msg = await _anthropic_client.messages.create(
             model=AI_MODEL,
-            max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
+            messages=[{"role": "user", "content": brief.build_prompt(brief_type, user_name, pairs)}],
         )
-        summary = _extract_text(msg).strip()
+        llm_text = _extract_text(msg).strip()
     except Exception as e:
+        # Not fatal: assemble() falls back to a deterministic take per story,
+        # which still points at the right article.
         logger.error(f"Brief Claude call failed: {e}")
-        fallback_parts = []
-        for cat in top_cats:
-            a = cat_articles[cat][0]
-            text = (a.get("what") or a.get("description") or a.get("title") or "").strip()
-            first = text.split(".")[0].strip()
-            if first:
-                fallback_parts.append(first + ".")
-        summary = " ".join(fallback_parts)
 
-    # Strip markdown artifacts
-    summary = re.sub(r'^#+\s*', '', summary, flags=re.MULTILINE)
-    summary = summary.replace('**', '')
-    # Strip greeting/brief-name prefixes that Claude sometimes adds
-    summary = re.sub(r'^(Your\s+\w+\s+Brief[,:\s]+)', '', summary, flags=re.IGNORECASE)
-    summary = re.sub(r'^(Good\s+(Morning|Evening|Afternoon)[,:\s]+)', '', summary, flags=re.IGNORECASE)
-    # Strip known generic sign-off phrases
-    for phrase in (
-        "Stay informed, stay ahead",
-        "That's your midday update",
-        "Here's how the day unfolded",
-        "Before you rest, here's today's story",
-    ):
-        summary = summary.replace(phrase, "").strip().rstrip(".")
+    assembled = brief.assemble(pairs, llm_text)
 
-    read_time = f"{max(1, round(len(summary.split()) / 200))} min read"
-
-    brief = {
+    brief_doc = {
         "greeting":           greeting,
         "subtitle":           subtitle,
-        "summary":            summary,
-        "categories":         top_cats,
-        "referenced_stories": referenced_stories,
-        "read_time":          read_time,
+        "summary":            assembled["summary"],
+        "categories":         assembled["categories"],
+        "referenced_stories": assembled["referenced_stories"],
+        "read_time":          assembled["read_time"],
     }
     # Cache BEFORE attaching saved_for_you -- that field must never be
     # persisted into brief_cache, or a delivered-once save would incorrectly
     # keep reappearing on every cache hit for the next hour.
+    _now = datetime.now(timezone.utc)
     await db.brief_cache.update_one(
         {"_id": _brief_cache_key},
-        {"$set": {"brief": brief, "generated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {
+            "brief": brief_doc,
+            # Kept as a string because the freshness check above parses it that
+            # way. The TTL index needs a real BSON date, so both are written --
+            # the string stays authoritative for reads, the date only expires.
+            "generated_at": _now.isoformat(),
+            "generated_at_dt": _now,
+        }},
         upsert=True,
     )
-    return await _attach_saved_for_brief(brief, _user_id)
+    return await _attach_saved_for_brief(brief_doc, _user_id)
 
 # ===================== AI ROUTES =====================
 

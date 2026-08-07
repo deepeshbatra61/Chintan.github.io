@@ -5,6 +5,7 @@ Tests all backend endpoints including auth, articles, AI features, and protected
 """
 
 import requests
+import re
 import sys
 import json
 from datetime import datetime, timezone, timedelta
@@ -141,13 +142,38 @@ class ChintanAPITester:
             
             if success:
                 brief = response.json()
-                required_fields = ['type', 'title', 'articles']
+                # Previously asserted ['type', 'title', 'articles'] — none of
+                # which this endpoint has ever returned. Because log_test only
+                # records a result instead of raising, that mistake sat green
+                # for the entire life of the file and reported "0 articles"
+                # every run. These are the fields the endpoint actually sends.
+                required_fields = ['summary', 'categories', 'referenced_stories', 'read_time']
                 missing_fields = [field for field in required_fields if field not in brief]
+
+                stories = brief.get('referenced_stories', [])
+                # The invariant that broke twice in production: every card must
+                # carry its own take, bound to the article it links to.
+                missing_takes = [s.get('article_id') for s in stories if not s.get('take')]
+                # And the summary must still split the way older app builds
+                # split it, one fragment per story.
+                fragments = [f for f in re.split(r'\.\s+', brief.get('summary', '')) if f.strip()]
+
                 if missing_fields:
                     success = False
                     details = f"Missing fields: {missing_fields}"
+                elif missing_takes:
+                    success = False
+                    details = f"Stories missing 'take': {missing_takes}"
+                elif stories and len(fragments) != len(stories):
+                    success = False
+                    details = (f"Summary splits into {len(fragments)} parts but there are "
+                               f"{len(stories)} stories — old clients would misalign")
+                elif len(brief.get('categories', [])) != len(stories):
+                    success = False
+                    details = (f"{len(brief.get('categories', []))} categories vs "
+                               f"{len(stories)} stories — labels would shift")
                 else:
-                    details = f"Brief contains {len(brief.get('articles', []))} articles"
+                    details = f"Brief contains {len(stories)} stories, all with takes, summary aligned"
             else:
                 details = "Failed to fetch morning brief"
             
