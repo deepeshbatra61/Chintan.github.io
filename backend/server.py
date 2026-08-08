@@ -1902,12 +1902,21 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def _send_email(to: str, subject: str, html: str, text: str = "") -> bool:
+async def _send_email(to: str, subject: str, html: str, text: str = "",
+                      reply_to: str = "") -> bool:
     """Send a transactional email via Resend. Returns False (never raises) when
     RESEND_API_KEY isn't set or the send fails -- callers treat email delivery
     as best-effort so a provider outage can't turn into a 500 for the user.
     `text` is an optional plain-text part -- clients that can't/won't render
-    HTML fall back to it, and having one improves spam-filter scoring."""
+    HTML fall back to it, and having one improves spam-filter scoring.
+
+    `reply_to` matters more than it looks. EMAIL_FROM defaults to a noreply
+    address, which is right for a password reset but wrong for anything that
+    invites a response: the welcome email tells the reader to hit reply, so a
+    reply that bounced would make the app a liar on its first contact. Setting
+    Reply-To makes that promise true without changing the From address, and
+    mail sent from an address people actually answer also scores better with
+    spam filters than one-way noreply traffic."""
     if not RESEND_API_KEY:
         logger.warning(f"RESEND_API_KEY not set — skipping email to {to}: {subject}")
         return False
@@ -1916,6 +1925,8 @@ async def _send_email(to: str, subject: str, html: str, text: str = "") -> bool:
             payload = {"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html}
             if text:
                 payload["text"] = text
+            if reply_to:
+                payload["reply_to"] = reply_to
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
@@ -1928,6 +1939,163 @@ async def _send_email(to: str, subject: str, html: str, text: str = "") -> bool:
     except Exception as e:
         logger.error(f"Resend send error to {to}: {e}")
         return False
+
+
+SUPPORT_EMAIL = "team@chintan.news"
+
+# Names reach these templates from Google profiles and from the registration
+# form, so both are user-controlled and must be escaped before landing in
+# markup. Aliased because both render functions use `html` as a local variable.
+from html import escape as _esc
+
+
+def _welcome_email(first_name: str) -> tuple[str, str]:
+    """Render the welcome email as (html, text).
+
+    Design direction "The Letter", chosen via /design-shotgun over an editorial
+    masthead and a bolder card layout. It reads as correspondence rather than
+    marketing, which is both the warmer answer to an open-door welcome and the
+    better one for the inbox: Gmail's Promotions filter keys partly off
+    promotional markup, and stacked cards, buttons and coloured panels are
+    exactly that. There is deliberately no call-to-action button here -- the
+    reader has already signed up, so a button would only make a letter look
+    like an ad.
+
+    Same table-based, fully inline construction as the password reset email,
+    for the same reason: Outlook renders through Word and ignores <style>
+    blocks. Web-safe stacks stand in for Playfair/JetBrains Mono/Manrope.
+    """
+    # Two forms deliberately: the HTML part needs entities escaped, the plain
+    # text part must NOT carry them or the reader sees "Hi Ann &amp; Bob,".
+    plain_name = (first_name or "there").strip()[:40] or "there"
+    safe_name = _esc(plain_name)
+
+    html = f"""\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Welcome to Chintan</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0A0A0A;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;">
+<tr><td align="center" style="padding:56px 20px;">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px; width:100%;">
+
+  <tr><td style="padding-bottom:34px;">
+    <table role="presentation" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="30" valign="middle">
+          <img src="https://chintan.news/email-logo.png" width="26" height="26" alt="" style="display:block; width:26px; height:26px; border:0;">
+        </td>
+        <td valign="middle" style="font-family:'Courier New',monospace; font-size:10px; letter-spacing:3.2px; color:#6E6862; text-transform:uppercase; padding-left:9px;">
+          Chintan
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="font-family:Georgia,'Times New Roman',serif; font-size:26px; font-weight:400; color:#F2EEE9; padding-bottom:26px;">
+    Hi {safe_name},
+  </td></tr>
+
+  <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15.5px; line-height:1.78; color:#C4BCB2; padding-bottom:20px;">
+    Welcome to Chintan. We built it because we were tired of finishing a news app
+    knowing more headlines and no more of the story.
+  </td></tr>
+
+  <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15.5px; line-height:1.78; color:#C4BCB2; padding-bottom:20px;">
+    So every story here opens at a glance and keeps going as far as you want to take
+    it, and three times a day we pull together a short brief from the things you
+    actually read. When a story has another side, you can ask to see it.
+  </td></tr>
+
+  <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15.5px; line-height:1.78; color:#C4BCB2; padding-bottom:34px;">
+    That is the whole pitch. The rest you will find on your own.
+  </td></tr>
+
+  <tr><td style="padding-bottom:34px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="3" style="background-color:#DC2626; font-size:0; line-height:0;">&nbsp;</td>
+        <td style="padding-left:20px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.74; color:#B6AFA6;">
+          One more thing. This is a real address, not a no-reply. Hit reply and it lands
+          with us. Tell us what is broken, what is missing, what you would build instead,
+          or send us a story we should be covering. We would genuinely rather hear from
+          you early than not at all.
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="font-family:Georgia,'Times New Roman',serif; font-style:italic; font-size:17px; color:#ECE7E1; padding-bottom:6px;">
+    &mdash; The Chintan team
+  </td></tr>
+  <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:13px; color:#6E6862; padding-bottom:40px;">
+    <a href="mailto:{SUPPORT_EMAIL}" style="color:#DC6B5A; text-decoration:none;">{SUPPORT_EMAIL}</a>
+  </td></tr>
+
+  <tr><td style="border-top:1px solid rgba(255,255,255,0.07); padding-top:22px; font-family:Georgia,'Times New Roman',serif; font-style:italic; font-size:12.5px; color:#5A544D;">
+    Don't just consume. Contemplate.
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+    text = (
+        f"Hi {plain_name},\n\n"
+        f"Welcome to Chintan. We built it because we were tired of finishing a news app "
+        f"knowing more headlines and no more of the story.\n\n"
+        f"So every story here opens at a glance and keeps going as far as you want to "
+        f"take it, and three times a day we pull together a short brief from the things "
+        f"you actually read. When a story has another side, you can ask to see it.\n\n"
+        f"That is the whole pitch. The rest you will find on your own.\n\n"
+        f"One more thing. This is a real address, not a no-reply. Hit reply and it lands "
+        f"with us. Tell us what is broken, what is missing, what you would build instead, "
+        f"or send us a story we should be covering. We would genuinely rather hear from "
+        f"you early than not at all.\n\n"
+        f"-- The Chintan team\n"
+        f"{SUPPORT_EMAIL}\n\n"
+        f"Don't just consume. Contemplate."
+    )
+    return html, text
+
+
+async def _send_welcome_email(user: dict) -> bool:
+    """Send the welcome email once, and only once, per user.
+
+    Idempotency lives here rather than at the call sites because there are
+    three of them (email signup, Google signup, and the admin backfill) and a
+    reader receiving two welcome emails is a worse first impression than
+    receiving none. The stamp is written only after Resend accepts the message,
+    so a provider outage leaves the user eligible for a later retry instead of
+    marking them done with nothing delivered.
+    """
+    email = (user.get("email") or "").strip()
+    if not email or user.get("welcome_email_sent_at"):
+        return False
+
+    first_name = (user.get("name") or "").split(" ")[0] if user.get("name") else ""
+    html, text = _welcome_email(first_name)
+    sent = await _send_email(
+        to=email,
+        subject="Welcome to Chintan",
+        html=html,
+        text=text,
+        reply_to=SUPPORT_EMAIL,
+    )
+    if sent:
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"welcome_email_sent_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    return sent
 
 
 def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tuple[str, str]:
@@ -1968,7 +2136,7 @@ def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tupl
       Reset your password
     </td></tr>
     <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#B6AFA6; padding-bottom:26px;">
-      Hi {first_name}, someone requested a password reset for your Chintan account.
+      Hi {_esc(first_name)}, someone requested a password reset for your Chintan account.
       This link expires in {ttl_min} minutes.
     </td></tr>
     <tr><td align="center">
@@ -2107,6 +2275,14 @@ async def google_auth(request: Request, response: Response):
         {"_id": 0}
     )
 
+    # This endpoint handles BOTH first-ever signup and every subsequent Google
+    # sign-in, so the welcome email has to be gated on which one happened.
+    # Idempotency in _send_welcome_email alone is not enough here: users who
+    # predate the welcome email carry no stamp, so firing on every sign-in
+    # would mail the entire existing user base the next time they logged in.
+    # Those users are reached deliberately through the admin backfill instead.
+    is_new_signup = existing_user is None
+
     if existing_user:
         user_id = existing_user["user_id"]
         await db.users.update_one(
@@ -2132,6 +2308,9 @@ async def google_auth(request: Request, response: Response):
     _set_session_cookie(response, app_access)
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
+    if is_new_signup:
+        # Fire-and-forget so sign-in never waits on, or fails because of, Resend.
+        asyncio.create_task(_send_welcome_email(user))
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
@@ -2169,6 +2348,10 @@ async def register(request: Request, payload: RegisterRequest, response: Respons
     app_access, app_refresh = await _issue_tokens(user_id)
     _set_session_cookie(response, app_access)
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
+    # Fire-and-forget: signup must not wait on Resend, and must not fail if
+    # Resend is down. _send_welcome_email swallows its own errors and only
+    # stamps the user once the message is accepted.
+    asyncio.create_task(_send_welcome_email(user))
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
@@ -4436,6 +4619,66 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
     return voted_polls
 
 # ===================== ADMIN ROUTES =====================
+
+@api_router.post("/admin/send-welcome-backfill")
+async def admin_send_welcome_backfill(
+    admin: dict = Depends(require_admin),
+    days: int = 14,
+    dry_run: bool = True,
+):
+    """Send the welcome email to users who signed up before it existed.
+
+    Defaults to dry_run=True on purpose. Email is the one thing in this app
+    that cannot be undone or edited after the fact, so the safe mode is the
+    default and sending requires explicitly asking for it. A dry run reports
+    exactly who would be mailed without contacting Resend at all.
+
+    Idempotent by construction: _send_welcome_email skips anyone already
+    carrying welcome_email_sent_at and only stamps after Resend accepts the
+    message. Running this twice cannot double-send; a run that partially
+    failed can simply be run again to pick up the stragglers.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    candidates = await db.users.find(
+        {
+            "created_at": {"$gte": cutoff},
+            "welcome_email_sent_at": {"$exists": False},
+            "email": {"$exists": True, "$ne": ""},
+        },
+        {"_id": 0, "user_id": 1, "email": 1, "name": 1, "created_at": 1},
+    ).to_list(500)
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "window_days": days,
+            "would_send": len(candidates),
+            # Addresses are masked: this is an audit trail, not a mailing list,
+            # and the response ends up in logs and terminal scrollback.
+            "recipients": [
+                {
+                    "email": (c.get("email", "")[:2] + "***@" + c.get("email", "").split("@")[-1]),
+                    "name": (c.get("name") or "").split(" ")[0],
+                    "joined": (c.get("created_at") or "")[:10],
+                }
+                for c in candidates
+            ],
+        }
+
+    sent, failed = 0, 0
+    for candidate in candidates:
+        if await _send_welcome_email(candidate):
+            sent += 1
+        else:
+            failed += 1
+        # Resend's free tier allows 2 requests/second. 12 users takes about
+        # seven seconds; pacing keeps a larger backfill from tripping a 429
+        # and silently losing recipients.
+        await asyncio.sleep(0.6)
+
+    logger.info(f"Welcome backfill: {sent} sent, {failed} failed, window {days}d")
+    return {"dry_run": False, "window_days": days, "sent": sent, "failed": failed}
+
 
 @api_router.post("/admin/recategorize")
 async def admin_recategorize(admin: dict = Depends(require_admin)):
