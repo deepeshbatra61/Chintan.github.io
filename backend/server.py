@@ -2067,6 +2067,21 @@ def _welcome_email(first_name: str) -> tuple[str, str]:
     return html, text
 
 
+# asyncio.create_task only keeps a WEAK reference to the running task, so a
+# fire-and-forget task with no strong reference anywhere can be garbage
+# collected mid-flight and silently never finish. Holding each task in a set
+# until it completes is the documented fix.
+_background_tasks: set = set()
+
+
+def _fire_and_forget(coro) -> None:
+    """Run a coroutine in the background without blocking the response, and
+    without letting the garbage collector kill it halfway through."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 async def _send_welcome_email(user: dict) -> bool:
     """Send the welcome email once, and only once, per user.
 
@@ -2310,7 +2325,7 @@ async def google_auth(request: Request, response: Response):
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
     if is_new_signup:
         # Fire-and-forget so sign-in never waits on, or fails because of, Resend.
-        asyncio.create_task(_send_welcome_email(user))
+        _fire_and_forget(_send_welcome_email(user))
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
@@ -2351,7 +2366,7 @@ async def register(request: Request, payload: RegisterRequest, response: Respons
     # Fire-and-forget: signup must not wait on Resend, and must not fail if
     # Resend is down. _send_welcome_email swallows its own errors and only
     # stamps the user once the message is accepted.
-    asyncio.create_task(_send_welcome_email(user))
+    _fire_and_forget(_send_welcome_email(user))
     return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
@@ -2472,7 +2487,7 @@ async def google_native_callback(
             new_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
             # Fire-and-forget: the OAuth redirect must not wait on, or fail
             # because of, Resend.
-            asyncio.create_task(_send_welcome_email(new_user))
+            _fire_and_forget(_send_welcome_email(new_user))
 
         app_access, app_refresh = await _issue_tokens(user_id)
 
@@ -4642,52 +4657,51 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
 ADMIN_TASK_TOKEN = os.environ.get("ADMIN_TASK_TOKEN", "")
 
 
-@api_router.get("/admin/email-diagnostics")
-async def admin_email_diagnostics(request: Request):
-    """Ask Resend directly whether RESEND_API_KEY actually works, instead of
-    inferring it from delivery failures. Every welcome-email send has failed
-    silently for every user in the last 24h (confirmed via the backfill dry
-    run), which points at the key rather than at any one code path -- this
-    calls Resend's own /domains endpoint, which needs no recipient and no
-    side effects, and returns exactly what Resend says: key invalid, key
-    valid, or valid-but-domain-not-verified. The key itself is never returned
-    or logged, only whether Resend accepts it."""
+@api_router.post("/admin/test-welcome-email")
+async def admin_test_welcome_email(request: Request, to: str):
+    """Send the real welcome email to one address and return what Resend
+    actually said. Pure send test: touches no user record, sets no stamp, so
+    it can be run repeatedly and can never interfere with the backfill.
+
+    This replaced an earlier diagnostic that probed Resend's /domains endpoint
+    to validate the API key. That was wrong: the project's key has "Sending
+    access" only, and /domains requires full access, so it returned 401 for a
+    perfectly working key and produced a confident false diagnosis. Exercising
+    the actual send path is the only check that proves the actual send path.
+    """
     await _require_admin_or_task_token(request)
 
     if not RESEND_API_KEY:
-        return {"resend_api_key_set": False, "detail": "RESEND_API_KEY is empty in this environment"}
+        return {"ok": False, "detail": "RESEND_API_KEY is empty in this environment"}
 
+    html, text = _welcome_email("Deepesh")
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(
-                "https://api.resend.com/domains",
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+                json={
+                    "from": EMAIL_FROM,
+                    "to": [to],
+                    "subject": "Welcome to Chintan",
+                    "html": html,
+                    "text": text,
+                    "reply_to": SUPPORT_EMAIL,
+                },
             )
-            body = r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text[:500]
     except Exception as e:
-        return {"resend_api_key_set": True, "reachable": False, "error": str(e)}
+        return {"ok": False, "stage": "network", "error": str(e)}
 
-    if r.status_code == 401:
-        return {
-            "resend_api_key_set": True,
-            "key_valid": False,
-            "detail": "Resend rejected this API key (401) -- it is invalid, "
-                       "revoked, or does not match what's configured on Railway. "
-                       "This is consistent with a key rotated in the Resend "
-                       "dashboard without updating RESEND_API_KEY here.",
-        }
-    if r.status_code != 200:
-        return {"resend_api_key_set": True, "key_valid": None, "status": r.status_code, "body": body}
-
-    domains = body.get("data", []) if isinstance(body, dict) else []
+    # Return Resend's verbatim response. The whole point is to stop inferring
+    # and start reading what the provider says.
+    body = r.text[:600]
     return {
-        "resend_api_key_set": True,
-        "key_valid": True,
+        "ok": r.status_code < 400,
+        "resend_status": r.status_code,
+        "resend_response": body,
         "email_from": EMAIL_FROM,
-        "domains": [
-            {"name": d.get("name"), "status": d.get("status"), "region": d.get("region")}
-            for d in domains
-        ],
+        "reply_to": SUPPORT_EMAIL,
+        "sent_to": to,
     }
 
 
