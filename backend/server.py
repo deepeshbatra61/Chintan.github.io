@@ -4642,6 +4642,55 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
 ADMIN_TASK_TOKEN = os.environ.get("ADMIN_TASK_TOKEN", "")
 
 
+@api_router.get("/admin/email-diagnostics")
+async def admin_email_diagnostics(request: Request):
+    """Ask Resend directly whether RESEND_API_KEY actually works, instead of
+    inferring it from delivery failures. Every welcome-email send has failed
+    silently for every user in the last 24h (confirmed via the backfill dry
+    run), which points at the key rather than at any one code path -- this
+    calls Resend's own /domains endpoint, which needs no recipient and no
+    side effects, and returns exactly what Resend says: key invalid, key
+    valid, or valid-but-domain-not-verified. The key itself is never returned
+    or logged, only whether Resend accepts it."""
+    await _require_admin_or_task_token(request)
+
+    if not RESEND_API_KEY:
+        return {"resend_api_key_set": False, "detail": "RESEND_API_KEY is empty in this environment"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://api.resend.com/domains",
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            )
+            body = r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text[:500]
+    except Exception as e:
+        return {"resend_api_key_set": True, "reachable": False, "error": str(e)}
+
+    if r.status_code == 401:
+        return {
+            "resend_api_key_set": True,
+            "key_valid": False,
+            "detail": "Resend rejected this API key (401) -- it is invalid, "
+                       "revoked, or does not match what's configured on Railway. "
+                       "This is consistent with a key rotated in the Resend "
+                       "dashboard without updating RESEND_API_KEY here.",
+        }
+    if r.status_code != 200:
+        return {"resend_api_key_set": True, "key_valid": None, "status": r.status_code, "body": body}
+
+    domains = body.get("data", []) if isinstance(body, dict) else []
+    return {
+        "resend_api_key_set": True,
+        "key_valid": True,
+        "email_from": EMAIL_FROM,
+        "domains": [
+            {"name": d.get("name"), "status": d.get("status"), "region": d.get("region")}
+            for d in domains
+        ],
+    }
+
+
 async def _require_admin_or_task_token(request: Request) -> dict:
     """Accept either a normal admin session, or X-Admin-Task-Token matching
     ADMIN_TASK_TOKEN. The token check is constant-time (hmac.compare_digest)
