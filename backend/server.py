@@ -4620,12 +4620,36 @@ async def get_voted_polls(user: dict = Depends(require_auth)):
 
 # ===================== ADMIN ROUTES =====================
 
+# One-off escape hatch for /admin/send-welcome-backfill specifically, for the
+# case where the operator's browser session is too stale to authenticate
+# normally (an old deployed build whose Google OAuth redirect no longer
+# resolves) but they still control Railway's env vars. Deliberately NOT a
+# blanket admin bypass -- scoped to this single route, and unset by default
+# so it does nothing unless someone explicitly opts in.
+ADMIN_TASK_TOKEN = os.environ.get("ADMIN_TASK_TOKEN", "")
+
+
+async def _require_admin_or_task_token(request: Request) -> dict:
+    """Accept either a normal admin session, or X-Admin-Task-Token matching
+    ADMIN_TASK_TOKEN. The token check is constant-time (hmac.compare_digest)
+    so a failed attempt can't be used to guess the secret one character at a
+    time via response timing."""
+    supplied = request.headers.get("x-admin-task-token", "")
+    if ADMIN_TASK_TOKEN and supplied and hmac.compare_digest(supplied, ADMIN_TASK_TOKEN):
+        return {"email": "task-token", "user_id": "task-token"}
+    # require_auth raises 401 for no/invalid session before require_admin ever
+    # runs -- calling require_admin directly on a possibly-None user would
+    # crash with a 500 instead of a clean 401.
+    return await require_admin(await require_auth(request))
+
+
 @api_router.post("/admin/send-welcome-backfill")
 async def admin_send_welcome_backfill(
-    admin: dict = Depends(require_admin),
+    request: Request,
     days: int = 14,
     dry_run: bool = True,
 ):
+    await _require_admin_or_task_token(request)
     """Send the welcome email to users who signed up before it existed.
 
     Defaults to dry_run=True on purpose. Email is the one thing in this app
