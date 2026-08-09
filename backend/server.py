@@ -2443,7 +2443,14 @@ async def google_native_callback(
 
         user_id = f"user_{uuid.uuid4().hex[:12]}"
 
+        # Same is_new_signup gating as /auth/google (server.py's web equivalent
+        # of this endpoint): this route is the ANDROID app's Google sign-in,
+        # a separate function that duplicates the same user upsert rather than
+        # sharing it, which is exactly how the welcome email first shipped
+        # wired into /auth/google and /auth/register but not here -- native
+        # app signups got no email at all until this fix.
         existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+        is_new_signup = existing_user is None
         if existing_user:
             user_id = existing_user["user_id"]
             await db.users.update_one(
@@ -2460,6 +2467,12 @@ async def google_native_callback(
                 "onboarding_completed": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
+
+        if is_new_signup:
+            new_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+            # Fire-and-forget: the OAuth redirect must not wait on, or fail
+            # because of, Resend.
+            asyncio.create_task(_send_welcome_email(new_user))
 
         app_access, app_refresh = await _issue_tokens(user_id)
 
