@@ -5424,6 +5424,10 @@ async def get_developing_stories_list(user: dict = Depends(require_auth), feed_b
                 "category": story.get("category"), "calendar_date": story.get("calendar_date"),
                 "content": story.get("content"), "citations": story.get("citations", []),
                 "last_updated": story.get("last_updated"),
+                # Always zero, but present: the feed banner reads article_count
+                # for every kind it doesn't special-case, and omitting it here
+                # rendered a literal "undefined updates" under the headline.
+                "article_count": 0,
             })
             continue
 
@@ -5502,6 +5506,28 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
     story = await db.developing_stories.find_one({"story_id": story_id}, {"_id": 0})
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+
+    # Chintan Calendar entries have no articles by definition, so every part
+    # of the machinery below — the timeline, the momentum buckets, the
+    # "where it stands" summary — has nothing to work on and renders as
+    # "0 updates / No updates yet", which is what a real user saw. Return
+    # the researched paragraph and its sources instead. The citations are
+    # the whole point of this kind: they're what lets a reader check the
+    # claim rather than take the app's word for it.
+    if story.get("kind") == "calendar":
+        return {
+            "story_id": story["story_id"],
+            "title": story["title"],
+            "theme": story.get("theme", "news"),
+            "kind": "calendar",
+            "category": story.get("category"),
+            "calendar_date": story.get("calendar_date"),
+            "content": story.get("content"),
+            "citations": story.get("citations", []),
+            "last_updated": story.get("last_updated"),
+            "articles": [],
+            "article_count": 0,
+        }
 
     article_ids = story.get("article_ids", [])
     articles = []

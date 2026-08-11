@@ -2,8 +2,24 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { ArrowLeft, Flame, Clock } from "lucide-react";
+import { ArrowLeft, Flame, Clock, ExternalLink } from "lucide-react";
+import { Browser } from "@capacitor/browser";
 import { SuryaLogo } from "../App";
+import { calendarIcon, formatCalendarDate } from "../lib/calendar";
+
+// Same pattern as ArticlePage's openSource: in-app browser on native, new
+// tab on web. Calendar citations are the one place this page links out.
+const openSource = async (url) => {
+  if (!url) return;
+  if (window.Capacitor?.isNativePlatform()) {
+    try { await Browser.open({ url }); return; } catch { /* fall through */ }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
+const hostOf = (url) => {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+};
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -74,6 +90,86 @@ const DevelopingStoryDetail = () => {
           <p style={{ color: "#8A847C", marginBottom: "14px" }}>Story not found</p>
           <button onClick={() => navigate(-1)} style={{ color: "#DC6B5A", background: "none", border: "none", cursor: "pointer" }}>Go back</button>
         </div>
+      </div>
+    );
+  }
+
+  // ── Chintan Calendar ──────────────────────────────────────────────────
+  // A separate layout, not a variation on the one below. Everything the
+  // timeline view is built around — updates, momentum, "latest" — is
+  // meaningless for a date-driven entry with no articles, which is why
+  // falling through to it rendered "0 updates / No updates yet" under a
+  // LIVE badge. What matters here instead is the researched paragraph and,
+  // above all, the sources: they're what let a reader check the claim.
+  if (story.kind === "calendar") {
+    const Icon = calendarIcon(story.category);
+    const citations = story.citations || [];
+    // Two URLs from one publication are one source to a reader, so dedupe by
+    // host — the same idea the backend enforces numerically before it will
+    // show this card at all.
+    const sources = [];
+    const seen = new Set();
+    for (const c of citations) {
+      const host = hostOf(c.url);
+      if (host && !seen.has(host)) { seen.add(host); sources.push({ ...c, host }); }
+    }
+
+    return (
+      <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="developing-story-detail">
+        <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }} />
+
+        <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+          <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
+              <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
+            </button>
+            {/* Deliberately not the LIVE pill: nothing here is live. */}
+            <span style={{ color: "#82828A", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", textTransform: "uppercase" }}>Chintan Calendar</span>
+            <Icon className="w-5 h-5" style={{ color: "#DC6B5A" }} />
+          </div>
+        </header>
+
+        <main style={{ position: "relative", zIndex: 1, padding: "18px 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.14em", color: "#DC6B5A", marginBottom: "10px" }}>
+              {formatCalendarDate(story.calendar_date)}
+            </div>
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "#F2EEE9", margin: 0 }}>{story.title}</h1>
+          </motion.div>
+
+          {story.content && (
+            <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+              style={{ marginTop: "18px", marginBottom: 0, fontSize: "15.5px", lineHeight: 1.62, color: "#C9C2BA" }}>
+              {story.content}
+            </motion.p>
+          )}
+
+          {sources.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} style={{ marginTop: "26px" }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "#6E6862", textTransform: "uppercase", marginBottom: "10px" }}>
+                Sources
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {sources.map((s) => (
+                  <button
+                    key={s.url}
+                    onClick={() => openSource(s.url)}
+                    data-testid={`calendar-source-${s.host}`}
+                    style={{ textAlign: "left", width: "100%", display: "flex", alignItems: "center", gap: "10px", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "12px 13px", cursor: "pointer" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "#DC6B5A", marginBottom: s.title ? "4px" : 0 }}>{s.host}</div>
+                      {s.title && (
+                        <div style={{ fontSize: "13px", lineHeight: 1.35, color: "#8A847C", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title}</div>
+                      )}
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5" style={{ color: "#4A453F", flexShrink: 0 }} />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </main>
       </div>
     );
   }

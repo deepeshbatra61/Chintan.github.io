@@ -2,37 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import {
-  ArrowLeft, Radio, Flame, Clock, ChevronRight, Flag, Trophy, Sparkles, Rocket, CalendarDays,
-  ScrollText, Globe, HeartPulse, Landmark, Palette, Users, Leaf, Wheat,
-} from "lucide-react";
+import { ArrowLeft, Radio, Flame, Clock, ChevronRight } from "lucide-react";
 import { SuryaLogo } from "../App";
+import { calendarIcon, formatCalendarDate } from "../lib/calendar";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
-
-// Category -> ribbon icon, per the approved "C-icon" Chintan Calendar design.
-// Extend alongside CALENDAR_EVENTS' `category` field in server.py.
-const CALENDAR_ICONS = {
-  national: Flag,
-  sports: Trophy,
-  festival: Sparkles,
-  science: Rocket,
-  history: ScrollText,
-  global: Globe,
-  health: HeartPulse,
-  politics: Landmark,
-  culture: Palette,
-  social: Users,
-  environment: Leaf,
-  economy: Wheat,
-};
-
-function formatCalendarDate(isoDate) {
-  if (!isoDate) return "";
-  const d = new Date(`${isoDate}T00:00:00`);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
-}
 
 function formatRelativeTime(isoString) {
   if (!isoString) return "";
@@ -102,15 +77,19 @@ const DevelopingPage = () => {
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {topics.map((topic, idx) => {
               if (topic.kind === "calendar") {
-                const Icon = CALENDAR_ICONS[topic.category] || CalendarDays;
+                const Icon = calendarIcon(topic.category);
                 return (
-                  <motion.div
+                  // A button, not a div: the feed-page banner already navigates
+                  // here for every kind, so a non-tappable card meant the same
+                  // entry opened from one surface and was dead on the other.
+                  <motion.button
                     key={topic.story_id}
+                    onClick={() => navigate(`/developing/${topic.story_id}`)}
                     data-testid={`topic-${topic.story_id}`}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: Math.min(idx, 8) * 0.06 }}
-                    style={{ position: "relative", overflow: "hidden", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", padding: "16px" }}
+                    style={{ textAlign: "left", width: "100%", position: "relative", overflow: "hidden", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", padding: "16px", cursor: "pointer" }}
                   >
                     <div style={{ position: "absolute", top: 0, right: 0, width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #DC2626, #B91C1C)", borderBottomLeftRadius: "14px" }}>
                       <Icon className="w-[18px] h-[18px]" style={{ color: "#fff" }} strokeWidth={2} />
@@ -127,9 +106,10 @@ const DevelopingPage = () => {
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "#DC6B5A", letterSpacing: "0.04em" }}>{formatCalendarDate(topic.calendar_date)}</span>
                         <span style={{ color: "#3A362F" }}>·</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#6E6862" }}>Chintan Calendar</span>
+                        <ChevronRight className="w-3.5 h-3.5" style={{ color: "#4A453F", marginLeft: "auto" }} />
                       </div>
                     </div>
-                  </motion.div>
+                  </motion.button>
                 );
               }
               return (

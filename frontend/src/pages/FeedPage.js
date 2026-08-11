@@ -19,6 +19,7 @@ import {
   getFeedCache, setFeedCache,
   setLatestSeenArticleId, setNewArticlesAvailable,
 } from "../lib/feedCache";
+import { formatCalendarDate } from "../lib/calendar";
 
 const SHARE_BASE = "https://chintan.news";
 
@@ -656,6 +657,11 @@ const FeedPage = () => {
                           </p>
                           {story.kind === 'wave' ? (
                             <WaveHeartbeat intensity={story.intensity} reduced={R} />
+                          ) : story.kind === 'calendar' ? (
+                            // Calendar entries have no articles by definition, so an
+                            // update count is both meaningless and (with no
+                            // article_count in the payload) literally "undefined".
+                            <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{formatCalendarDate(story.calendar_date)}</p>
                           ) : (
                             <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
                           )}
