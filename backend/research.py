@@ -63,9 +63,14 @@ RESEARCH_CACHE_TTL_HOURS = 20                   # D4: don't re-research same day
 # and was still being served from cache after the code fix landed.
 #   v1: initial
 #   v2: answer taken from post-search blocks only + narration stripped
-RESEARCH_CACHE_VERSION = 2
-RESEARCH_MAX_SENTENCES = 3                      # card copy, not an essay
-RESEARCH_MAX_CHARS = 400                        # backstop for very long sentences
+#   v3: longer, more substantive copy + citation-fragment spacing fixed
+RESEARCH_CACHE_VERSION = 3
+# Length budget. The list card line-clamps to 4 lines regardless, so this
+# really governs the DETAIL page, where a reader has deliberately tapped in
+# and wants substance. Raised from 3/400 after the first live entry read as
+# a single thin fact with nothing behind it.
+RESEARCH_MAX_SENTENCES = 6
+RESEARCH_MAX_CHARS = 900                        # backstop for very long sentences
 
 # Block types the API emits for the search itself. Text blocks BEFORE the last
 # one of these are the model narrating its own process, not the answer.
@@ -113,6 +118,14 @@ def _clean_answer(text: str) -> str:
     content than narration, and silently deleting the middle of a factual
     sentence is a worse failure than leaving one clumsy phrase in."""
     text = re.sub(r"\s+", " ", text or "").strip()
+    # The API splits an answer into fragments at citation boundaries, and each
+    # fragment already carries its own leading/trailing spaces. Concatenating
+    # them is therefore correct, but a stray space can still land in front of
+    # punctuation ("at the age of 18 , making him" reached a live card).
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    # ...and the mirror case: two fragments meeting with no space at a
+    # sentence boundary ("...on August 11.He was 18").
+    text = re.sub(r"([.!?])([A-Z])", r"\1 \2", text)
     if not text:
         return ""
 
@@ -240,7 +253,10 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
     # independent domains." Counting sources the model merely looked at
     # earlier, while displaying different text, would make that claim a lie.
     # It's a stricter bar than pooling everything, and that's the point.
-    content = _clean_answer(" ".join(text_parts))
+    # Concatenated, NOT space-joined: these are contiguous fragments of one
+    # continuous answer, split where citations attach, and they carry their
+    # own spacing. _clean_answer repairs either kind of seam defensively.
+    content = _clean_answer("".join(text_parts))
     if not content or _independent_domain_count(citations) < RESEARCH_MIN_INDEPENDENT_DOMAINS:
         return None
 
@@ -314,16 +330,25 @@ async def research_topic(
         response = await asyncio.wait_for(
             anthropic_client.messages.create(
                 model=model,
-                max_tokens=500,
+                # Covers the model's between-search narration (which is
+                # discarded but still counts) plus a 4-6 sentence answer.
+                max_tokens=1200,
                 system=(
                     "You write copy that goes DIRECTLY onto a card in a live news app. "
-                    "Search the web, then reply with ONLY the finished paragraph: 2-3 "
+                    "Search the web, then reply with ONLY the finished paragraph: 4-6 "
                     "sentences of plain factual prose.\n\n"
+                    "Make it genuinely informative — a reader who taps in wants to come "
+                    "away knowing something. Do not restate the headline, and do not pad "
+                    "with generalities like 'a significant occasion' or 'remembered by "
+                    "many'. Every sentence must carry NEW information: what actually "
+                    "happened, the specifics (names, places, ages, numbers, outcomes), "
+                    "why it mattered at the time, and what it connects to today. Prefer "
+                    "one concrete detail over three vague ones.\n\n"
                     "Never narrate your own process. Do not write 'based on my search', "
                     "'let me search', 'I notice', 'I can now provide', or any sentence "
                     "about searching, sources, or yourself. No preamble, no sign-off, no "
-                    "headings, no quotes around the paragraph. The reader must never be "
-                    "able to tell a search happened.\n\n"
+                    "headings, no bullet points, no quotes around the paragraph. The "
+                    "reader must never be able to tell a search happened.\n\n"
                     "State only what your results support. If the weight of sources "
                     "materially conflicts on a central fact, state that conflict as a "
                     "fact ('accounts differ on whether...'). Ignore lone outliers that "

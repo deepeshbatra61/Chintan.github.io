@@ -236,8 +236,40 @@ def test_answer_that_is_only_narration_does_not_verify():
 # ─────────────────────── _clean_answer ───────────────────────
 
 def test_clean_answer_caps_sentence_count():
-    text = "One. Two. Three. Four. Five."
-    assert research._clean_answer(text) == "One. Two. Three."
+    text = "One. Two. Three. Four. Five. Six. Seven. Eight."
+    out = research._clean_answer(text)
+    assert out == "One. Two. Three. Four. Five. Six."
+    assert len(research._split_sentences(out)) == research.RESEARCH_MAX_SENTENCES
+
+
+def test_clean_answer_removes_space_before_punctuation():
+    """Citation fragments carry their own spacing, so a naive space-join put
+    'at the age of 18 , making him' and 'to be executed .' on a live card."""
+    text = "He was hanged in 1908 , at the age of 18 , and was executed ."
+    assert research._clean_answer(text) == "He was hanged in 1908, at the age of 18, and was executed."
+
+
+def test_clean_answer_inserts_missing_space_at_a_sentence_seam():
+    """The mirror case: fragments meeting with no space between them."""
+    assert research._clean_answer("Hanged on August 11.He was 18.") == "Hanged on August 11. He was 18."
+
+
+def test_answer_fragments_are_concatenated_not_space_joined():
+    """End to end through _extract_search_result, since the join lives there."""
+    blocks = [
+        _tool_result_block(),
+        _text_block("Khudiram Bose was hanged on August 11, 1908, at the age of 18",
+                    [{"url": "https://byjus.com/a"}]),
+        _text_block(", making him one of the youngest revolutionaries executed",
+                    [{"url": "https://en.wikipedia.org/b"}]),
+        _text_block("."),
+    ]
+    result = research._extract_search_result(blocks)
+    assert result is not None
+    assert result["content"] == (
+        "Khudiram Bose was hanged on August 11, 1908, at the age of 18, making him "
+        "one of the youngest revolutionaries executed."
+    )
 
 
 def test_clean_answer_only_strips_leading_narration():
@@ -253,7 +285,9 @@ def test_clean_answer_collapses_whitespace():
 
 
 def test_clean_answer_trims_to_a_whole_sentence_when_too_long():
-    long_first = "A" * 380 + "."
+    # Sized off the constant, not a literal, so raising the cap doesn't
+    # silently turn this into a test of nothing.
+    long_first = "A" * (research.RESEARCH_MAX_CHARS - 20) + "."
     text = f"{long_first} This second sentence pushes it over the character cap."
     out = research._clean_answer(text)
     assert out == long_first
@@ -261,7 +295,7 @@ def test_clean_answer_trims_to_a_whole_sentence_when_too_long():
 
 
 def test_clean_answer_hard_cuts_a_single_runaway_sentence():
-    text = "word " * 200  # no sentence boundary at all
+    text = "word " * (research.RESEARCH_MAX_CHARS // 2)  # no sentence boundary at all
     out = research._clean_answer(text)
     assert len(out) <= research.RESEARCH_MAX_CHARS + 1  # +1 for the ellipsis
     assert out.endswith("…")
