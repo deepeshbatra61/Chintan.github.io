@@ -45,6 +45,7 @@ ALLOWED_ORIGINS = list({
 
 import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
+import research  # verified web research (native web_search + citation check) — see backend/research.py
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -63,6 +64,12 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
+
+# Hard daily ceiling on research.py's web_search calls (D4) — shared across
+# every caller of research_topic() (Chintan Calendar today, trending topics
+# later). Deliberately conservative default; raise via env once real usage
+# patterns are known.
+RESEARCH_AGENT_DAILY_CAP = int(os.environ.get("RESEARCH_AGENT_DAILY_CAP", "20"))
 
 # Transactional email (password reset). Optional, same pattern as REDIS_URL --
 # the feature degrades to a logged warning instead of a crash when unset, so
@@ -842,6 +849,7 @@ async def _run_ingest_cycle_body() -> None:
     #       before tagging, so anything new is matchable this cycle ─────────
     await _sync_scheduled_events()
     await _sync_wave_topics()
+    await _sync_calendar_events()
 
     # ── 6. Tag new articles to watched/scheduled/wave developing stories ────
     if api_articles:
@@ -1124,6 +1132,9 @@ async def lifespan(app: FastAPI):
     await db.articles.create_index([("published_at", -1)])
     await db.articles.create_index([("category", 1), ("published_at", -1)])
     await db.developing_stories.create_index("story_id", unique=True)
+    # research_cache/_agent_stats use their own composite string _id (see
+    # research.py's _cache_key/_under_daily_cap) — no extra index needed
+    # beyond Mongo's default _id index.
     logger.info("MongoDB indexes created")
 
     # Open/close calendar-known developing stories (parliament sessions,
@@ -1131,7 +1142,8 @@ async def lifespan(app: FastAPI):
     # ingest cycle so windows open/close on time, not just at boot.
     await _sync_scheduled_events()
     await _sync_wave_topics()
-    logger.info(f"Developing stories: synced {len(SCHEDULED_EVENTS)} scheduled events, {len(WAVE_TOPICS)} wave topics")
+    await _sync_calendar_events()
+    logger.info(f"Developing stories: synced {len(SCHEDULED_EVENTS)} scheduled events, {len(WAVE_TOPICS)} wave topics, {len(CALENDAR_EVENTS)} calendar entries")
 
     # Reset claude_summarized on articles that don't yet have the contemplation
     # model (beats), so they re-summarize with the new prompt when credits return.
@@ -3283,6 +3295,123 @@ async def _sync_wave_topics() -> None:
         )
 
 
+# ── Chintan Calendar: dates with no source article to summarise from
+# (Independence Day, festivals, fixtures) — a fundamentally different shape
+# from every other kind here, which all pull their card text from a matched
+# article. These get their content from research.research_topic() instead:
+# a verified, citation-backed paragraph, or nothing shown at all (see
+# research.py's module docstring for why there is deliberately no fallback).
+#
+# `category` drives the frontend's ribbon icon (national/sports/festival/
+# science today — extend both here and DevelopingPage.js's ICONS map
+# together). `lead_days` controls how early research is ATTEMPTED (so a slow
+# or failed search has time to retry via the next sync cycle before the
+# display day arrives) — the card itself only ever shows ON `date`, never
+# during the lead window; see _sync_calendar_events.
+#
+# First-draft seed list (2026-08-09 planning session, Gemini-sourced) — only
+# the entries independently spot-checked during that review are seeded here.
+# Treat as a starting point, not a complete calendar.
+CALENDAR_EVENTS = [
+    {
+        "event_id": "independence-day-2026",
+        "title": "India's 80th Independence Day",
+        "category": "national",
+        "date": "2026-08-15",
+        "lead_days": 2,
+        "research_query": (
+            "What is happening for India's 80th Independence Day on August 15, 2026 — "
+            "the Prime Minister's Red Fort address, national celebrations, and any major "
+            "announcements. Write one factual paragraph."
+        ),
+    },
+    {
+        "event_id": "national-space-day-2026",
+        "title": "National Space Day — Chandrayaan-3 anniversary",
+        "category": "science",
+        "date": "2026-08-23",
+        "lead_days": 2,
+        "research_query": (
+            "What is India's National Space Day on August 23, 2026 commemorating — the "
+            "Chandrayaan-3 Moon landing anniversary — and any planned ISRO events that day. "
+            "Write one factual paragraph."
+        ),
+    },
+    {
+        "event_id": "raksha-bandhan-2026",
+        "title": "Raksha Bandhan celebrated across India",
+        "category": "festival",
+        "date": "2026-08-28",
+        "lead_days": 2,
+        "research_query": (
+            "What is Raksha Bandhan, when does it fall in 2026, and what is its cultural and "
+            "retail/e-commerce significance in India. Write one factual paragraph."
+        ),
+    },
+    {
+        "event_id": "womens-t20-asia-cup-2026-begins",
+        "title": "Women's T20 Asia Cup begins in Dubai",
+        "category": "sports",
+        "date": "2026-08-28",
+        "lead_days": 2,
+        "research_query": (
+            "When does the Women's T20 Asia Cup cricket tournament begin in 2026, which teams "
+            "are competing, and who India's first opponent is. Write one factual paragraph "
+            "and flag it clearly if sources disagree on the exact date."
+        ),
+    },
+]
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+async def _sync_calendar_events() -> None:
+    """Research (cached) and open/close Chintan Calendar entries by date.
+
+    Unlike every other kind, existence here is gated on VERIFICATION, not
+    volume or a date window alone: a card only reaches is_active=True once
+    research_topic() has returned a citation-backed result, and even then
+    only on the entry's actual `date` (IST) — the lead window before that is
+    for researching ahead of time, not for showing anything early."""
+    if not ANTHROPIC_API_KEY:
+        return
+    today_ist = datetime.now(IST).date()
+    for ev in CALENDAR_EVENTS:
+        event_date = datetime.fromisoformat(ev["date"]).date()
+        lead = timedelta(days=ev.get("lead_days", 2))
+        if today_ist < (event_date - lead) or today_ist > event_date:
+            await db.developing_stories.update_one(
+                {"story_id": ev["event_id"]}, {"$set": {"is_active": False}}
+            )
+            continue
+
+        result = await research.research_topic(
+            _anthropic_client, db, AI_MODEL,
+            ev["event_id"], ev["research_query"], ev["date"],
+            RESEARCH_AGENT_DAILY_CAP,
+        )
+        if result is None:
+            await db.developing_stories.update_one(
+                {"story_id": ev["event_id"]}, {"$set": {"is_active": False}}
+            )
+            continue
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.developing_stories.update_one(
+            {"story_id": ev["event_id"]},
+            {
+                "$set": {
+                    "title": ev["title"], "theme": ev["category"], "category": ev["category"],
+                    "source": "calendar", "kind": "calendar", "is_active": today_ist == event_date,
+                    "calendar_date": ev["date"], "content": result["content"],
+                    "citations": result["citations"], "last_updated": now_iso,
+                },
+                "$setOnInsert": {"article_ids": [], "detected_at": now_iso},
+            },
+            upsert=True,
+        )
+
+
 def _wave_intensity(articles: list) -> dict:
     """Classify a wave story's CURRENT intensity from recent article
     velocity — surging/simmering/watching, never active/inactive. A wave
@@ -4974,7 +5103,13 @@ async def get_developing_stories_list(user: dict = Depends(require_auth), feed_b
     - auto (organic volume clusters, the legacy/fallback path): keep the
       original bar — >=3 articles and a newest update within 48h — since
       without a calendar or LLM screening backing it, raw volume is a weaker
-      signal and needs a higher bar to avoid 'dud' stories."""
+      signal and needs a higher bar to avoid 'dud' stories.
+    - calendar (Chintan Calendar — dates with no source article, e.g.
+      Independence Day): no article_ids at all, so it skips the volume gate
+      entirely. is_active is only ever True on the entry's actual date AND
+      once research.research_topic() has returned a verified, citation-backed
+      result — see _sync_calendar_events. There is no unverified/fallback
+      state to filter here; if it's active, it already cleared verification."""
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
     ).sort("last_updated", -1).to_list(100)
@@ -4994,6 +5129,16 @@ async def get_developing_stories_list(user: dict = Depends(require_auth), feed_b
     for story in stories:
         kind = story.get("kind", "auto")  # legacy docs predate the `kind` field
         article_ids = story.get("article_ids", [])
+
+        if kind == "calendar":
+            result.append({
+                "story_id": story["story_id"], "title": story["title"],
+                "theme": story.get("theme", "news"), "kind": kind,
+                "category": story.get("category"), "calendar_date": story.get("calendar_date"),
+                "content": story.get("content"), "citations": story.get("citations", []),
+                "last_updated": story.get("last_updated"),
+            })
+            continue
 
         if kind == "wave":
             # A wave topic with ZERO matched articles ever has no real signal

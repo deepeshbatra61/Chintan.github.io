@@ -2,11 +2,26 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { ArrowLeft, Radio, Flame, Clock, ChevronRight } from "lucide-react";
+import { ArrowLeft, Radio, Flame, Clock, ChevronRight, Flag, Trophy, Sparkles, Rocket, CalendarDays } from "lucide-react";
 import { SuryaLogo } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
+
+// Category -> ribbon icon, per the approved "C-icon" Chintan Calendar design.
+// Extend alongside CALENDAR_EVENTS' `category` field in server.py.
+const CALENDAR_ICONS = {
+  national: Flag,
+  sports: Trophy,
+  festival: Sparkles,
+  science: Rocket,
+};
+
+function formatCalendarDate(isoDate) {
+  if (!isoDate) return "";
+  const d = new Date(`${isoDate}T00:00:00`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+}
 
 function formatRelativeTime(isoString) {
   if (!isoString) return "";
@@ -74,7 +89,36 @@ const DevelopingPage = () => {
 
         {topics.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {topics.map((topic, idx) => (
+            {topics.map((topic, idx) => {
+              if (topic.kind === "calendar") {
+                const Icon = CALENDAR_ICONS[topic.category] || CalendarDays;
+                return (
+                  <motion.div
+                    key={topic.story_id}
+                    data-testid={`topic-${topic.story_id}`}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: Math.min(idx, 8) * 0.06 }}
+                    style={{ position: "relative", overflow: "hidden", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "16px", padding: "16px" }}
+                  >
+                    <div style={{ position: "absolute", top: 0, right: 0, width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #DC2626, #B91C1C)", borderBottomLeftRadius: "14px" }}>
+                      <Icon className="w-[18px] h-[18px]" style={{ color: "#fff" }} strokeWidth={2} />
+                    </div>
+                    <div style={{ paddingTop: "4px", paddingRight: "46px" }}>
+                      <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "17px", lineHeight: 1.28, color: "#F2EEE9", margin: 0 }}>{topic.title}</h2>
+                      {topic.content && (
+                        <p style={{ color: "#8A847C", fontSize: "13px", lineHeight: 1.4, margin: "7px 0 0" }}>{topic.content}</p>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", paddingTop: "11px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "#DC6B5A", letterSpacing: "0.04em" }}>{formatCalendarDate(topic.calendar_date)}</span>
+                        <span style={{ color: "#3A362F" }}>·</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#6E6862" }}>Chintan Calendar</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
+              return (
               <motion.button
                 key={topic.story_id}
                 onClick={() => navigate(`/developing/${topic.story_id}`)}
@@ -101,7 +145,8 @@ const DevelopingPage = () => {
                   Follow the thread <ChevronRight className="w-3.5 h-3.5" />
                 </div>
               </motion.button>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "70px 0" }}>

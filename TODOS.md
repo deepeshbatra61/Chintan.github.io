@@ -86,3 +86,51 @@ deferred to keep an already-large release focused.
 
 **Depends on / blocked by:** Do this after `backend/brief.py` exists, so the prompt
 construction being moved is already isolated from the endpoint.
+
+---
+
+## 4. Decouple the research agent from the ingest sync cycle at scale
+
+**What:** `backend/research.py`'s topic research runs inline inside the same sync cycle as
+`_sync_wave_topics` and friends, with a hard per-call timeout as the only safety valve.
+
+**Why:** At the stated volume (1-2 calendar entries/day), inline is simpler and reuses
+infrastructure that already runs reliably. If either Chintan Calendar's own volume grows, or
+the same `research.py` module gets used for trending-topic research (a separate planned
+feature), several research calls landing in one sync cycle could meaningfully slow down or
+time out the shared ingest cycle that also fetches new articles.
+
+**Pros:** Isolates research latency from article ingestion at any volume; removes the
+per-call timeout as a single point of failure for the whole cycle.
+
+**Cons:** Real infrastructure (a queue, or a separately scheduled job) for a problem that
+doesn't exist yet — building it now would be solving for a scale not yet reached.
+
+**Context:** Decided in `/plan-eng-review` (2026-08-09), issue D8. Revisit once either
+Chintan Calendar's entry volume grows meaningfully, or the trending-topics feature starts
+calling `research.py` too.
+
+**Depends on / blocked by:** Nothing blocking. Trigger is observed volume/latency, not a
+prerequisite piece of work.
+
+---
+
+## 5. Extend `research.py` to power trending topics
+
+**What:** The user's stated plan for a future feature: surface trending topics using the
+same verified-web-research capability being built for Chintan Calendar.
+
+**Why:** Requested explicitly during the research-agent architecture review — the module is
+deliberately designed to take an arbitrary topic string, not a calendar-specific shape, so
+this door stays open without rework.
+
+**Pros:** Reuses verification, caching, and cost-control work that already has to be built
+once, for a second feature.
+
+**Cons:** Trending-topic discovery itself (what counts as "trending," how often to check) is
+a separate design question not explored in this review — this TODO is a pointer, not a plan.
+
+**Context:** Raised by the user during `/plan-eng-review` (2026-08-09) while scoping the
+research agent. No design work done yet beyond keeping `research.py`'s interface general.
+
+**Depends on / blocked by:** The research agent itself must ship first.
