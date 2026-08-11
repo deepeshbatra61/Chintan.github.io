@@ -3302,62 +3302,338 @@ async def _sync_wave_topics() -> None:
 # a verified, citation-backed paragraph, or nothing shown at all (see
 # research.py's module docstring for why there is deliberately no fallback).
 #
-# `category` drives the frontend's ribbon icon (national/sports/festival/
-# science today — extend both here and DevelopingPage.js's ICONS map
-# together). `lead_days` controls how early research is ATTEMPTED (so a slow
-# or failed search has time to retry via the next sync cycle before the
-# display day arrives) — the card itself only ever shows ON `date`, never
-# during the lead window; see _sync_calendar_events.
+# `category` drives the frontend's ribbon icon — extend both here and
+# DevelopingPage.js's CALENDAR_ICONS map together. `lead_days` controls how
+# early research is ATTEMPTED (so a slow or failed search has time to retry
+# via the next sync cycle before the display day arrives) — the card itself
+# only ever shows ON `date`, never during the lead window; see
+# _sync_calendar_events.
 #
-# First-draft seed list (2026-08-09 planning session, Gemini-sourced) — only
-# the entries independently spot-checked during that review are seeded here.
-# Treat as a starting point, not a complete calendar.
+# Full first-draft list (2026-08-09 planning session, Gemini-sourced,
+# Aug 11 - Sep 10 2026), seeded per the user's explicit call to include every
+# entry regardless of Gemini's own Major/Medium/Minor rating — pruning by
+# engagement can happen later, once there's real data to prune with.
+#
+# Gemini's wording is used only as a research HINT below, never as fact —
+# _cal_query() always instructs the agent to verify independently, and a
+# hint that turns out wrong just means that entry fails verification and
+# stays hidden (no different from a hint that was never given). One entry's
+# hint is already known-wrong and corrected here: Gemini listed the India vs
+# Pakistan Women's T20 Asia Cup match as Sept 6, but an independent check
+# during the 2026-08-09 review (Olympics.com, Telangana Today, Asianet
+# Newsable) found the real date is Sept 5 — `date` below reflects that
+# correction, not Gemini's original text.
+def _cal_query(hint: str, focus: str = "") -> str:
+    """Build a research_query that treats `hint` as a lead to verify, never
+    as ground truth — this is the one line standing between every entry
+    below and repeating Gemini's own Sept 6 vs Sept 5 mistake."""
+    return (
+        f"{hint} Verify this independently via web search rather than assuming it is "
+        f"accurate — confirm the date and key facts yourself. Write one factual paragraph "
+        f"(2-3 sentences){f' focused on: {focus}' if focus else ''}. If sources disagree on "
+        f"the date or details, say so explicitly rather than picking one confidently."
+    )
+
+
 CALENDAR_EVENTS = [
     {
-        "event_id": "independence-day-2026",
-        "title": "India's 80th Independence Day",
-        "category": "national",
-        "date": "2026-08-15",
-        "lead_days": 2,
-        "research_query": (
-            "What is happening for India's 80th Independence Day on August 15, 2026 — "
-            "the Prime Minister's Red Fort address, national celebrations, and any major "
-            "announcements. Write one factual paragraph."
+        "event_id": "khudiram-bose-martyrdom-day-2026", "category": "history",
+        "title": "Khudiram Bose Martyrdom Day", "date": "2026-08-11", "lead_days": 1,
+        "research_query": _cal_query(
+            "Khudiram Bose was one of the youngest revolutionaries of the Indian "
+            "independence movement, executed on August 11, 1908."
         ),
     },
     {
-        "event_id": "national-space-day-2026",
-        "title": "National Space Day — Chandrayaan-3 anniversary",
-        "category": "science",
-        "date": "2026-08-23",
-        "lead_days": 2,
-        "research_query": (
-            "What is India's National Space Day on August 23, 2026 commemorating — the "
-            "Chandrayaan-3 Moon landing anniversary — and any planned ISRO events that day. "
-            "Write one factual paragraph."
+        "event_id": "vikram-sarabhai-birth-anniversary-2026", "category": "science",
+        "title": "Vikram Sarabhai Birth Anniversary", "date": "2026-08-12", "lead_days": 1,
+        "research_query": _cal_query(
+            "Vikram Sarabhai, known as the father of the Indian space program, has his "
+            "birth anniversary on August 12.", focus="his legacy and ISRO's current missions"
         ),
     },
     {
-        "event_id": "raksha-bandhan-2026",
-        "title": "Raksha Bandhan celebrated across India",
-        "category": "festival",
-        "date": "2026-08-28",
-        "lead_days": 2,
-        "research_query": (
-            "What is Raksha Bandhan, when does it fall in 2026, and what is its cultural and "
-            "retail/e-commerce significance in India. Write one factual paragraph."
+        "event_id": "international-youth-day-2026", "category": "global",
+        "title": "International Youth Day", "date": "2026-08-12", "lead_days": 1,
+        "research_query": _cal_query(
+            "International Youth Day is a UN-designated observance on August 12 focused on "
+            "youth issues, education, and employment.", focus="India's youth demographic"
         ),
     },
     {
-        "event_id": "womens-t20-asia-cup-2026-begins",
-        "title": "Women's T20 Asia Cup begins in Dubai",
-        "category": "sports",
-        "date": "2026-08-28",
-        "lead_days": 2,
-        "research_query": (
-            "When does the Women's T20 Asia Cup cricket tournament begin in 2026, which teams "
-            "are competing, and who India's first opponent is. Write one factual paragraph "
-            "and flag it clearly if sources disagree on the exact date."
+        "event_id": "world-organ-donation-day-2026", "category": "health",
+        "title": "World Organ Donation Day", "date": "2026-08-13", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Organ Donation Day on August 13 focuses on debunking myths around organ "
+            "donation and medical advancements in transplantation."
+        ),
+    },
+    {
+        "event_id": "partition-horrors-remembrance-day-2026", "category": "national",
+        "title": "Partition Horrors Remembrance Day", "date": "2026-08-14", "lead_days": 1,
+        "research_query": _cal_query(
+            "Partition Horrors Remembrance Day is an official Indian national observance on "
+            "August 14 remembering the victims of the 1947 Partition."
+        ),
+    },
+    {
+        "event_id": "independence-day-2026", "category": "national",
+        "title": "India's 80th Independence Day", "date": "2026-08-15", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's 80th Independence Day falls on August 15, 2026, with the Prime "
+            "Minister's Red Fort address and national celebrations.",
+            focus="the Red Fort address and any major announcements",
+        ),
+    },
+    {
+        "event_id": "vajpayee-death-anniversary-2026", "category": "politics",
+        "title": "Atal Bihari Vajpayee Death Anniversary", "date": "2026-08-16", "lead_days": 1,
+        "research_query": _cal_query(
+            "Former Indian Prime Minister Atal Bihari Vajpayee's death anniversary falls on "
+            "August 16.", focus="tributes from political leaders"
+        ),
+    },
+    {
+        "event_id": "madan-lal-dhingra-martyrdom-day-2026", "category": "history",
+        "title": "Madan Lal Dhingra Martyrdom Day", "date": "2026-08-17", "lead_days": 1,
+        "research_query": _cal_query(
+            "Madan Lal Dhingra was an Indian revolutionary; his martyrdom day is observed on "
+            "August 17."
+        ),
+    },
+    {
+        "event_id": "indonesian-independence-day-2026", "category": "global",
+        "title": "Indonesian Independence Day", "date": "2026-08-17", "lead_days": 1,
+        "research_query": _cal_query(
+            "Indonesia's Independence Day falls on August 17.",
+            focus="any India-Indonesia geopolitical or economic relevance",
+        ),
+    },
+    {
+        "event_id": "subhas-chandra-bose-death-anniversary-2026", "category": "history",
+        "title": "Subhas Chandra Bose Death Anniversary", "date": "2026-08-18", "lead_days": 1,
+        "research_query": _cal_query(
+            "Subhas Chandra Bose's disputed death anniversary, tied to the 1945 Taiwan plane "
+            "crash, is observed on August 18.", focus="the ongoing historical discourse"
+        ),
+    },
+    {
+        "event_id": "world-photography-day-2026", "category": "culture",
+        "title": "World Photography Day", "date": "2026-08-19", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Photography Day on August 19 is a hook for photography, camera tech, and "
+            "photojournalism features."
+        ),
+    },
+    {
+        "event_id": "sadbhavana-diwas-2026", "category": "politics",
+        "title": "Sadbhavana Diwas", "date": "2026-08-20", "lead_days": 1,
+        "research_query": _cal_query(
+            "Sadbhavana Diwas ('Harmony Day') on August 20 marks former Indian PM Rajiv "
+            "Gandhi's birth anniversary."
+        ),
+    },
+    {
+        "event_id": "world-senior-citizens-day-2026", "category": "social",
+        "title": "World Senior Citizen's Day", "date": "2026-08-21", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Senior Citizen's Day falls on August 21.",
+            focus="pensions, healthcare, and financial planning for the elderly in India",
+        ),
+    },
+    {
+        "event_id": "madras-day-2026", "category": "culture",
+        "title": "Madras Day", "date": "2026-08-22", "lead_days": 1,
+        "research_query": _cal_query(
+            "Madras Day on August 22 celebrates the founding of the city of Madras (Chennai) "
+            "in 1639."
+        ),
+    },
+    {
+        "event_id": "national-space-day-2026", "category": "science",
+        "title": "National Space Day — Chandrayaan-3 anniversary", "date": "2026-08-23", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's National Space Day on August 23 commemorates the Chandrayaan-3 Moon "
+            "landing anniversary.", focus="the Chandrayaan-3 anniversary and planned ISRO events"
+        ),
+    },
+    {
+        "event_id": "f1-dutch-grand-prix-2026", "category": "sports",
+        "title": "Formula 1 Dutch Grand Prix", "date": "2026-08-23", "lead_days": 1,
+        "research_query": _cal_query(
+            "The Formula 1 Dutch Grand Prix takes place in Zandvoort, Netherlands in late "
+            "August 2026.", focus="confirming the exact 2026 race date and any standings context"
+        ),
+    },
+    {
+        "event_id": "pluto-demoted-day-2026", "category": "science",
+        "title": "Pluto Demoted Day", "date": "2026-08-24", "lead_days": 1,
+        "research_query": _cal_query(
+            "Pluto Demoted Day on August 24 marks the 2006 IAU decision that revoked Pluto's "
+            "planetary status."
+        ),
+    },
+    {
+        "event_id": "first-onam-2026", "category": "festival",
+        "title": "First Onam", "date": "2026-08-25", "lead_days": 1,
+        "research_query": _cal_query(
+            "The core Onam festival celebrations in Kerala begin around August 25, 2026.",
+            focus="confirming the 2026 date and its cultural/economic significance",
+        ),
+    },
+    {
+        "event_id": "eid-e-milad-2026", "category": "festival",
+        "title": "Milad-un-Nabi / Eid-e-Milad", "date": "2026-08-26", "lead_days": 1,
+        "research_query": _cal_query(
+            "Eid-e-Milad (Milad-un-Nabi), the birth anniversary of Prophet Muhammad, is "
+            "observed around August 26, 2026 as a public holiday in many Indian states.",
+            focus="confirming the 2026 date, since Islamic calendar dates shift yearly",
+        ),
+    },
+    {
+        "event_id": "mother-teresa-birth-anniversary-2026", "category": "global",
+        "title": "Mother Teresa Birth Anniversary", "date": "2026-08-26", "lead_days": 1,
+        "research_query": _cal_query(
+            "Mother Teresa's birth anniversary falls on August 26."
+        ),
+    },
+    {
+        "event_id": "don-bradman-birth-anniversary-2026", "category": "sports",
+        "title": "Sir Don Bradman Birth Anniversary", "date": "2026-08-27", "lead_days": 1,
+        "research_query": _cal_query(
+            "Cricketer Sir Don Bradman's birth anniversary falls on August 27.",
+            focus="cricket nostalgia and statistics",
+        ),
+    },
+    {
+        "event_id": "raksha-bandhan-2026", "category": "festival",
+        "title": "Raksha Bandhan celebrated across India", "date": "2026-08-28", "lead_days": 1,
+        "research_query": _cal_query(
+            "Raksha Bandhan, the pan-India festival celebrating the bond between siblings, "
+            "falls around August 28, 2026.",
+            focus="confirming the 2026 date and its retail/e-commerce significance",
+        ),
+    },
+    {
+        "event_id": "national-sports-day-2026", "category": "sports",
+        "title": "National Sports Day", "date": "2026-08-29", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's National Sports Day on August 29 marks hockey legend Major Dhyan "
+            "Chand's birth anniversary, with the President typically presenting the Khel "
+            "Ratna and Arjuna awards that day.",
+            focus="confirming this year's award ceremony details",
+        ),
+    },
+    {
+        "event_id": "womens-t20-asia-cup-2026-begins", "category": "sports",
+        "title": "Women's T20 Asia Cup begins in Dubai", "date": "2026-08-30", "lead_days": 1,
+        "research_query": _cal_query(
+            "The Women's T20 Asia Cup 2026 begins around August 30 in Dubai, with India "
+            "Women facing Thailand Women in their opening group-stage match.",
+            focus="confirming the exact start date and opening fixture",
+        ),
+    },
+    {
+        "event_id": "amrita-pritam-birth-anniversary-2026", "category": "culture",
+        "title": "Amrita Pritam Birth Anniversary", "date": "2026-08-31", "lead_days": 1,
+        "research_query": _cal_query(
+            "Punjabi writer and poet Amrita Pritam's birth anniversary falls on August 31."
+        ),
+    },
+    {
+        "event_id": "national-nutrition-week-2026", "category": "health",
+        "title": "National Nutrition Week Begins", "date": "2026-09-01", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's National Nutrition Week begins around September 1.",
+            focus="this year's theme and diet/wellness angle",
+        ),
+    },
+    {
+        "event_id": "world-coconut-day-2026", "category": "economy",
+        "title": "World Coconut Day", "date": "2026-09-02", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Coconut Day on September 2 highlights coconut agriculture and trade.",
+            focus="relevance to southern and coastal Indian states",
+        ),
+    },
+    {
+        "event_id": "india-vs-hong-kong-t20-2026", "category": "sports",
+        "title": "India vs Hong Kong — Women's T20 Asia Cup", "date": "2026-09-03", "lead_days": 1,
+        "research_query": _cal_query(
+            "India Women play Hong Kong Women in their second group-stage match of the "
+            "Women's T20 Asia Cup around September 3, 2026.",
+            focus="confirming the exact match date and result if already played",
+        ),
+    },
+    {
+        "event_id": "janmashtami-2026", "category": "festival",
+        "title": "Janmashtami", "date": "2026-09-04", "lead_days": 1,
+        "research_query": _cal_query(
+            "Janmashtami, celebrating the birth of Lord Krishna, falls around September 4, "
+            "2026.", focus="confirming the 2026 date and major celebrations across India"
+        ),
+    },
+    {
+        "event_id": "teachers-day-2026", "category": "national",
+        "title": "Teachers' Day", "date": "2026-09-05", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's Teachers' Day on September 5 marks Dr. Sarvepalli Radhakrishnan's birth "
+            "anniversary.", focus="education policy news and school celebrations"
+        ),
+    },
+    {
+        # Gemini's list dated this Sept 6 — corrected to Sept 5 per an
+        # independent check during the 2026-08-09 review (Olympics.com,
+        # Telangana Today, Asianet Newsable). See the CALENDAR_EVENTS
+        # docstring above. research_topic() will independently re-verify
+        # regardless, but the DATE here has to be right for the card to
+        # even attempt showing on the correct day.
+        "event_id": "india-vs-pakistan-t20-2026", "category": "sports",
+        "title": "India vs Pakistan — Women's T20 Asia Cup", "date": "2026-09-05", "lead_days": 1,
+        "research_query": _cal_query(
+            "India Women play Pakistan Women in the Women's T20 Asia Cup group stage in "
+            "Dubai in early September 2026 — confirm the exact date, since sources have "
+            "disagreed on Sept 5 vs Sept 6 in the past.",
+            focus="confirming the exact match date and result if already played",
+        ),
+    },
+    {
+        "event_id": "clean-air-blue-skies-day-2026", "category": "environment",
+        "title": "International Day of Clean Air for Blue Skies", "date": "2026-09-07", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN's International Day of Clean Air for Blue Skies falls on September 7.",
+            focus="relevance to air quality (AQI) in Indian cities",
+        ),
+    },
+    {
+        "event_id": "international-literacy-day-2026", "category": "global",
+        "title": "International Literacy Day", "date": "2026-09-08", "lead_days": 1,
+        "research_query": _cal_query(
+            "UN-designated International Literacy Day falls on September 8.",
+            focus="literacy as a matter of dignity and human rights"
+        ),
+    },
+    {
+        "event_id": "himalayan-day-2026", "category": "environment",
+        "title": "Himalayan Day", "date": "2026-09-09", "lead_days": 1,
+        "research_query": _cal_query(
+            "Himalayan Day on September 9 focuses on conservation of the Himalayan "
+            "ecosystem, largely observed in Uttarakhand."
+        ),
+    },
+    {
+        "event_id": "world-suicide-prevention-day-2026", "category": "health",
+        "title": "World Suicide Prevention Day", "date": "2026-09-10", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Suicide Prevention Day falls on September 10.",
+            focus="mental health awareness in India",
+        ),
+    },
+    {
+        "event_id": "govind-ballabh-pant-birth-anniversary-2026", "category": "history",
+        "title": "Govind Ballabh Pant Birth Anniversary", "date": "2026-09-10", "lead_days": 1,
+        "research_query": _cal_query(
+            "Freedom fighter Govind Ballabh Pant's birth anniversary falls on September 10."
         ),
     },
 ]

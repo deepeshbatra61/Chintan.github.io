@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { ArrowLeft, Radio, Flame, Clock, ChevronRight, Flag, Trophy, Sparkles, Rocket, CalendarDays } from "lucide-react";
+import {
+  ArrowLeft, Radio, Flame, Clock, ChevronRight, Flag, Trophy, Sparkles, Rocket, CalendarDays,
+  ScrollText, Globe, HeartPulse, Landmark, Palette, Users, Leaf, Wheat,
+} from "lucide-react";
 import { SuryaLogo } from "../App";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
@@ -15,6 +18,14 @@ const CALENDAR_ICONS = {
   sports: Trophy,
   festival: Sparkles,
   science: Rocket,
+  history: ScrollText,
+  global: Globe,
+  health: HeartPulse,
+  politics: Landmark,
+  culture: Palette,
+  social: Users,
+  environment: Leaf,
+  economy: Wheat,
 };
 
 function formatCalendarDate(isoDate) {
