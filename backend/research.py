@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse
@@ -53,6 +54,88 @@ RESEARCH_TIMEOUT_SECONDS = 25                   # D8: hard per-call timeout so a
                                                  # slow call fails fast, not hangs
 RESEARCH_MIN_INDEPENDENT_DOMAINS = 2            # D3: the actual verification bar
 RESEARCH_CACHE_TTL_HOURS = 20                   # D4: don't re-research same day
+
+# BUMP THIS whenever extraction, cleaning, or the system prompt changes.
+# Cached entries are keyed by version, so old rows are ignored rather than
+# migrated. Without it, a fix ships but users keep seeing the cached bad
+# text until the TTL lapses — which is exactly what happened when the
+# model's "I notice there is a discrepancy..." narration went out on a card
+# and was still being served from cache after the code fix landed.
+#   v1: initial
+#   v2: answer taken from post-search blocks only + narration stripped
+RESEARCH_CACHE_VERSION = 2
+RESEARCH_MAX_SENTENCES = 3                      # card copy, not an essay
+RESEARCH_MAX_CHARS = 400                        # backstop for very long sentences
+
+# Block types the API emits for the search itself. Text blocks BEFORE the last
+# one of these are the model narrating its own process, not the answer.
+_TOOL_BLOCK_TYPES = ("web_search_tool_result", "server_tool_use")
+
+# Sentence openers that mean the model is describing its own research rather
+# than answering. Matched case-insensitively and ONLY at the start of a
+# leading sentence: "I found the claim credible" mid-paragraph is content,
+# "I found one reference citing..." opening the card is not.
+_META_OPENERS = (
+    "based on my search", "based on the search", "based on my web search",
+    "based on these search", "based on those search", "based on the above",
+    "let me search", "let me look", "let me verify", "let me check",
+    "let me find", "let me confirm", "let me clarify",
+    "i'll search", "i will search", "i'll look", "i will look",
+    "i'll verify", "i will verify", "i'll check", "i will check",
+    "i need to search", "i should search", "i need to verify",
+    "i can now provide", "i can now write", "i now have enough",
+    "i notice there is", "i notice that there", "i notice a", "i notice one",
+    "here is a factual", "here's a factual", "here is one factual",
+    "here's one factual", "here is the factual", "here's the factual",
+    "here is the paragraph", "here's the paragraph",
+    "my search results", "the search results", "searching for",
+    "i have searched", "i've searched", "i searched",
+)
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Naive sentence split — good enough for trimming card copy. Abbreviations
+    ('Aug. 11') can over-split; the cost is a slightly shorter card, not a
+    wrong one, which is the right way for this to fail."""
+    return [s for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s]
+
+
+def _clean_answer(text: str) -> str:
+    """Turn the model's raw reply into card-ready copy.
+
+    Two jobs, both learned from a live card that shipped "I notice there is a
+    discrepancy in one source... Let me search for additional clarification":
+      1. drop leading sentences that narrate the research process
+      2. cap the length, because this renders in a fixed-size card
+
+    Deliberately only strips from the FRONT. A meta-sounding clause in the
+    middle of an otherwise good paragraph is far more likely to be real
+    content than narration, and silently deleting the middle of a factual
+    sentence is a worse failure than leaving one clumsy phrase in."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if not text:
+        return ""
+
+    sentences = _split_sentences(text)
+    while sentences and sentences[0].lower().lstrip("*_# ").startswith(_META_OPENERS):
+        sentences.pop(0)
+
+    out = " ".join(sentences[:RESEARCH_MAX_SENTENCES]).strip()
+    if len(out) <= RESEARCH_MAX_CHARS:
+        return out
+
+    # Too long: trim back to the last COMPLETE sentence that fits, so a card
+    # never ends mid-thought. If even the first sentence overruns, hard-cut it
+    # on a word boundary rather than shipping a wall of text.
+    kept, total = [], 0
+    for s in _split_sentences(out):
+        if total + len(s) + 1 > RESEARCH_MAX_CHARS:
+            break
+        kept.append(s)
+        total += len(s) + 1
+    if kept:
+        return " ".join(kept).strip()
+    return out[:RESEARCH_MAX_CHARS].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 # Domains where the registrable part is the last THREE labels, not two
 # (bbc.co.uk, not co.uk). Not a full public-suffix-list -- deliberately a small,
@@ -123,9 +206,21 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
                 logger.warning(f"web_search_tool_result_error: {error_code}")
                 return None
 
+    # The model narrates between searches — one text block before EACH tool
+    # call ("Let me search for additional clarification...", "Based on my
+    # search results, I can now provide...") and the real answer last. Only
+    # the blocks after the LAST search result are the answer. Joining all of
+    # them is exactly what put "I notice there is a discrepancy in one source"
+    # onto a live card, so this slice is the fix, not a nicety.
+    last_tool = -1
+    for i, block in enumerate(content_blocks):
+        if block_type(block) in _TOOL_BLOCK_TYPES:
+            last_tool = i
+    answer_blocks = content_blocks[last_tool + 1:]
+
     text_parts: list[str] = []
     citations: list[dict] = []
-    for block in content_blocks:
+    for block in answer_blocks:
         if block_type(block) != "text":
             continue
         text = getattr(block, "text", None) or (block.get("text") if isinstance(block, dict) else "")
@@ -140,7 +235,12 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
             if url:
                 citations.append({"url": url, "title": title or ""})
 
-    content = "".join(text_parts).strip()
+    # Citations are counted from the ANSWER blocks only, deliberately: the
+    # claim this module makes is "the text being shown is backed by 2+
+    # independent domains." Counting sources the model merely looked at
+    # earlier, while displaying different text, would make that claim a lie.
+    # It's a stricter bar than pooling everything, and that's the point.
+    content = _clean_answer(" ".join(text_parts))
     if not content or _independent_domain_count(citations) < RESEARCH_MIN_INDEPENDENT_DOMAINS:
         return None
 
@@ -148,7 +248,7 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
 
 
 def _cache_key(topic: str, scope: str) -> str:
-    return f"{topic}:{scope}"
+    return f"v{RESEARCH_CACHE_VERSION}:{topic}:{scope}"
 
 
 def _is_fresh(cached: dict) -> bool:
@@ -216,11 +316,18 @@ async def research_topic(
                 model=model,
                 max_tokens=500,
                 system=(
-                    "You are a careful research assistant. Search the web and write "
-                    "ONE short, factual paragraph (2-3 sentences) answering the "
-                    "user's question. State only what your search results support. "
-                    "If your sources disagree on a specific detail (a date, a score, "
-                    "a name), say so rather than picking one confidently."
+                    "You write copy that goes DIRECTLY onto a card in a live news app. "
+                    "Search the web, then reply with ONLY the finished paragraph: 2-3 "
+                    "sentences of plain factual prose.\n\n"
+                    "Never narrate your own process. Do not write 'based on my search', "
+                    "'let me search', 'I notice', 'I can now provide', or any sentence "
+                    "about searching, sources, or yourself. No preamble, no sign-off, no "
+                    "headings, no quotes around the paragraph. The reader must never be "
+                    "able to tell a search happened.\n\n"
+                    "State only what your results support. If the weight of sources "
+                    "materially conflicts on a central fact, state that conflict as a "
+                    "fact ('accounts differ on whether...'). Ignore lone outliers that "
+                    "the bulk of sources contradict — do not mention them."
                 ),
                 messages=[{"role": "user", "content": context}],
                 tools=[{

@@ -118,7 +118,10 @@ const DevelopingPage = () => {
                     <div style={{ paddingTop: "4px", paddingRight: "46px" }}>
                       <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "17px", lineHeight: 1.28, color: "#F2EEE9", margin: 0 }}>{topic.title}</h2>
                       {topic.content && (
-                        <p style={{ color: "#8A847C", fontSize: "13px", lineHeight: 1.4, margin: "7px 0 0" }}>{topic.content}</p>
+                        // Clamped, not free-flowing: the backend already caps this to
+                        // ~3 sentences, but a card in a scrolling list must never be
+                        // able to grow unbounded on a backend that misbehaves.
+                        <p style={{ color: "#8A847C", fontSize: "13px", lineHeight: 1.4, margin: "7px 0 0", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{topic.content}</p>
                       )}
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", paddingTop: "11px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "#DC6B5A", letterSpacing: "0.04em" }}>{formatCalendarDate(topic.calendar_date)}</span>

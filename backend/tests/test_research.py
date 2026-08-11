@@ -110,7 +110,9 @@ def test_citations_are_pooled_across_multiple_text_blocks():
     ]
     result = research._extract_search_result(blocks)
     assert result is not None
-    assert result["content"] == "Part one.Part two."
+    # Joined with a space, not glued -- the "date.Based on my search" that
+    # reached a live card came from a bare "".join().
+    assert result["content"] == "Part one. Part two."
 
 
 def test_no_citations_does_not_verify():
@@ -157,6 +159,117 @@ def test_accepts_sdk_style_objects_not_just_dicts():
     result = research._extract_search_result([block])
     assert result is not None
     assert result["content"] == "Verified via SDK objects."
+
+
+# ────────────── narration leak (regression: shipped to a live card) ──────────
+
+def _tool_result_block(url="https://a.com"):
+    return {"type": "web_search_tool_result", "content": [{"type": "web_search_result", "url": url}]}
+
+
+def test_narration_before_the_last_search_is_not_part_of_the_answer():
+    """THE regression test. This exact shape reached a real user's screen:
+    the model's between-search commentary was concatenated onto the front of
+    the Khudiram Bose card because every text block was being joined."""
+    blocks = [
+        _text_block("I'll search for information about Khudiram Bose."),
+        _tool_result_block(),
+        _text_block(
+            "I notice there is a discrepancy in one source about the execution date. "
+            "Let me search for additional clarification about the exact date."
+        ),
+        _tool_result_block(),
+        _text_block(
+            "Khudiram Bose was executed by the British government on August 11, 1908.",
+            [{"url": "https://britannica.com/x"}, {"url": "https://thehindu.com/y"}],
+        ),
+    ]
+    result = research._extract_search_result(blocks)
+    assert result is not None
+    assert result["content"] == (
+        "Khudiram Bose was executed by the British government on August 11, 1908."
+    )
+    assert "Let me search" not in result["content"]
+    assert "I notice" not in result["content"]
+
+
+def test_citations_come_only_from_the_answer_blocks():
+    """Sources the model merely looked at earlier must not prop up a verified
+    claim about text it did not back -- otherwise 'backed by 2 domains' lies."""
+    blocks = [
+        _text_block("Looking into this.", [{"url": "https://early1.com/a"}]),
+        _tool_result_block(),
+        _text_block("More context.", [{"url": "https://early2.com/b"}]),
+        _tool_result_block(),
+        _text_block("The final answer.", [{"url": "https://only-one.com/c"}]),
+    ]
+    # Only one domain backs the ANSWER, even though three were seen overall.
+    assert research._extract_search_result(blocks) is None
+
+
+def test_meta_preamble_is_stripped_from_the_answer_block_itself():
+    """Narration can also open the final block, not just earlier ones."""
+    blocks = [
+        _tool_result_block(),
+        _text_block(
+            "Based on my search results, I can now provide a factual paragraph. "
+            "Vikram Sarabhai founded the Indian space programme.",
+            [{"url": "https://isro.gov.in/a"}, {"url": "https://thehindu.com/b"}],
+        ),
+    ]
+    result = research._extract_search_result(blocks)
+    assert result is not None
+    assert result["content"] == "Vikram Sarabhai founded the Indian space programme."
+
+
+def test_answer_that_is_only_narration_does_not_verify():
+    blocks = [
+        _tool_result_block(),
+        _text_block(
+            "Let me search for more detail. I can now provide a factual paragraph.",
+            [{"url": "https://a.com"}, {"url": "https://b.com"}],
+        ),
+    ]
+    assert research._extract_search_result(blocks) is None
+
+
+# ─────────────────────── _clean_answer ───────────────────────
+
+def test_clean_answer_caps_sentence_count():
+    text = "One. Two. Three. Four. Five."
+    assert research._clean_answer(text) == "One. Two. Three."
+
+
+def test_clean_answer_only_strips_leading_narration():
+    """A meta-sounding clause mid-paragraph is far likelier to be real content
+    than narration, so it stays -- deleting the middle of a factual sentence
+    would be the worse failure."""
+    text = "Bose was executed in 1908. I found the record in colonial archives."
+    assert research._clean_answer(text) == text
+
+
+def test_clean_answer_collapses_whitespace():
+    assert research._clean_answer("  A   sentence.\n\nAnother.  ") == "A sentence. Another."
+
+
+def test_clean_answer_trims_to_a_whole_sentence_when_too_long():
+    long_first = "A" * 380 + "."
+    text = f"{long_first} This second sentence pushes it over the character cap."
+    out = research._clean_answer(text)
+    assert out == long_first
+    assert len(out) <= research.RESEARCH_MAX_CHARS
+
+
+def test_clean_answer_hard_cuts_a_single_runaway_sentence():
+    text = "word " * 200  # no sentence boundary at all
+    out = research._clean_answer(text)
+    assert len(out) <= research.RESEARCH_MAX_CHARS + 1  # +1 for the ellipsis
+    assert out.endswith("…")
+
+
+def test_clean_answer_on_empty_input():
+    assert research._clean_answer("") == ""
+    assert research._clean_answer(None) == ""
 
 
 # ─────────────────────── _is_fresh ───────────────────────
@@ -226,7 +339,7 @@ async def test_verified_result_is_cached_and_returned():
     )
 
     assert result["content"] == "Verified fact."
-    cached = db.research_cache.docs["Independence Day:2026-08-15"]
+    cached = db.research_cache.docs[research._cache_key("Independence Day", "2026-08-15")]
     assert cached["verified"] is True
 
 
@@ -241,7 +354,7 @@ async def test_unverified_result_returns_none_and_caches_as_unverified():
     )
 
     assert result is None
-    cached = db.research_cache.docs["Some Topic:scope"]
+    cached = db.research_cache.docs[research._cache_key("Some Topic", "scope")]
     assert cached["verified"] is False
 
 
@@ -249,8 +362,8 @@ async def test_unverified_result_returns_none_and_caches_as_unverified():
 async def test_fresh_verified_cache_hit_skips_the_api_call():
     db = FakeDB()
     now = datetime.now(timezone.utc).isoformat()
-    db.research_cache.docs["Topic:scope"] = {
-        "_id": "Topic:scope",
+    db.research_cache.docs[research._cache_key("Topic", "scope")] = {
+        "_id": research._cache_key("Topic", "scope"),
         "verified": True,
         "content": "Cached content.",
         "citations": [{"url": "https://a.com"}],
@@ -270,8 +383,8 @@ async def test_fresh_verified_cache_hit_skips_the_api_call():
 async def test_fresh_unverified_cache_hit_returns_none_without_recalling():
     db = FakeDB()
     now = datetime.now(timezone.utc).isoformat()
-    db.research_cache.docs["Topic:scope"] = {
-        "_id": "Topic:scope",
+    db.research_cache.docs[research._cache_key("Topic", "scope")] = {
+        "_id": research._cache_key("Topic", "scope"),
         "verified": False,
         "content": None,
         "citations": [],
@@ -301,7 +414,7 @@ async def test_daily_cap_reached_skips_the_call_entirely():
     assert result is None
     client.messages.create.assert_not_called()
     # no cache entry written -- the call was never attempted
-    assert "Topic:scope" not in db.research_cache.docs
+    assert research._cache_key("Topic", "scope") not in db.research_cache.docs
 
 
 @pytest.mark.asyncio
@@ -329,7 +442,7 @@ async def test_api_error_is_swallowed_and_treated_as_unverified():
     )
 
     assert result is None
-    cached = db.research_cache.docs["Topic:scope"]
+    cached = db.research_cache.docs[research._cache_key("Topic", "scope")]
     assert cached["verified"] is False
     # a call was still counted -- it cost money even though it failed
     today = datetime.now(timezone.utc).date().isoformat()
@@ -355,7 +468,7 @@ async def test_timeout_is_swallowed_and_treated_as_unverified(monkeypatch):
     )
 
     assert result is None
-    cached = db.research_cache.docs["Topic:scope"]
+    cached = db.research_cache.docs[research._cache_key("Topic", "scope")]
     assert cached["verified"] is False
 
 

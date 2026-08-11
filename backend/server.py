@@ -3315,23 +3315,35 @@ async def _sync_wave_topics() -> None:
 # engagement can happen later, once there's real data to prune with.
 #
 # Gemini's wording is used only as a research HINT below, never as fact —
-# _cal_query() always instructs the agent to verify independently, and a
-# hint that turns out wrong just means that entry fails verification and
-# stays hidden (no different from a hint that was never given). One entry's
+# research.py's 2-independent-domain rule is what decides whether anything
+# ships, so a hint that turns out wrong just means that entry fails
+# verification and stays hidden (no different from a hint that was never
+# given). Note the hints deliberately do NOT say "verify this" — telling a
+# model to verify makes it narrate verifying, which is how "I notice there
+# is a discrepancy in one source" reached a live card. One entry's
 # hint is already known-wrong and corrected here: Gemini listed the India vs
 # Pakistan Women's T20 Asia Cup match as Sept 6, but an independent check
 # during the 2026-08-09 review (Olympics.com, Telangana Today, Asianet
 # Newsable) found the real date is Sept 5 — `date` below reflects that
 # correction, not Gemini's original text.
 def _cal_query(hint: str, focus: str = "") -> str:
-    """Build a research_query that treats `hint` as a lead to verify, never
-    as ground truth — this is the one line standing between every entry
-    below and repeating Gemini's own Sept 6 vs Sept 5 mistake."""
+    """Build the research prompt for one calendar entry.
+
+    `hint` is Gemini's original description, used ONLY to identify which
+    event to look up. It is never treated as ground truth — research.py's
+    system prompt is what instructs verification, and its 2-independent-
+    domain rule is what actually decides whether an answer ships at all.
+
+    Deliberately NOT phrased as "verify this yourself, confirm the date":
+    that earlier wording made the model narrate its own fact-checking onto
+    a live card ("I notice there is a discrepancy in one source about the
+    execution date. Let me search for additional clarification"). Telling a
+    model to verify makes it TALK about verifying; the verification belongs
+    in code, which is where it now lives."""
     return (
-        f"{hint} Verify this independently via web search rather than assuming it is "
-        f"accurate — confirm the date and key facts yourself. Write one factual paragraph "
-        f"(2-3 sentences){f' focused on: {focus}' if focus else ''}. If sources disagree on "
-        f"the date or details, say so explicitly rather than picking one confidently."
+        f"{hint}"
+        f"{f' Focus on {focus}.' if focus else ''}"
+        " Write the card paragraph for this."
     )
 
 
@@ -3462,7 +3474,7 @@ CALENDAR_EVENTS = [
         "title": "Formula 1 Dutch Grand Prix", "date": "2026-08-23", "lead_days": 1,
         "research_query": _cal_query(
             "The Formula 1 Dutch Grand Prix takes place in Zandvoort, Netherlands in late "
-            "August 2026.", focus="confirming the exact 2026 race date and any standings context"
+            "August 2026.", focus="the race weekend and the championship picture going into it"
         ),
     },
     {
@@ -3478,7 +3490,7 @@ CALENDAR_EVENTS = [
         "title": "First Onam", "date": "2026-08-25", "lead_days": 1,
         "research_query": _cal_query(
             "The core Onam festival celebrations in Kerala begin around August 25, 2026.",
-            focus="confirming the 2026 date and its cultural/economic significance",
+            focus="its cultural significance and economic impact in Kerala",
         ),
     },
     {
@@ -3487,7 +3499,7 @@ CALENDAR_EVENTS = [
         "research_query": _cal_query(
             "Eid-e-Milad (Milad-un-Nabi), the birth anniversary of Prophet Muhammad, is "
             "observed around August 26, 2026 as a public holiday in many Indian states.",
-            focus="confirming the 2026 date, since Islamic calendar dates shift yearly",
+            focus="how it is observed across Indian states",
         ),
     },
     {
@@ -3511,7 +3523,7 @@ CALENDAR_EVENTS = [
         "research_query": _cal_query(
             "Raksha Bandhan, the pan-India festival celebrating the bond between siblings, "
             "falls around August 28, 2026.",
-            focus="confirming the 2026 date and its retail/e-commerce significance",
+            focus="its retail and e-commerce significance",
         ),
     },
     {
@@ -3521,7 +3533,7 @@ CALENDAR_EVENTS = [
             "India's National Sports Day on August 29 marks hockey legend Major Dhyan "
             "Chand's birth anniversary, with the President typically presenting the Khel "
             "Ratna and Arjuna awards that day.",
-            focus="confirming this year's award ceremony details",
+            focus="this year's Khel Ratna and Arjuna award recipients",
         ),
     },
     {
@@ -3530,7 +3542,7 @@ CALENDAR_EVENTS = [
         "research_query": _cal_query(
             "The Women's T20 Asia Cup 2026 begins around August 30 in Dubai, with India "
             "Women facing Thailand Women in their opening group-stage match.",
-            focus="confirming the exact start date and opening fixture",
+            focus="the opening fixture and the tournament format",
         ),
     },
     {
@@ -3562,7 +3574,7 @@ CALENDAR_EVENTS = [
         "research_query": _cal_query(
             "India Women play Hong Kong Women in their second group-stage match of the "
             "Women's T20 Asia Cup around September 3, 2026.",
-            focus="confirming the exact match date and result if already played",
+            focus="the fixture, and the result if it has already been played",
         ),
     },
     {
@@ -3570,7 +3582,7 @@ CALENDAR_EVENTS = [
         "title": "Janmashtami", "date": "2026-09-04", "lead_days": 1,
         "research_query": _cal_query(
             "Janmashtami, celebrating the birth of Lord Krishna, falls around September 4, "
-            "2026.", focus="confirming the 2026 date and major celebrations across India"
+            "2026.", focus="major celebrations across North and West India"
         ),
     },
     {
@@ -3592,9 +3604,8 @@ CALENDAR_EVENTS = [
         "title": "India vs Pakistan — Women's T20 Asia Cup", "date": "2026-09-05", "lead_days": 1,
         "research_query": _cal_query(
             "India Women play Pakistan Women in the Women's T20 Asia Cup group stage in "
-            "Dubai in early September 2026 — confirm the exact date, since sources have "
-            "disagreed on Sept 5 vs Sept 6 in the past.",
-            focus="confirming the exact match date and result if already played",
+            "Dubai in early September 2026.",
+            focus="the fixture, and the result if it has already been played",
         ),
     },
     {
