@@ -1,0 +1,13 @@
+# Xcode/iOS project files are line-ending-sensitive (and some are binary
+# plists). This repo has core.autocrlf=true, which would otherwise rewrite
+# them on checkout depending on OS and corrupt the Xcode project the moment
+# it's cloned onto a different machine than it was generated on.
+frontend/ios/**/*.pbxproj -text
+frontend/ios/**/*.xcworkspacedata -text
+frontend/ios/**/*.xcscheme -text
+frontend/ios/**/*.plist -text
+frontend/ios/**/*.storyboard -text
+frontend/ios/**/*.xcuserstate binary
+frontend/ios/**/*.png binary
+frontend/ios/**/*.jpg binary
+frontend/ios/**/*.jpeg binary
