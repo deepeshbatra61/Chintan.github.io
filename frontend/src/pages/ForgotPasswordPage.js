@@ -23,17 +23,26 @@ const focusOff = (e) => { e.target.style.borderColor = "rgba(255,255,255,0.09)";
 // actual password-setting step happens on chintan.news/reset-password once
 // the emailed link is opened, since that has to work reliably regardless of
 // whether the app is installed on the device the email is read from.
+// Resends allowed after the initial send. Each one is a real transactional
+// email that costs money and burns sending reputation, and a button that
+// looks inert invites mashing -- which is exactly what happened: the resend
+// fired the request but nothing on screen moved, so there was no signal to
+// stop. This is a UX guard, not a security control: it resets on reload, and
+// the real ceiling is the server's own 5/minute rate limit on the endpoint.
+const MAX_RESENDS = 3;
+
 const ForgotPasswordPage = () => {
   const navigate = useNavigate();
   const R = useReducedMotion();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [resendCount, setResendCount] = useState(0);
+  const [justResent, setJustResent] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || submitting) return;
-    setSubmitting(true);
+  const resendsLeft = MAX_RESENDS - resendCount;
+
+  const postRequest = async () => {
     try {
       await axios.post(`${API}/auth/forgot-password`, { email: email.trim() });
     } catch {
@@ -41,10 +50,26 @@ const ForgotPasswordPage = () => {
       // whether the email exists, so a request-level failure here is a real
       // network problem -- but we still move to the confirmation state
       // rather than reveal account existence through a different UI path.
-    } finally {
-      setSubmitting(false);
-      setSent(true);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || submitting) return;
+    setSubmitting(true);
+    await postRequest();
+    setSubmitting(false);
+    setSent(true);
+  };
+
+  const handleResend = async () => {
+    if (submitting || resendsLeft <= 0) return;
+    setSubmitting(true);
+    setJustResent(false);          // so the confirmation re-animates on every press
+    await postRequest();
+    setSubmitting(false);
+    setResendCount((n) => n + 1);
+    setJustResent(true);
   };
 
   return (
@@ -123,9 +148,35 @@ const ForgotPasswordPage = () => {
                   If an account exists for <span style={{ color: "#B6AFA6" }}>{email.trim()}</span>, a reset link is
                   on its way. It expires in 30 minutes.
                 </p>
-                <button onClick={handleSubmit} disabled={submitting} data-testid="resend-link-btn"
-                  style={{ display: "block", width: "100%", marginBottom: "14px", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "12px", padding: "11px", color: "#B6AFA6", cursor: "pointer", fontSize: "13.5px", fontFamily: "'Manrope', sans-serif", opacity: submitting ? 0.6 : 1 }}>
-                  {submitting ? "Sending…" : "Didn't get it? Send again"}
+                {justResent && (
+                  <motion.p
+                    key={resendCount}
+                    initial={R ? false : { opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.28, ease: EASE }}
+                    data-testid="resend-status"
+                    style={{
+                      margin: "0 0 14px", fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "11.5px", lineHeight: 1.5,
+                      color: resendsLeft === 0 ? "#8A6F62" : "#4ADE80",
+                    }}
+                  >
+                    {resendsLeft > 0
+                      ? `Sent again · ${resendsLeft} attempt${resendsLeft === 1 ? "" : "s"} left`
+                      : "Sent again · that was the last one"}
+                  </motion.p>
+                )}
+
+                {resendsLeft === 0 && (
+                  <p style={{ color: "#6E6862", fontSize: "12.5px", lineHeight: 1.55, margin: "0 0 14px" }}>
+                    Still nothing? Check your spam folder, or write to{" "}
+                    <span style={{ color: "#B6AFA6" }}>team@chintan.news</span> and we'll sort it out.
+                  </p>
+                )}
+
+                <button onClick={handleResend} disabled={submitting || resendsLeft <= 0} data-testid="resend-link-btn"
+                  style={{ display: "block", width: "100%", marginBottom: "14px", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "12px", padding: "11px", color: "#B6AFA6", fontSize: "13.5px", fontFamily: "'Manrope', sans-serif", cursor: resendsLeft <= 0 ? "default" : "pointer", opacity: submitting || resendsLeft <= 0 ? 0.45 : 1 }}>
+                  {submitting ? "Sending…" : resendsLeft <= 0 ? "No more attempts" : "Didn't get it? Send again"}
                 </button>
                 <button onClick={() => navigate("/login")} data-testid="back-to-login-btn"
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: "#DC6B5A", cursor: "pointer", fontWeight: 600, fontSize: "13.5px" }}>
