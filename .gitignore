@@ -95,3 +95,9 @@ frontend/node_modules/.cache/default-development/0.pack
 
 # Gradle build transcript written by local release builds — not source.
 frontend/android/build-log.txt
+
+# Real tester email addresses for scripts/send_tester_nudge.py. This repo is
+# public and these are personal Gmail addresses belonging to friends and
+# family — they must never be committed. Use testers.example.json for the
+# format; keep the real list local only.
+backend/scripts/testers.json
