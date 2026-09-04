@@ -2201,6 +2201,89 @@ def _password_reset_email(first_name: str, reset_url: str, ttl_min: int) -> tupl
     return html, text
 
 
+def _google_account_email(first_name: str) -> tuple[str, str]:
+    """Render the "you signed up with Google" email as (html, text).
+
+    Sent when someone asks to reset the password on an account that has none,
+    because it was created through Google sign-in. Deliberately carries NO
+    button: the action is to reopen the app already sitting on their phone
+    and tap Continue with Google, and a link that went anywhere else would
+    just be a detour dressed up as help.
+
+    Same table-based, fully-inline styling as the other two templates -- see
+    _password_reset_email for why inline is the only styling that survives
+    real mail clients."""
+    safe_name = _esc(first_name)
+    html = f"""\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>Signing in to Chintan</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0A0A0A;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%;">
+
+<tr><td align="center" style="padding-bottom:14px;">
+  <img src="https://chintan.news/email-logo.png" width="48" height="48" alt="Chintan" style="display:block; width:48px; height:48px; border:0;">
+</td></tr>
+
+<tr><td align="center" style="padding-bottom:8px; font-family:'Courier New',monospace; font-size:11px; letter-spacing:3px; color:#6E6862; text-transform:uppercase;">
+  Chintan
+</td></tr>
+
+<tr><td style="background-color:#131211; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:34px 28px;">
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; color:#F2EEE9; padding-bottom:14px;">
+      You sign in with Google
+    </td></tr>
+    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#B6AFA6; padding-bottom:18px;">
+      Hi {safe_name}, you asked to reset your Chintan password — but this account
+      doesn't have one. It was created with Google, so Google handles the signing in.
+    </td></tr>
+    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#B6AFA6;">
+      Open Chintan and tap <span style="color:#F2EEE9; font-weight:600;">Continue with Google</span>.
+      That's all you need — there's no password to remember.
+    </td></tr>
+  </table>
+
+</td></tr>
+
+<tr><td align="center" style="padding-top:26px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:12.5px; line-height:1.6; color:#6E6862;">
+  Didn't ask for this? You can safely ignore this email — nothing about your account has changed.
+</td></tr>
+
+<tr><td align="center" style="padding-top:30px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:11px; color:#4A453F;">
+  Chintan &middot; Don't just consume. Contemplate.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+    # Unescaped name here: the text part is read as plain text, so an escaped
+    # "&amp;" would show up literally. Same split as the other templates.
+    text = (
+        f"You sign in with Google\n\n"
+        f"Hi {first_name}, you asked to reset your Chintan password — but this account "
+        f"doesn't have one. It was created with Google, so Google handles the signing in.\n\n"
+        f"Open Chintan and tap \"Continue with Google\". That's all you need — there's no "
+        f"password to remember.\n\n"
+        f"Didn't ask for this? You can safely ignore this email — nothing about your "
+        f"account has changed.\n\n"
+        f"Chintan — Don't just consume. Contemplate."
+    )
+    return html, text
+
+
 _PWD_ITERATIONS = 200_000
 
 def _hash_password(password: str) -> tuple:
@@ -2589,9 +2672,26 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
         return generic_response
 
     user = await db.users.find_one({"email": email}, {"_id": 0, "user_id": 1, "name": 1, "password_hash": 1})
-    # No account, or a Google-only account with no password to reset -- same
-    # response either way, silently, so this stays unenumerable from outside.
-    if not user or not user.get("password_hash"):
+    # No account at all: say nothing, send nothing. This is the branch the
+    # anti-enumeration guarantee actually rests on.
+    if not user:
+        return generic_response
+
+    first_name = (user.get("name") or "").split(" ")[0] or "there"
+
+    # The account exists but has no password, because it was created through
+    # Google sign-in. Previously this fell into the same silent return as
+    # "no such account" -- which meant a real user (hi, Bani) sat watching
+    # "a reset link is on its way" for a link that was never coming.
+    #
+    # Sending a DIFFERENT email costs nothing in enumeration terms: the HTTP
+    # response is byte-identical either way, so an attacker probing the API
+    # learns exactly as much as before (nothing). The only party who finds
+    # out is whoever can already read that inbox -- which is precisely the
+    # person entitled to know.
+    if not user.get("password_hash"):
+        html, text = _google_account_email(first_name)
+        await _send_email(to=email, subject="Signing in to Chintan", html=html, text=text)
         return generic_response
 
     raw_token = f"prt_{uuid.uuid4().hex}{uuid.uuid4().hex}"
@@ -2608,7 +2708,6 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
     })
 
     reset_url = f"https://chintan.news/reset-password?token={raw_token}"
-    first_name = (user.get("name") or "").split(" ")[0] or "there"
     html, text = _password_reset_email(first_name, reset_url, _PASSWORD_RESET_TOKEN_TTL_MIN)
     await _send_email(to=email, subject="Reset your Chintan password", html=html, text=text)
     return generic_response
