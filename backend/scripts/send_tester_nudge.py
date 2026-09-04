@@ -29,12 +29,15 @@ from urllib.parse import quote
 # Stdlib only, on purpose: this is run by hand from a laptop, and it should
 # never fail because a virtualenv is missing the app's dependencies.
 
-# ── The 14-day window ────────────────────────────────────────────────────────
-# Day 1 = the day build 12 (1.9.0) was promoted to the alpha (closed) track.
-# Google counts from the review date / the running closed test, NOT from when
-# testers originally joined -- see the rejection notice.
-START_DATE = date(2026, 9, 3)
-TOTAL_DAYS = 14
+# ── The testing window ───────────────────────────────────────────────────────
+# Day 1 = 5 September 2026, the day the nudges actually started going out.
+# 21 days, not Google's minimum 14: the extra week is deliberate buffer, so a
+# tester who joins late or drops out for a few days can't drag the whole group
+# back under the 14-day bar. Google counts continuous days on the running
+# closed test, not from when testers originally joined -- see the rejection.
+START_DATE = date(2026, 9, 5)
+TOTAL_DAYS = 21
+END_DATE = date.fromordinal(START_DATE.toordinal() + TOTAL_DAYS - 1)
 
 FEEDBACK_URL = "https://chintan.news/feedback"
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "Chintan <noreply@chintan.news>")
@@ -91,6 +94,7 @@ def render(name: str, day: int) -> tuple[str, str, str]:
     greeting = f"Hi {name}," if name else "Hi,"
     safe_greeting = escape(greeting)
     days_left = max(TOTAL_DAYS - day, 0)
+    end_human = END_DATE.strftime("%d %B").lstrip("0")   # "25 September"
     link = feedback_link(name)
 
     subject = f"Day {day} of Chintan testing — got 2 minutes?"
@@ -109,10 +113,9 @@ def render(name: str, day: int) -> tuple[str, str, str]:
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%;">
 
-<tr><td align="center" style="padding-bottom:14px;">
-  <img src="https://chintan.news/email-logo.png" width="48" height="48" alt="Chintan" style="display:block; width:48px; height:48px; border:0;">
-</td></tr>
-
+<!-- No logo image, deliberately. Images are one of the strongest signals
+     Gmail uses to sort mail into the Promotions tab, and these need to land
+     in Primary to get opened at all. -->
 <tr><td align="center" style="padding-bottom:8px; font-family:'Courier New',monospace; font-size:11px; letter-spacing:3px; color:#6E6862; text-transform:uppercase;">
   Chintan &middot; Day {day} of {TOTAL_DAYS}
 </td></tr>
@@ -127,17 +130,17 @@ def render(name: str, day: int) -> tuple[str, str, str]:
       Quick nudge: open Chintan, read a couple of stories, poke around for a few
       minutes — use it the way you normally would.
     </td></tr>
-    <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.65; color:#B6AFA6; padding-bottom:24px;">
-      Then tell me what you thought. Good, bad, or "this button confused me" —
-      all of it helps, and one line is genuinely enough. Bad news is more useful
-      than good news.
+    <!-- A plain inline link, not a button. A large coloured CTA block is one
+         of the clearest "this is marketing" signals Gmail sorts on, and the
+         whole point of dropping the logo was to stay out of Promotions. This
+         also just reads like an email from a person, which is what it is. -->
+    <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.65; color:#B6AFA6; padding-bottom:16px;">
+      Then tell me what you thought —
+      <a href="{link}" style="color:#DC6B5A; text-decoration:underline;">click here to leave your feedback</a>.
+      Good, bad, or "this screen confused me" — all of it helps, and one line is
+      genuinely enough. Bad news is more useful than good news.
     </td></tr>
-    <tr><td align="center" style="padding-bottom:22px;">
-      <a href="{link}" style="display:inline-block; background-color:#DC2626; color:#ffffff; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; text-decoration:none; padding:13px 32px; border-radius:10px;">
-        Tell me what you think
-      </a>
-    </td></tr>
-    <tr><td align="center" style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#8A847C;">
+    <tr><td style="font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.65; color:#B6AFA6;">
       Or just hit reply to this email — whatever's easier.
     </td></tr>
   </table>
@@ -146,9 +149,14 @@ def render(name: str, day: int) -> tuple[str, str, str]:
 
 <tr><td style="padding-top:24px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.65; color:#8A847C;">
   One thing that really matters: please keep the app installed and stay in the
-  testing group for the next <strong style="color:#B6AFA6;">{days_left} days</strong>.
-  Google needs 14 unbroken days of testing before Chintan can go public — if
-  anyone drops out, the clock restarts for everyone.
+  testing group until <strong style="color:#B6AFA6;">{end_human}</strong>
+  ({days_left} days from today). Google needs an unbroken run of testing before
+  Chintan can go public — if people drop out, the clock restarts for everyone.
+</td></tr>
+
+<tr><td style="padding-top:14px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.65; color:#8A847C;">
+  I'll send a short nudge like this every couple of days until then. Ignore the
+  ones you don't need — but please don't leave the test group.
 </td></tr>
 
 <tr><td align="center" style="padding-top:28px; font-family:-apple-system,Helvetica,Arial,sans-serif; font-size:11px; color:#4A453F;">
@@ -166,15 +174,17 @@ def render(name: str, day: int) -> tuple[str, str, str]:
         f"Day {day} of {TOTAL_DAYS} of the Chintan testing period.\n\n"
         f"Quick nudge: open Chintan, read a couple of stories, poke around for a few "
         f"minutes — use it the way you normally would.\n\n"
-        f"Then tell me what you thought. Good, bad, or \"this button confused me\" — all "
+        f"Then tell me what you thought. Good, bad, or \"this screen confused me\" — all "
         f"of it helps, and one line is genuinely enough. Bad news is more useful than "
         f"good news:\n\n"
         f"{link}\n\n"
         f"Or just hit reply to this email — whatever's easier.\n\n"
         f"One thing that really matters: please keep the app installed and stay in the "
-        f"testing group for the next {days_left} days. Google needs 14 unbroken days of "
-        f"testing before Chintan can go public — if anyone drops out, the clock restarts "
-        f"for everyone.\n\n"
+        f"testing group until {end_human} ({days_left} days from today). Google needs an "
+        f"unbroken run of testing before Chintan can go public — if people drop out, the "
+        f"clock restarts for everyone.\n\n"
+        f"I'll send a short nudge like this every couple of days until then. Ignore the "
+        f"ones you don't need — but please don't leave the test group.\n\n"
         f"Chintan — Don't just consume. Contemplate."
     )
     return subject, html, text
