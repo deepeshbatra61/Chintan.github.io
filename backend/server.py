@@ -35,12 +35,24 @@ load_dotenv(ROOT_DIR / '.env')
 # CORS allowed origins — comma-separated in ALLOWED_ORIGINS env var, defaults to localhost:3000
 # Always include Capacitor Android WebView origins (https://localhost, capacitor://localhost)
 # so native-poll and other API calls work from the APK regardless of env config.
+#
+# The chintan.news origins are hardcoded for exactly the same reason as the
+# Capacitor ones: they are first-party surfaces that MUST be able to reach this
+# API, so their access shouldn't hinge on an env var being maintained
+# correctly. It wasn't -- the marketing site's /reset-password page shipped and
+# every request it made was killed by the browser with "Disallowed CORS origin"
+# before it ever reached the server. That went unnoticed because the one person
+# who tried the flow had a Google account and so never received a reset link at
+# all. Both apex and www are listed: the site redirects apex -> www, so www is
+# the Origin a browser actually sends.
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
 ALLOWED_ORIGINS = list({
     *[o.strip() for o in _raw_origins.split(",") if o.strip()],
     "https://localhost",       # Capacitor WebView (androidScheme: https)
     "capacitor://localhost",   # Capacitor WebView (androidScheme: capacitor)
     "http://localhost",        # Capacitor WebView fallback
+    "https://chintan.news",    # marketing site (apex)
+    "https://www.chintan.news",  # marketing site (canonical, after redirect)
 })
 
 import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
@@ -1593,6 +1605,17 @@ class AskAIRequest(BaseModel):
 class RelevanceFeedback(BaseModel):
     article_id: str
     is_relevant: bool
+
+class TesterFeedback(BaseModel):
+    """Feedback from chintan.news/feedback. Deliberately NOT authenticated:
+    it's reached from a link in an email, and requiring sign-in first would
+    lose most of the people it exists to hear from. Every field except the
+    message is optional for the same reason -- friction is the enemy here."""
+    message: str
+    rating: Optional[int] = None       # 1-5, optional
+    name: Optional[str] = None
+    email: Optional[str] = None
+    app_version: Optional[str] = None
 
 # ===================== SAMPLE NEWS DATA =====================
 
@@ -5703,6 +5726,56 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
         "last_updated": story.get("last_updated"),
         "state_summary": summary,
         "momentum": momentum,
+    }
+
+
+# ===================== TESTER FEEDBACK =====================
+
+@api_router.post("/feedback")
+@limiter.limit("6/minute")
+async def submit_feedback(request: Request, payload: TesterFeedback):
+    """Store feedback from chintan.news/feedback.
+
+    Unauthenticated by design (see TesterFeedback). That means it's open to
+    junk from anyone who finds the URL, so: a rate limit, hard length caps,
+    and the client's user-agent stored alongside. It is NOT a security
+    boundary -- it's a feedback box, and the cost of a bogus row is one row.
+    """
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Please write a little something first")
+
+    rating = payload.rating
+    if rating is not None and not (1 <= rating <= 5):
+        rating = None          # ignore a nonsense rating rather than 400 on it
+
+    await db.feedback.insert_one({
+        "feedback_id": f"fb_{uuid.uuid4().hex[:12]}",
+        # Caps are generous but finite: long enough for a genuinely detailed
+        # note, short enough that nobody can post a novel into the collection.
+        "message": message[:4000],
+        "rating": rating,
+        "name": (payload.name or "").strip()[:80] or None,
+        "email": (payload.email or "").strip().lower()[:200] or None,
+        "app_version": (payload.app_version or "").strip()[:40] or None,
+        "user_agent": request.headers.get("user-agent", "")[:300],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"message": "Thank you — this genuinely helps."}
+
+
+@api_router.get("/admin/feedback")
+async def admin_list_feedback(request: Request, limit: int = 200):
+    """Read everything testers have sent, newest first — this is what the
+    Play production-access application's 'summarize your testing feedback'
+    question gets answered from, so it returns full messages, not counts."""
+    await _require_admin_or_task_token(request)
+    rows = await db.feedback.find({}, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 500))
+    rated = [r["rating"] for r in rows if r.get("rating")]
+    return {
+        "count": len(rows),
+        "average_rating": round(sum(rated) / len(rated), 2) if rated else None,
+        "feedback": rows,
     }
 
 
