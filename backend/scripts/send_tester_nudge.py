@@ -195,7 +195,17 @@ def send_one(api_key: str, to: str, subject: str, html: str, text: str) -> tuple
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=body,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            # Required, not cosmetic. Cloudflare fronts api.resend.com and
+            # blocks urllib's default "Python-urllib/3.x" signature with
+            # 403 "error code: 1010" -- the request never reaches Resend.
+            # Any ordinary-looking UA gets through; verified by probing with
+            # a deliberately invalid key, which returns Cloudflare's 1010 on
+            # the default UA and Resend's own 401 with this one.
+            "User-Agent": "Chintan-Nudge/1.0 (+https://chintan.news)",
+        },
         method="POST",
     )
     try:
@@ -204,7 +214,10 @@ def send_one(api_key: str, to: str, subject: str, html: str, text: str) -> tuple
                 return False, f"{r.status}: {r.read()[:200].decode(errors='replace')}"
             return True, "sent"
     except urllib.error.HTTPError as e:
-        return False, f"{e.code}: {e.read()[:200].decode(errors='replace')}"
+        detail = e.read()[:200].decode(errors="replace").strip()
+        if "1010" in detail:
+            detail += "  <- Cloudflare blocked the client signature, not a Resend/API-key problem"
+        return False, f"{e.code}: {detail}"
     except Exception as e:
         return False, f"network error: {e}"
 
