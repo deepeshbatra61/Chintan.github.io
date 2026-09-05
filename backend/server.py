@@ -22,6 +22,7 @@ import secrets
 import re
 import itertools
 import httpx
+import jwt          # PyJWT — verifies Apple's identity tokens (RS256 via cryptography)
 import redis.asyncio as aioredis
 import anthropic
 import pytz
@@ -2448,6 +2449,151 @@ async def google_auth(request: Request, response: Response):
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# ── Sign in with Apple ───────────────────────────────────────────────────────
+# Required by App Store Guideline 4.8: an app offering Google Sign-In must also
+# offer a login that limits collection to name and email AND lets the user keep
+# their email private. Email+password doesn't qualify (no hide-my-email), so
+# this is not optional for us.
+#
+# Native-only by design. The client runs the Apple sheet and posts us the
+# resulting identity token; we verify it against Apple's public keys. That
+# needs no client secret and no .p8 — those are only required for the web
+# (Services ID) flow and for server-to-server token revocation.
+APPLE_CLIENT_ID = os.environ.get("APPLE_CLIENT_ID", "com.chintan.app")
+_APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys"
+_APPLE_ISSUER = "https://appleid.apple.com"
+_apple_jwks_cache: dict = {"keys": None, "fetched_at": 0.0}
+
+
+async def _apple_public_keys(force: bool = False) -> list:
+    """Apple's JWKS, cached for an hour. Apple rotates these, so a cache that
+    never expires eventually rejects every valid token; `force` re-fetches
+    immediately when a key id isn't found, which is what rotation looks like
+    from here."""
+    now = time.time()
+    if not force and _apple_jwks_cache["keys"] and (now - _apple_jwks_cache["fetched_at"]) < 3600:
+        return _apple_jwks_cache["keys"]
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        r = await http.get(_APPLE_KEYS_URL)
+        r.raise_for_status()
+        keys = r.json().get("keys", [])
+    _apple_jwks_cache.update({"keys": keys, "fetched_at": now})
+    return keys
+
+
+async def _verify_apple_identity_token(identity_token: str) -> dict:
+    """Verify an Apple identity token and return its claims.
+
+    Signature, issuer, audience and expiry are all checked. Skipping any of
+    them would make this endpoint a way to sign in as anybody: an unverified
+    JWT is just a string the caller chose."""
+    try:
+        header = jwt.get_unverified_header(identity_token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Malformed Apple token")
+
+    kid = header.get("kid")
+    keys = await _apple_public_keys()
+    match = next((k for k in keys if k.get("kid") == kid), None)
+    if match is None:
+        # Unknown key id usually means Apple rotated; re-fetch once before
+        # deciding the token is bad.
+        keys = await _apple_public_keys(force=True)
+        match = next((k for k in keys if k.get("kid") == kid), None)
+    if match is None:
+        raise HTTPException(status_code=401, detail="Unrecognised Apple signing key")
+
+    try:
+        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(match))
+        claims = jwt.decode(
+            identity_token,
+            public_key,
+            algorithms=["RS256"],
+            audience=APPLE_CLIENT_ID,
+            issuer=_APPLE_ISSUER,
+        )
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Apple token has expired")
+    except jwt.InvalidAudienceError:
+        raise HTTPException(status_code=401, detail="Apple token was issued for a different app")
+    except Exception as e:
+        logger.warning(f"Apple token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Could not verify Apple token")
+
+    return claims
+
+
+@api_router.post("/auth/apple")
+@limiter.limit("10/minute")
+async def apple_auth(request: Request, response: Response):
+    """Sign in with Apple. The client posts the identity token from the native
+    Apple sheet, plus the user's name IF Apple supplied one.
+
+    Two Apple-specific things this has to get right:
+
+    1. `sub` is the identity, not the email. Apple's private-relay addresses
+       can change and a user can switch to hiding their email later, so
+       matching on email would silently create a second account for the same
+       person. We store apple_sub and match on it first.
+    2. Apple returns the user's name ONLY on the very first authorization,
+       never again. If it isn't captured now it is gone for good, so a name
+       arriving here is always saved when we don't already have one."""
+    body = await request.json()
+    identity_token = body.get("identity_token") or body.get("identityToken")
+    if not identity_token:
+        raise HTTPException(status_code=400, detail="identity_token required")
+
+    claims = await _verify_apple_identity_token(identity_token)
+    apple_sub = claims.get("sub")
+    if not apple_sub:
+        raise HTTPException(status_code=401, detail="Apple token carried no user id")
+
+    email = (claims.get("email") or "").strip().lower()
+    # Only sent on first authorization; may be absent forever after.
+    given_name = (body.get("name") or "").strip()[:60]
+
+    existing_user = await db.users.find_one({"apple_sub": apple_sub}, {"_id": 0})
+    if existing_user is None and email:
+        # First Apple sign-in for someone who already registered with this
+        # address another way -- link the accounts rather than duplicating.
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+
+    is_new_signup = existing_user is None
+
+    if existing_user:
+        user_id = existing_user["user_id"]
+        updates = {"apple_sub": apple_sub}
+        # Don't overwrite a name we already have with a blank one.
+        if given_name and not existing_user.get("name"):
+            updates["name"] = given_name
+        await db.users.update_one({"user_id": user_id}, {"$set": updates})
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": email or None,
+            "name": given_name or None,
+            "picture": None,
+            "apple_sub": apple_sub,
+            # True when the user chose "Hide My Email"; kept so we know a
+            # bounce from a relay address isn't a bad address.
+            "apple_private_email": bool(claims.get("is_private_email")),
+            "interests": [],
+            "onboarding_completed": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    app_access, app_refresh = await _issue_tokens(user_id)
+    _set_session_cookie(response, app_access)
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0, "password_salt": 0})
+    # Same gating as the Google path: this endpoint serves both first signup
+    # and every later sign-in. Relay addresses are real and deliverable, so
+    # a hidden email still gets a welcome.
+    if is_new_signup and user.get("email"):
+        _fire_and_forget(_send_welcome_email(user))
+    return {"user": user, "session_token": app_access, "refresh_token": app_refresh}
 
 
 @api_router.post("/auth/register")

@@ -138,6 +138,46 @@ const LoginPage = () => {
     }, 2000);
   };
 
+  // Reached through window.Capacitor.Plugins rather than an npm import on
+  // purpose: the plugin only exists in the iOS project, and a static import
+  // would break the Android and web bundles for a package they'll never have.
+  // This also means the button hides itself automatically anywhere the plugin
+  // isn't registered, instead of offering a login that can't work.
+  const applePlugin = () => window.Capacitor?.Plugins?.SignInWithApple;
+  const isAppleAvailable = isNative() && !!applePlugin();
+
+  const handleAppleLogin = async () => {
+    const plugin = applePlugin();
+    if (!plugin) return;
+    try {
+      const result = await plugin.authorize({
+        clientId: "com.chintan.app",
+        scopes: "name email",
+      });
+      const r = result?.response || result || {};
+      const identityToken = r.identityToken;
+      if (!identityToken) throw new Error("Apple didn't return an identity token");
+
+      // Apple sends the name ONLY on the very first authorization, so it has
+      // to be forwarded now or it's lost permanently. It arrives split.
+      const name = [r.givenName, r.familyName].filter(Boolean).join(" ").trim();
+
+      const resp = await axios.post(`${API}/auth/apple`,
+        { identity_token: identityToken, name },
+        { withCredentials: true });
+      // Same handoff the email/password path uses, so Apple sign-in lands in
+      // exactly the same place (onboarding vs feed) as every other route in.
+      await login(resp.data.user, resp.data.session_token, resp.data.refresh_token);
+      goAfterAuth(resp.data.user);
+    } catch (error) {
+      // The user tapping "Cancel" on Apple's sheet lands here too; that isn't
+      // an error worth shouting about.
+      const msg = String(error?.message || "");
+      if (/cancel/i.test(msg) || error?.code === "1001") return;
+      toast.error(error?.response?.data?.detail || "Couldn't sign in with Apple");
+    }
+  };
+
   const handleGoogleLogin = async () => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
     if (!clientId) { console.error("REACT_APP_GOOGLE_CLIENT_ID is not set"); return; }
@@ -301,6 +341,24 @@ const LoginPage = () => {
             </svg>
             Continue with Google
           </motion.button>
+
+          {/* Sign in with Apple. Required by App Store Guideline 4.8 because
+              we offer Google Sign-In: the alternative must let the user keep
+              their email private, which email+password cannot.
+
+              Shown only on iOS. Apple requires it there; on Android it would
+              be a button that cannot work, and Apple doesn't require it off
+              their platform. */}
+          {isAppleAvailable && (
+            <motion.button onClick={handleAppleLogin} data-testid="apple-login-btn"
+              whileTap={R ? undefined : { scale: 0.97 }} transition={{ duration: 0.1, ease: EASE }}
+              style={{ width: "100%", marginTop: "10px", background: "#fff", color: "#000", border: "none", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", fontFamily: "'Manrope', sans-serif" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "18px", height: "18px" }} fill="currentColor" aria-hidden="true">
+                <path d="M16.365 1.43c0 1.14-.42 2.2-1.12 3.02-.85.99-2.24 1.76-3.4 1.66-.14-1.1.42-2.26 1.09-3.02.77-.88 2.14-1.55 3.43-1.66zM20.7 17.1c-.6 1.38-.88 1.99-1.65 3.2-1.07 1.7-2.58 3.82-4.45 3.83-1.66.02-2.09-1.09-4.35-1.08-2.26.01-2.73 1.1-4.39 1.09-1.87-.02-3.3-1.93-4.37-3.62C-1.5 15.7-1.82 9.2 1.05 5.9c1.02-1.18 2.5-1.93 3.9-1.93 1.66 0 2.7 1.09 4.07 1.09 1.33 0 2.14-1.09 4.06-1.09 1.25 0 2.58.68 3.53 1.85-3.1 1.7-2.6 6.13.09 7.28z"/>
+              </svg>
+              Continue with Apple
+            </motion.button>
+          )}
         </motion.div>
 
         {/* Contact route sits behind auth, so the address is repeated here as
