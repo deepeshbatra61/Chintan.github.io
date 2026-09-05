@@ -2771,22 +2771,14 @@ async def reset_password(request: Request, payload: ResetPasswordRequest):
     return {"message": "Password updated — sign in with your new password"}
 
 
-@api_router.post("/account/delete")
-@limiter.limit("5/minute")
-async def delete_account(request: Request, payload: DeleteAccountRequest):
-    """Permanently delete an account and all associated data. Verifies
-    identity via email + password rather than the session cookie, so this
-    also works from the public web deletion form at chintan.news/data-safety
-    (a different origin with no access to the app's session cookie), not
-    just from inside the app itself."""
-    email = (payload.email or "").strip().lower()
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if not user or not user.get("password_hash"):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    if not _verify_password(payload.password or "", user.get("password_salt", ""), user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+async def _purge_user(user_id: str) -> None:
+    """Erase a user and everything belonging to them.
 
-    user_id = user["user_id"]
+    Shared by both deletion routes deliberately. When these were written out
+    twice, a collection added to one and forgotten in the other would leave
+    orphaned personal data behind and nobody would notice -- which is the
+    exact failure that turns a deletion feature into a privacy incident.
+    Anything user-owned added to this app belongs in this list."""
     await db.users.delete_one({"user_id": user_id})
     await db.bookmarks.delete_many({"user_id": user_id})
     await db.comments.delete_many({"user_id": user_id})
@@ -2797,6 +2789,47 @@ async def delete_account(request: Request, payload: DeleteAccountRequest):
     await db.user_sessions.delete_many({"user_id": user_id})
     await db.password_reset_tokens.delete_many({"user_id": user_id})
 
+
+@api_router.post("/account/delete")
+@limiter.limit("5/minute")
+async def delete_account(request: Request, payload: DeleteAccountRequest):
+    """Delete an account using email + password.
+
+    This is the PUBLIC WEB path, used by the deletion form at
+    chintan.news/data-safety, which is a different origin with no access to
+    the app's session cookie. It can only ever serve password accounts --
+    a Google-created account has no password to check -- so the in-app
+    route below is what covers everyone else. See delete_my_account."""
+    email = (payload.email or "").strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not _verify_password(payload.password or "", user.get("password_salt", ""), user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    await _purge_user(user["user_id"])
+    return {"message": "Account and all associated data deleted"}
+
+
+@api_router.post("/account/delete-me")
+@limiter.limit("5/minute")
+async def delete_my_account(request: Request, response: Response, user: dict = Depends(require_auth)):
+    """Delete the SIGNED-IN user's account. The in-app path.
+
+    Identity is proven by the session itself, so no password is required --
+    which is the entire point. The email+password route above cannot serve
+    Google-created accounts at all (they have no password_hash), meaning
+    that until this existed, most users had no way to delete their account
+    by any route. Apple requires in-app deletion for any app offering
+    account creation (Guideline 5.1.1(v)), and 'most of our users can't'
+    is not a passing answer.
+
+    The session cookie is cleared on the way out so the client can't be
+    left holding a token for a user that no longer exists."""
+    await _purge_user(user["user_id"])
+    # Same cookie teardown as logout -- otherwise the client is left holding
+    # a token for a user that no longer exists.
+    response.delete_cookie(key="session_token", path="/")
     return {"message": "Account and all associated data deleted"}
 
 

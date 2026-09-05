@@ -5,7 +5,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight, ChevronDown,
-  Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail, UserX, X, Info
+  Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail, UserX, X, Info,
+  Trash2, AlertTriangle
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -77,6 +78,9 @@ const ProfilePage = () => {
   const [loadingPolls, setLoadingPolls] = useState(false);
   const [selectedPoll, setSelectedPoll] = useState(null);
   const [showBlocked, setShowBlocked] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loadingBlocked, setLoadingBlocked] = useState(false);
 
@@ -118,6 +122,29 @@ const ProfilePage = () => {
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+  };
+
+  // Account deletion. Required in-app by Apple for any app that offers
+  // account creation (Guideline 5.1.1(v)); the web form at
+  // chintan.news/data-safety doesn't satisfy that, and can't serve Google
+  // accounts at all since it authenticates with a password they don't have.
+  // This route authenticates with the session instead, so it works for
+  // everyone who is signed in.
+  const handleDeleteAccount = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await axios.post(`${API}/account/delete-me`, {}, { withCredentials: true });
+      setShowDelete(false);
+      toast.success("Your account and data have been deleted");
+      // Clear client-side auth state too, or the app keeps rendering as if
+      // signed in against a user that no longer exists.
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Couldn't delete your account — try again");
+      setDeleting(false);
+    }
   };
 
   const nicheCount = (cat) => (taxonomy[cat] || []).filter((n) => selectedInterests.includes(n)).length;
@@ -350,6 +377,15 @@ const ProfilePage = () => {
             style={{ ...actionStyle, justifyContent: "center", gap: "8px", color: "#DC6B5A", border: "1px solid rgba(220,38,38,0.2)" }}>
             <LogOut className="w-5 h-5" /> Sign out
           </button>
+
+          {/* Visually quieter than Sign out and separated from it: deletion is
+              permanent, and it must not sit a mis-tap away from the button
+              people press every day. */}
+          <button onClick={() => { setDeleteConfirmText(""); setShowDelete(true); }} data-testid="delete-account-btn"
+            style={{ ...actionStyle, justifyContent: "center", gap: "8px", marginTop: "10px",
+                     background: "transparent", border: "1px solid rgba(255,255,255,0.06)", color: "#8A847C" }}>
+            <Trash2 className="w-4 h-4" /> Delete account
+          </button>
         </motion.div>
 
         {/* Footer */}
@@ -416,6 +452,65 @@ const ProfilePage = () => {
               className="flex-1 py-2 px-4 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {savingInterests ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Account Dialog */}
+      <Dialog open={showDelete} onOpenChange={(o) => { if (!deleting) setShowDelete(o); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Account</div>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" /> Delete your account
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2">
+            <p style={{ color: "#B6AFA6", fontSize: "14px", lineHeight: 1.6, marginBottom: "12px" }}>
+              This permanently deletes your account and everything attached to it —
+              your bookmarks, comments, poll votes, blocked list and reading history.
+            </p>
+            <p style={{ color: "#8A847C", fontSize: "13.5px", lineHeight: 1.6, marginBottom: "16px" }}>
+              It cannot be undone, and it happens immediately. There is no recovery
+              window and we keep no copy.
+            </p>
+
+            {/* Typing the word is deliberate friction. A single "are you sure?"
+                tap is too easy to clear by reflex for something irreversible. */}
+            <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6E6862", marginBottom: "7px" }}>
+              Type DELETE to confirm
+            </label>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              data-testid="delete-confirm-input"
+              style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.09)",
+                       borderRadius: "10px", padding: "12px 13px", color: "#ECE7E1", fontSize: "15px",
+                       fontFamily: "'Manrope', sans-serif", outline: "none" }}
+            />
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
+              <button onClick={() => setShowDelete(false)} disabled={deleting} data-testid="delete-cancel-btn"
+                style={{ flex: 1, background: "#131211", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "11px",
+                         padding: "12px", color: "#ECE7E1", fontSize: "14px", fontWeight: 600,
+                         fontFamily: "'Manrope', sans-serif", cursor: "pointer", opacity: deleting ? 0.5 : 1 }}>
+                Keep my account
+              </button>
+              <button onClick={handleDeleteAccount}
+                disabled={deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
+                data-testid="delete-confirm-btn"
+                style={{ flex: 1, background: "#DC2626", border: "none", borderRadius: "11px",
+                         padding: "12px", color: "#fff", fontSize: "14px", fontWeight: 600,
+                         fontFamily: "'Manrope', sans-serif",
+                         cursor: deleteConfirmText.trim().toUpperCase() === "DELETE" && !deleting ? "pointer" : "default",
+                         opacity: deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE" ? 0.4 : 1 }}>
+                {deleting ? "Deleting…" : "Delete forever"}
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
