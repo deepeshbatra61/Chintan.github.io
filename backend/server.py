@@ -3499,6 +3499,121 @@ SCHEDULED_EVENTS = [
     #     "end": "<counting date, 23:59 local>",
     #     "lead_days": 5,
     # },
+
+    # ── Seeded Sept-Nov 2026 ──────────────────────────────────────────────
+    # These are the multi-week ARCS: things that generate coverage for days
+    # or months and genuinely develop, which is what this kind is for. A
+    # one-day observance with no news behind it belongs in CALENDAR_EVENTS
+    # instead, where the research agent writes the card and hides it if it
+    # can't verify one. Windows are as supplied; US midterms is the only one
+    # derivable from a rule (first Tuesday after the first Monday in
+    # November = 3 Nov 2026, which checks out).
+    #
+    # Keywords are the whole ballgame here: an entry only surfaces once it
+    # matches a real article, and generic words false-merge unrelated
+    # stories (the failure that bit the auto-clustering kind twice). Every
+    # list below is specific nouns -- teams, places, people, competition
+    # names -- never bare words like "match" or "festival".
+    {
+        "story_id": "apple-event-sept-2026",
+        "title": "Apple's September 2026 event",
+        "theme": "tech",
+        "keywords": [
+            "apple event", "apple keynote", "iphone 18", "apple september event",
+            "tim cook", "cupertino", "apple watch series", "airpods pro",
+            "foldable iphone", "apple silicon",
+        ],
+        "start": "2026-09-09T00:00:00+05:30",
+        "end": "2026-09-12T23:59:59+05:30",
+        "lead_days": 3,
+    },
+    {
+        "story_id": "ganesh-chaturthi-2026",
+        "title": "Ganesh Chaturthi 2026",
+        "theme": "festival",
+        "keywords": [
+            "ganesh chaturthi", "ganeshotsav", "ganpati", "lalbaugcha raja",
+            "visarjan", "ganesh idol", "ganesh pandal", "vinayaka chaturthi",
+        ],
+        "start": "2026-09-14T00:00:00+05:30",
+        "end": "2026-09-25T23:59:59+05:30",
+        "lead_days": 3,
+    },
+    {
+        "story_id": "asian-games-2026",
+        "title": "Asian Games 2026, Aichi-Nagoya",
+        "theme": "sports",
+        "keywords": [
+            "asian games", "aichi nagoya", "asiad", "medal tally",
+            "indian contingent asian games", "asian games gold",
+            "olympic council of asia",
+        ],
+        "start": "2026-09-19T00:00:00+05:30",
+        "end": "2026-10-04T23:59:59+05:30",
+        "lead_days": 5,
+    },
+    {
+        "story_id": "india-vs-west-indies-2026",
+        "title": "India vs West Indies, home series",
+        "theme": "cricket",
+        "keywords": [
+            "india vs west indies", "ind vs wi", "west indies tour of india",
+            "windies india series", "india west indies odi", "india west indies t20",
+        ],
+        "start": "2026-09-27T00:00:00+05:30",
+        "end": "2026-10-17T23:59:59+05:30",
+        "lead_days": 3,
+    },
+    {
+        "story_id": "navratri-dussehra-2026",
+        "title": "Navratri and Dussehra 2026",
+        "theme": "festival",
+        "keywords": [
+            "navratri", "durga puja", "dussehra", "vijayadashami", "garba",
+            "dandiya", "ravan dahan", "durga pandal", "sharadiya navratri",
+        ],
+        "start": "2026-10-11T00:00:00+05:30",
+        "end": "2026-10-20T23:59:59+05:30",
+        "lead_days": 4,
+    },
+    {
+        "story_id": "india-tour-new-zealand-2026",
+        "title": "India tour of New Zealand 2026",
+        "theme": "cricket",
+        "keywords": [
+            "india tour of new zealand", "ind vs nz", "india vs new zealand",
+            "black caps india", "new zealand test series india",
+            "india nz odi", "india nz t20",
+        ],
+        "start": "2026-10-22T00:00:00+05:30",
+        "end": "2026-12-01T23:59:59+05:30",
+        "lead_days": 5,
+    },
+    {
+        "story_id": "us-midterms-2026",
+        "title": "US Midterm Elections 2026",
+        "theme": "politics",
+        "keywords": [
+            "us midterms", "midterm elections", "house of representatives race",
+            "senate race 2026", "us congress election", "capitol hill midterms",
+        ],
+        "start": "2026-11-01T00:00:00+05:30",
+        "end": "2026-11-06T23:59:59+05:30",
+        "lead_days": 5,
+    },
+    {
+        "story_id": "diwali-2026",
+        "title": "Diwali 2026",
+        "theme": "festival",
+        "keywords": [
+            "diwali", "deepavali", "muhurat trading", "dhanteras",
+            "diwali sale", "govardhan puja", "bhai dooj", "diwali aqi",
+            "firecracker ban", "delhi air quality diwali",
+        ],
+        "start": "2026-11-06T00:00:00+05:30",
+        "end": "2026-11-10T23:59:59+05:30",
+        "lead_days": 4,
+    },
 ]
 
 
@@ -3947,6 +4062,206 @@ CALENDAR_EVENTS = [
         "title": "Govind Ballabh Pant Birth Anniversary", "date": "2026-09-10", "lead_days": 1,
         "research_query": _cal_query(
             "Freedom fighter Govind Ballabh Pant's birth anniversary falls on September 10."
+        ),
+    },
+
+    # ── Sept-Nov 2026 observances ─────────────────────────────────────────
+    # Every entry below is a FIXED-DATE observance -- same calendar day every
+    # year, so the date is a fact rather than a lookup that could be stale.
+    # Movable feasts (Diwali, Navratri, Ganesh Chaturthi) are deliberately
+    # NOT here: they shift with the lunar calendar, they generate real news
+    # coverage, and they're seeded as multi-week arcs in SCHEDULED_EVENTS
+    # instead, where articles carry them.
+    #
+    # Institution-scheduled events (RBI monetary policy, ISRO launch dates,
+    # DRDO trials, UN summits) are deliberately absent too. Their dates are
+    # announced, not derivable, and I don't have reliable 2026 dates for
+    # them -- inventing one would put a card on the wrong day, which is the
+    # single failure this whole verified-research design exists to prevent.
+    # They need confirming against the actual source before seeding.
+    {
+        "event_id": "hindi-diwas-2026", "category": "national",
+        "title": "Hindi Diwas", "date": "2026-09-14", "lead_days": 1,
+        "research_query": _cal_query(
+            "Hindi Diwas is observed in India on September 14, marking the adoption of "
+            "Hindi in the Devanagari script as an official language in 1949.",
+        ),
+    },
+    {
+        "event_id": "engineers-day-2026", "category": "science",
+        "title": "Engineers' Day", "date": "2026-09-15", "lead_days": 1,
+        "research_query": _cal_query(
+            "India observes Engineers' Day on September 15, the birth anniversary of "
+            "M. Visvesvaraya.", focus="his engineering legacy in India"
+        ),
+    },
+    {
+        "event_id": "international-day-democracy-2026", "category": "global",
+        "title": "International Day of Democracy", "date": "2026-09-15", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN's International Day of Democracy falls on September 15."
+        ),
+    },
+    {
+        "event_id": "world-ozone-day-2026", "category": "environment",
+        "title": "World Ozone Day", "date": "2026-09-16", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Ozone Day on September 16 marks the Montreal Protocol on substances "
+            "that deplete the ozone layer.", focus="the state of ozone-layer recovery"
+        ),
+    },
+    {
+        "event_id": "international-day-of-peace-2026", "category": "global",
+        "title": "International Day of Peace", "date": "2026-09-21", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN's International Day of Peace falls on September 21.",
+            focus="this year's UN theme"
+        ),
+    },
+    {
+        "event_id": "world-tourism-day-2026", "category": "economy",
+        "title": "World Tourism Day", "date": "2026-09-27", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Tourism Day falls on September 27.",
+            focus="India's tourism sector and this year's theme"
+        ),
+    },
+    {
+        "event_id": "world-heart-day-2026", "category": "health",
+        "title": "World Heart Day", "date": "2026-09-29", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Heart Day falls on September 29.",
+            focus="cardiovascular disease trends in India"
+        ),
+    },
+    {
+        "event_id": "international-day-older-persons-2026", "category": "social",
+        "title": "International Day of Older Persons", "date": "2026-10-01", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN's International Day of Older Persons falls on October 1."
+        ),
+    },
+    {
+        "event_id": "gandhi-jayanti-2026", "category": "national",
+        "title": "Gandhi Jayanti", "date": "2026-10-02", "lead_days": 1,
+        "research_query": _cal_query(
+            "Gandhi Jayanti on October 2 marks Mahatma Gandhi's birth anniversary and is "
+            "observed globally as the UN's International Day of Non-Violence.",
+            focus="how it is marked across India",
+        ),
+    },
+    {
+        "event_id": "world-animal-day-2026", "category": "environment",
+        "title": "World Animal Day", "date": "2026-10-04", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Animal Day falls on October 4.",
+            focus="wildlife conservation in India"
+        ),
+    },
+    {
+        "event_id": "world-teachers-day-2026", "category": "global",
+        "title": "World Teachers' Day", "date": "2026-10-05", "lead_days": 1,
+        "research_query": _cal_query(
+            "UNESCO's World Teachers' Day falls on October 5. Note this is distinct from "
+            "India's own Teachers' Day on September 5."
+        ),
+    },
+    {
+        "event_id": "indian-air-force-day-2026", "category": "national",
+        "title": "Indian Air Force Day", "date": "2026-10-08", "lead_days": 1,
+        "research_query": _cal_query(
+            "Indian Air Force Day is observed on October 8, marking the IAF's raising in "
+            "1932.", focus="this year's parade and any fleet or capability news"
+        ),
+    },
+    {
+        "event_id": "world-mental-health-day-2026", "category": "health",
+        "title": "World Mental Health Day", "date": "2026-10-10", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Mental Health Day falls on October 10.",
+            focus="this year's WHO theme and mental health access in India"
+        ),
+    },
+    {
+        "event_id": "world-food-day-2026", "category": "economy",
+        "title": "World Food Day", "date": "2026-10-16", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Food Day on October 16 marks the founding of the FAO.",
+            focus="food security and this year's theme"
+        ),
+    },
+    {
+        "event_id": "united-nations-day-2026", "category": "global",
+        "title": "United Nations Day", "date": "2026-10-24", "lead_days": 1,
+        "research_query": _cal_query(
+            "United Nations Day on October 24 marks the UN Charter entering into force in "
+            "1945.", focus="India's current role at the UN"
+        ),
+    },
+    {
+        "event_id": "national-unity-day-2026", "category": "national",
+        "title": "Rashtriya Ekta Diwas — National Unity Day", "date": "2026-10-31", "lead_days": 1,
+        "research_query": _cal_query(
+            "India observes Rashtriya Ekta Diwas (National Unity Day) on October 31, the "
+            "birth anniversary of Sardar Vallabhbhai Patel."
+        ),
+    },
+    {
+        "event_id": "national-education-day-2026", "category": "national",
+        "title": "National Education Day", "date": "2026-11-11", "lead_days": 1,
+        "research_query": _cal_query(
+            "India's National Education Day on November 11 marks the birth anniversary of "
+            "Maulana Abul Kalam Azad, the country's first education minister."
+        ),
+    },
+    {
+        "event_id": "childrens-day-2026", "category": "national",
+        "title": "Children's Day", "date": "2026-11-14", "lead_days": 1,
+        "research_query": _cal_query(
+            "India celebrates Children's Day on November 14, Jawaharlal Nehru's birth "
+            "anniversary."
+        ),
+    },
+    {
+        "event_id": "world-diabetes-day-2026", "category": "health",
+        "title": "World Diabetes Day", "date": "2026-11-14", "lead_days": 1,
+        "research_query": _cal_query(
+            "World Diabetes Day falls on November 14.",
+            focus="India's diabetes burden and this year's theme"
+        ),
+    },
+    {
+        "event_id": "international-mens-day-2026", "category": "social",
+        "title": "International Men's Day", "date": "2026-11-19", "lead_days": 1,
+        "research_query": _cal_query(
+            "International Men's Day falls on November 19.",
+            focus="this year's theme, particularly men's health"
+        ),
+    },
+    {
+        "event_id": "world-television-day-2026", "category": "culture",
+        "title": "World Television Day", "date": "2026-11-21", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN's World Television Day falls on November 21.",
+            focus="how Indian viewing habits are shifting to streaming"
+        ),
+    },
+    {
+        "event_id": "elimination-violence-against-women-2026", "category": "social",
+        "title": "International Day for the Elimination of Violence against Women",
+        "date": "2026-11-25", "lead_days": 1,
+        "research_query": _cal_query(
+            "The UN observes the International Day for the Elimination of Violence against "
+            "Women on November 25, beginning the 16 Days of Activism."
+        ),
+    },
+    {
+        "event_id": "constitution-day-2026", "category": "national",
+        "title": "Constitution Day — Samvidhan Divas", "date": "2026-11-26", "lead_days": 1,
+        "research_query": _cal_query(
+            "India observes Constitution Day (Samvidhan Divas) on November 26, marking the "
+            "adoption of the Constitution in 1949. The date is also the anniversary of the "
+            "2008 Mumbai attacks.",
         ),
     },
 ]
