@@ -24,7 +24,11 @@ const API = `${BACKEND_URL}/api`;
 
 // Public base for shared links (the Chintan website). Swap for a Play Store
 // link once the app is published.
-const SHARE_BASE = "https://chintan.news";
+// www, not the apex: chintan.news 308-redirects to www, and Android does NOT
+// follow redirects when fetching /.well-known/assetlinks.json -- pointing
+// shares at the apex would fail App Link verification and the app would
+// never intercept a shared story, however correct everything else looked.
+const SHARE_BASE = "https://www.chintan.news";
 
 const triggerHaptic = (type = 'light') => {
   if ('vibrate' in navigator) {

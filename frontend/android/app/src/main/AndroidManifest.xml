@@ -42,18 +42,23 @@
                       android:pathPrefix="/auth/callback" />
             </intent-filter>
 
-            <!-- Verified App Link: shared story URLs (chintan.news/article/<id>).
+            <!-- Verified App Link: shared story URLs, www.chintan.news/article/ID.
                  Without this, a shared link had no way back into the app even
-                 when installed -- Android had no reason to route chintan.news
+                 when installed. Android had no reason to route the domain
                  anywhere but a browser, which then 404'd because the marketing
-                 site had no /article route at all. Requires chintan.news to
-                 serve /.well-known/assetlinks.json with this app's signing
-                 fingerprint (see chintan-website/public/.well-known). -->
+                 site had no /article route at all.
+
+                 www ONLY, deliberately. The apex 308-redirects to www, and
+                 Android does not follow redirects when fetching
+                 assetlinks.json, so chintan.news can never verify. One failing
+                 host fails the whole autoVerify filter, which would take www
+                 down with it. Shares point at www too (see SHARE_BASE).
+                 Verification reads /.well-known/assetlinks.json, served from
+                 chintan-website/public/.well-known. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="chintan.news" android:pathPrefix="/article" />
                 <data android:scheme="https" android:host="www.chintan.news" android:pathPrefix="/article" />
             </intent-filter>
 

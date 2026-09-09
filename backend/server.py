@@ -57,6 +57,7 @@ ALLOWED_ORIGINS = list({
 })
 
 import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
+import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
 
@@ -4277,7 +4278,14 @@ async def get_articles(
         for a in candidates
     ]
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [a for _, a in scored[skip:skip + limit]]
+
+    # Sorting by score alone clusters the feed by category, because the score is
+    # very nearly a category score -- see feed.py for why. Re-rank into a varied
+    # sequence before paginating, NOT after: diversifying a single page can't see
+    # what the previous page ended with, so page 2 would happily open with the
+    # same category page 1 closed on.
+    ordered = feed.diversify(scored, needed=skip + limit)
+    return ordered[skip:skip + limit]
 
 @api_router.get("/articles/developing")
 async def get_developing_stories():

@@ -21,7 +21,11 @@ import {
 } from "../lib/feedCache";
 import { formatCalendarDate } from "../lib/calendar";
 
-const SHARE_BASE = "https://chintan.news";
+// www, not the apex: chintan.news 308-redirects to www, and Android does NOT
+// follow redirects when fetching /.well-known/assetlinks.json -- pointing
+// shares at the apex would fail App Link verification and the app would
+// never intercept a shared story, however correct everything else looked.
+const SHARE_BASE = "https://www.chintan.news";
 
 const triggerHaptic = async (style = ImpactStyle.Light) => {
   if (window.Capacitor?.isNativePlatform()) {
