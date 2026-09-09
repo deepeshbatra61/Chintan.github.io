@@ -6317,13 +6317,28 @@ async def health():
 # Include the router in the main app
 # ── Android App Links ─────────────────────────────────────────────────────────
 # assetlinks.json lets Android verify (by signing-cert fingerprint) that THIS app
-# owns https://<domain>/auth/callback, so the OAuth success redirect can't be
+# owns https://<domain>/auth/callback and /article/<id>, so those URLs can't be
 # claimed by a malicious app. Served at the domain root (NOT under /api) because
 # Android fetches it from https://<domain>/.well-known/assetlinks.json exactly.
+#
+# TWO fingerprints, deliberately. Uploading an AAB does not mean the APK a user
+# installs is signed with your keystore -- Play App Signing re-signs it with a
+# key Google holds, and THAT is the cert on every real install. Only the first
+# fingerprint below was ever listed here, and it's the upload cert, not the
+# distribution one (confirmed 2026-09-09 against Play Console -> Protected with
+# Play -> App signing -> Classical key -> SHA-256). Every App Link on every
+# real Play Store install has been silently failing verification since this
+# endpoint existed -- correct locally with a sideloaded/debug build (signed
+# with the upload key), broken for every actual user. Both are listed now so
+# neither signing path is left unverified again.
 _ANDROID_PACKAGE = "com.chintan.app"
-_ANDROID_CERT_SHA256 = os.environ.get(
-    "ANDROID_CERT_SHA256",
+_ANDROID_CERT_SHA256_UPLOAD = os.environ.get(
+    "ANDROID_CERT_SHA256_UPLOAD",
     "A4:6E:20:25:A3:CB:BE:4B:58:07:68:B7:4C:4B:F2:B1:2E:FF:33:D1:7B:DD:22:48:35:46:AD:B6:2B:97:BD:5A",
+)
+_ANDROID_CERT_SHA256_PLAY = os.environ.get(
+    "ANDROID_CERT_SHA256_PLAY",
+    "30:57:D0:EE:ED:EA:81:29:34:10:55:21:00:59:7C:B5:DA:64:0A:1C:F8:97:B0:09:07:BA:BC:34:42:ED:28:3A",
 )
 
 
@@ -6334,7 +6349,7 @@ async def assetlinks():
         "target": {
             "namespace": "android_app",
             "package_name": _ANDROID_PACKAGE,
-            "sha256_cert_fingerprints": [_ANDROID_CERT_SHA256],
+            "sha256_cert_fingerprints": [_ANDROID_CERT_SHA256_PLAY, _ANDROID_CERT_SHA256_UPLOAD],
         },
     }]
 
