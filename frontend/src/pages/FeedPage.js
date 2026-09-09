@@ -198,7 +198,7 @@ const FeedPage = () => {
     try {
       await Share.share({
         title: article.title,
-        text: `${article.title}\n\n${category}Read it on Chintan — don't just consume, contemplate.`,
+        text: `${article.title}\n\n${category}${(article.what || "").slice(0, 180)}`,
         url: `${SHARE_BASE}/article/${article.article_id}`,
         dialogTitle: "Share this story",
       });

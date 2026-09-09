@@ -323,6 +323,18 @@ const NativeAuthHandler = () => {
 
     const handleUrl = async ({ url }) => {
       console.log("appUrlOpen fired with url: " + url);
+
+      // Shared story link (chintan.news/article/<id>). Android routes these
+      // here once the App Link is verified; without this branch the app would
+      // open on whatever screen it was last on and silently swallow the link,
+      // which reads to the user as "the share is broken" just as much as the
+      // 404 did.
+      const shared = url.match(/^https:\/\/(?:www\.)?chintan\.news\/article\/([A-Za-z0-9_-]+)/);
+      if (shared) {
+        navigate(`/article/${shared[1]}`);
+        return;
+      }
+
       // Accept both the verified App Link (https) and the custom scheme (error fallback)
       const isCallback =
         url.startsWith("com.chintan.app://auth/callback") ||

@@ -1036,7 +1036,10 @@ const ArticlePage = () => {
     try {
       await Share.share({
         title: art.title,
-        text: `${art.title}\n\n${category}Read it on Chintan — don't just consume, contemplate.`,
+        // The recipient reads this in a WhatsApp bubble before anything else, so
+        // it leads with what the story IS. "Read it on Chintan" led with the app
+        // instead, which made a friend's recommendation read like an ad for one.
+        text: `${art.title}\n\n${category}${(art.what || "").slice(0, 180)}`,
         url: `${SHARE_BASE}/article/${art.article_id}`,
         dialogTitle: "Share this story",
       });

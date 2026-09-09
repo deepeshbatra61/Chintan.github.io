@@ -4325,6 +4325,29 @@ async def get_article(article_id: str):
 
     return article
 
+@api_router.get("/articles/{article_id}/preview")
+async def get_article_preview(article_id: str):
+    """Minimal public article data for the shared-link landing page at
+    chintan.news/article/<id>.
+
+    Deliberately NOT get_article. That endpoint lazily summarises with Claude
+    on first open, which is right for a reader tapping into a story and very
+    wrong here: every WhatsApp, Twitter and iMessage link-preview crawler that
+    touches a shared URL would fire a paid API call, for a page nobody has
+    even opened yet. A share is crawled far more often than it is read.
+
+    Returns only what the landing page and its OpenGraph tags render, and
+    never writes anything."""
+    article = await db.articles.find_one(
+        {"article_id": article_id},
+        {"_id": 0, "article_id": 1, "title": 1, "what": 1, "description": 1,
+         "source": 1, "category": 1, "image_url": 1, "published_at": 1, "url": 1},
+    )
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return article
+
+
 @api_router.get("/articles/{article_id}/reaction")
 async def get_article_reaction(article_id: str, user: dict = Depends(require_auth)):
     """Return the current user's like/dislike state for an article."""
