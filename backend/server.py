@@ -1077,6 +1077,53 @@ async def _run_category_migration() -> None:
         logger.error(f"Category migration failed: {traceback.format_exc()}")
 
 
+# Bump when categories.py's keyword lists change, so stored articles are
+# re-scored. Separate from the migration above on purpose: that one also
+# rewrites description/summary fields, which a keyword tweak must not touch.
+_RECATEGORIZE_VERSION = 1  # 2026-09-27: Asian Games / non-cricket sports + business gaps
+
+
+async def _run_recategorize() -> None:
+    """Re-run detect_category over stored articles, changing ONLY category and
+    subcategory, and only where the answer changed. Background, fully guarded."""
+    try:
+        meta = await db.app_meta.find_one({"_id": "recategorize"})
+        if meta and meta.get("version", 0) >= _RECATEGORIZE_VERSION:
+            return
+        changed = 0
+        async for art in db.articles.find(
+            # An LLM-assigned category (LLM_CATEGORIZATION_ENABLED) wins over keywords.
+            {"claude_categorized": {"$ne": True}},
+            {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1,
+             "category": 1, "subcategory": 1},
+        ):
+            try:
+                cat, sub = detect_category(
+                    art.get("title", ""),
+                    (art.get("description") or "") + " " + (art.get("content") or ""),
+                )
+                if cat != art.get("category") or sub != art.get("subcategory"):
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"]},
+                        {"$set": {"category": cat, "subcategory": sub}},
+                    )
+                    changed += 1
+            except Exception as one_err:
+                logger.error(f"Recategorize: skipped {art.get('article_id')}: {one_err}")
+        await db.app_meta.update_one(
+            {"_id": "recategorize"}, {"$set": {"version": _RECATEGORIZE_VERSION}}, upsert=True,
+        )
+        logger.info(f"Recategorize v{_RECATEGORIZE_VERSION}: {changed} articles changed category")
+    except Exception:
+        logger.error(f"Recategorize failed: {traceback.format_exc()}")
+
+
+async def _run_startup_migrations() -> None:
+    # Sequential: the recategorize pass must see the other migration's output.
+    await _run_category_migration()
+    await _run_recategorize()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
@@ -1170,7 +1217,7 @@ async def lifespan(app: FastAPI):
     # Re-categorize + clean existing articles in the BACKGROUND so the app starts
     # serving immediately (this previously ran inline and blocked startup).
     # Keep a reference — a fire-and-forget create_task() can be GC'd mid-flight.
-    migration_task = asyncio.create_task(_run_category_migration())
+    migration_task = asyncio.create_task(_run_startup_migrations())
     app.state._migration_task = migration_task
 
     # Clear any ingestion lock left over from a prior process — a fresh boot
@@ -3211,188 +3258,10 @@ async def get_interest_categories():
 # the highest-scoring category wins. India-news tuned and kept specific to avoid
 # the cross-topic bleed that mislabeled almost everything. Only the 7 categories
 # the feed filter shows are emitted (Health/Lifestyle fold into Science/Entertainment).
-_CATEGORY_KEYWORDS = {
-    "Politics": [
-        "election", "elections", "minister", "parliament", "lok sabha", "rajya sabha",
-        "policy", "vote", "votes", "voter", "bjp", "congress", "aap", "modi",
-        "rahul gandhi", "amit shah", "kejriwal", "mamata", "yogi", "government",
-        "cabinet", "opposition", "coalition", "ordinance", "supreme court",
-        "high court", "cbi", "governor", "chief minister", "prime minister",
-        "manifesto", "poll", "assembly", "mla", "bypoll", "lokpal", "rally",
-    ],
-    "Business": [
-        "market", "markets", "stock", "stocks", "sensex", "nifty", "economy",
-        "economic", "gdp", "inflation", "rbi", "sebi", "rupee", "investment",
-        "investor", "ipo", "revenue", "profit", "earnings", "merger", "fintech",
-        "acquisition", "bank", "banking", "loan", "gst", "budget", "valuation",
-        "adani", "ambani", "reliance", "infosys", "tcs", "wipro", "funding",
-        "trade", "tariff", "export", "import", "shares", "mutual fund",
-        "petrol", "diesel", "fuel price", "forex", "reserves", "trade deficit",
-        "current account", "industrial policy", "manufacturing", "msme", "sme",
-        "retail", "e-commerce", "company", "companies", "corporate", "ceo",
-        "industry", "commerce ministry", "finance ministry", "customs duty",
-        "commodity", "crude oil", "gold price", "quarterly results", "q1 results",
-        "q2 results", "q3 results", "q4 results",
-    ],
-    "Technology": [
-        "artificial intelligence", "machine learning", "software", "smartphone",
-        "gadget", "chip", "semiconductor", "cyber", "data breach", "cloud computing",
-        "5g", "google", "apple", "microsoft", "openai", "chatgpt", "android",
-        "ios", "app", "startup", "robotics", "electric vehicle",
-        "coding", "developer", "hardware", "laptop", "processor", "gpu", "ai model",
-    ],
-    "Sports": [
-        "cricket", "ipl", "bcci", "world cup", "football", "tennis", "hockey",
-        "kabaddi", "olympic", "olympics", "match", "tournament", "wicket",
-        "batsman", "bowler", "virat", "kohli", "rohit sharma", "dhoni", "bumrah",
-        "medal", "championship", "league", "fifa", "odi", "t20", "test series",
-        "stadium", "athlete", "innings", "captain",
-    ],
-    "Entertainment": [
-        "bollywood", "film", "movie", "actor", "actress", "cinema", "box office",
-        "ott", "netflix", "song", "music", "album", "concert", "celebrity",
-        "trailer", "web series", "director", "shah rukh", "salman khan",
-        "deepika", "singer", "tollywood", "teaser", "biopic", "filmmaker",
-    ],
-    "Science": [
-        "isro", "chandrayaan", "gaganyaan", "satellite", "space", "nasa",
-        "research", "scientist", "vaccine", "climate", "discovery", "experiment",
-        "astronomy", "physics", "biology", "genome", "hospital", "aiims",
-        "disease", "covid", "dengue", "cancer", "medicine", "health",
-        "monsoon", "heatwave", "cyclone", "imd", "rainfall", "flood", "drought",
-        "weather", "cold wave", "hailstorm", "landslide", "earthquake", "tremor",
-        "air quality", "aqi", "pollution", "wildlife", "forest", "biodiversity",
-    ],
-    "World": [
-        "united nations", "g20", "brics", "pakistan", "china", "russia",
-        "ukraine", "united states", "europe", "ceasefire", "foreign",
-        "embassy", "bilateral", "trump", "putin", "biden", "gaza", "israel",
-        "diplomatic", "treaty", "summit",
-    ],
-}
+from categories import (  # noqa: E402 -- classifier lives in its own testable module
+    _CATEGORY_KEYWORDS, _SUBCATEGORY_KEYWORDS, _kw_pattern, detect_category,
+)
 
-
-# Niche keywords, scored WITHIN the winning category (names mirror
-# INTEREST_CATEGORIES so a tagged article maps straight to a picked interest).
-_SUBCATEGORY_KEYWORDS = {
-    "Politics": {
-        "Parliament": ["parliament", "lok sabha", "rajya sabha", "bill", "ordinance", "monsoon session", "speaker"],
-        "Elections": ["election", "poll", "voter", "bypoll", "campaign", "manifesto", "constituency", "polling"],
-        "Judiciary": ["supreme court", "high court", "verdict", "judge", "bench", "petition", "plea", "judgment"],
-        "International Relations": ["bilateral", "diplomat", "treaty", "summit", "embassy", "external affairs"],
-        "State Politics": ["chief minister", "assembly", "mla", "governor", "state government", "cabinet"],
-    },
-    "Technology": {
-        "AI & ML": ["artificial intelligence", "machine learning", "openai", "chatgpt", "ai model", "llm", "generative ai"],
-        "Startups": ["startup", "funding", "unicorn", "founder", "venture capital", "seed round"],
-        "Gadgets": ["smartphone", "laptop", "gadget", "wearable", "processor", "gpu", "chip", "semiconductor"],
-        "Fintech": ["fintech", "upi", "digital payment", "neobank", "paytm", "razorpay"],
-        "Space Tech": ["satellite", "spacex", "rocket", "launch vehicle"],
-        "Telecom": ["5g", "telecom", "spectrum", "jio", "airtel", "vodafone", "broadband"],
-    },
-    "Business": {
-        "Markets": ["sensex", "nifty", "stock", "shares", "ipo", "mutual fund", "equities"],
-        "Economy": ["gdp", "inflation", "rbi", "fiscal", "repo rate", "economic"],
-        "Startups": ["startup", "funding", "unicorn", "venture", "founder"],
-        "Real Estate": ["real estate", "property", "housing", "realty"],
-        "Banking": ["bank", "loan", "npa", "sbi", "hdfc", "credit", "banking"],
-        "Corporate": ["merger", "acquisition", "earnings", "revenue", "ceo", "corporate", "profit"],
-    },
-    "Sports": {
-        "Cricket": ["cricket", "ipl", "bcci", "wicket", "batsman", "bowler", "virat", "kohli", "rohit", "dhoni", "odi", "t20", "test match", "innings"],
-        "Football": ["football", "fifa", "isl", "messi", "ronaldo", "premier league"],
-        "Tennis": ["tennis", "wimbledon", "grand slam", "djokovic"],
-        "Olympics": ["olympic", "medal", "athlete", "asian games"],
-        "Kabaddi": ["kabaddi", "pro kabaddi"],
-        "Motorsport": ["formula 1", "f1", "motogp", "grand prix"],
-    },
-    "Entertainment": {
-        "Bollywood": ["bollywood", "shah rukh", "salman khan", "deepika", "box office", "hindi film"],
-        "OTT": ["ott", "netflix", "prime video", "web series", "hotstar", "streaming"],
-        "Music": ["song", "music", "album", "concert", "singer"],
-        "Television": ["television", "tv serial", "reality show"],
-        "Regional Cinema": ["tollywood", "kollywood", "telugu film", "tamil film", "regional cinema"],
-    },
-    "Science": {
-        "Space": ["isro", "chandrayaan", "gaganyaan", "satellite", "nasa", "astronomy"],
-        "Health": ["hospital", "disease", "covid", "vaccine", "aiims", "medicine", "cancer", "dengue"],
-        "Environment": ["environment", "pollution", "wildlife", "forest", "biodiversity"],
-        "Research": ["research", "study", "scientist", "discovery", "experiment"],
-        "Climate": ["climate", "global warming", "emissions", "monsoon", "heatwave"],
-    },
-    "World": {
-        "USA": ["united states", "trump", "biden", "washington"],
-        "China": ["china", "beijing", "xi jinping"],
-        "Europe": ["european union", "uk", "france", "germany", "europe"],
-        "Middle East": ["gaza", "israel", "iran", "saudi", "middle east", "palestine"],
-        "Southeast Asia": ["pakistan", "bangladesh", "sri lanka", "nepal", "myanmar"],
-    },
-}
-
-
-def _kw_pattern(kw: str):
-    """Word-boundary regex for single words; plain (escaped) regex for phrases.
-    Word boundaries stop short keywords like 'ev' or 'app' from matching inside
-    unrelated words (the old 'ai in text' bug matched said/again/main/campaign)."""
-    if " " in kw:
-        return re.compile(re.escape(kw), re.IGNORECASE)
-    return re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
-
-
-_CATEGORY_PATTERNS = {
-    cat: [_kw_pattern(kw) for kw in kws] for cat, kws in _CATEGORY_KEYWORDS.items()
-}
-
-_SUBCATEGORY_PATTERNS = {
-    cat: {sub: [_kw_pattern(kw) for kw in kws] for sub, kws in subs.items()}
-    for cat, subs in _SUBCATEGORY_KEYWORDS.items()
-}
-
-
-def detect_category(title: str, body: str) -> tuple:
-    """Score every category by weighted keyword matches (title hits count double)
-    and return the highest scorer, plus the best niche WITHIN that category (or
-    None). Beats the old first-match-wins + substring approach that dumped nearly
-    everything into Technology.
-
-    Default is "Politics" (general/national India news), NOT "World" — World's
-    own keyword list is specifically foreign/international terms (China,
-    Russia, Ukraine, Gaza...), so it must win on its own merits like every
-    other category. Defaulting zero-signal articles to World was the actual
-    bug behind Indian weather and business stories reading as World news:
-    anything that failed to hit a keyword (which used to include most weather
-    reports — "monsoon"/"heatwave"/"cyclone" lived only in a subcategory list,
-    never in the list that decides the primary category) silently became
-    "World" by fallback, not by any real signal that it was international."""
-    title_s = title or ""
-    body_s = body or ""
-    best_cat, best_score = "Politics", 0
-    for cat, patterns in _CATEGORY_PATTERNS.items():
-        score = 0
-        for pat in patterns:
-            if pat.search(title_s):
-                score += 2
-            if pat.search(body_s):
-                score += 1
-        if score > best_score:
-            best_cat, best_score = cat, score
-
-    # Niche within the winning category
-    subcategory = None
-    if best_score > 0:
-        best_sub, best_sub_score = None, 0
-        for sub, pats in _SUBCATEGORY_PATTERNS.get(best_cat, {}).items():
-            sub_score = 0
-            for pat in pats:
-                if pat.search(title_s):
-                    sub_score += 2
-                if pat.search(body_s):
-                    sub_score += 1
-            if sub_score > best_sub_score:
-                best_sub, best_sub_score = sub, sub_score
-        subcategory = best_sub
-
-    return best_cat, subcategory
 
 def clean_newsapi_text(text: str) -> str:
     """Strip NewsAPI truncation artifacts and WordPress/RSS footer cruft."""
@@ -4884,10 +4753,13 @@ async def get_brief(brief_type: str, request: Request = None):
         except Exception:
             pass
 
+    # Sentence case, matching the app's own copy (BriefPage, side nav). These
+    # override the app's text, so Title Case here made the brief say "Good
+    # Afternoon" while the sidebar said "Good afternoon".
     _greetings = {
-        "morning": ("Good Morning",  "while you were sleeping, we curated your morning brief"),
-        "midday":  ("Good Afternoon", "while you were working, we were curating your tailored afternoon brief"),
-        "night":   ("Good Evening",  "while you wound down, here's what shaped your world today"),
+        "morning": ("Good morning",  "while you were sleeping, we curated your morning brief"),
+        "midday":  ("Good afternoon", "while you were working, we were curating your tailored afternoon brief"),
+        "night":   ("Good evening",  "while you wound down, here's what shaped your world today"),
     }
     greeting, subtitle = _greetings[brief_type]
 
