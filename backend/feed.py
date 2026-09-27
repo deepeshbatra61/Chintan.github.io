@@ -66,13 +66,15 @@ def diversify(
     remaining = list(scored)
     out: List[dict] = []
     emitted: List[str] = []
+    counts = category_counts([a for _, a in remaining])
+    counts.pop("", None)  # uncategorised never conflicts, so never constrains
 
     while remaining and len(out) < needed:
         prev_cat = emitted[-1] if emitted else None
         recent = emitted[-window:]
 
-        best_i = None
-        best_val = 0.0
+        best_i = best_val = None      # best that also keeps the rest arrangeable
+        loose_i = loose_val = None    # best that merely satisfies adjacency
         for i, (score, article) in enumerate(remaining):
             cat = article.get("category") or ""
             # An uncategorised article blocks nothing and is blocked by nothing:
@@ -80,19 +82,51 @@ def diversify(
             if cat and cat == prev_cat:
                 continue
             adjusted = score - penalty * (recent.count(cat) if cat else 0)
-            if best_i is None or adjusted > best_val:
+            if loose_i is None or adjusted > loose_val:
+                loose_i, loose_val = i, adjusted
+            if _still_arrangeable(counts, len(remaining), cat) and (best_i is None or adjusted > best_val):
                 best_i, best_val = i, adjusted
 
-        if best_i is None:
+        pick = best_i if best_i is not None else loose_i
+        if pick is None:
             # Everything left repeats the previous category. Take the best of
             # them rather than truncating the feed.
-            best_i = max(range(len(remaining)), key=lambda i: remaining[i][0])
+            pick = max(range(len(remaining)), key=lambda i: remaining[i][0])
 
-        _, article = remaining.pop(best_i)
+        _, article = remaining.pop(pick)
         out.append(article)
-        emitted.append(article.get("category") or "")
+        cat = article.get("category") or ""
+        emitted.append(cat)
+        if cat:
+            counts[cat] -= 1
 
     return out
+
+
+def _still_arrangeable(counts: Dict[str, int], remaining_before: int, picking: str) -> bool:
+    """Would picking a `picking` article now leave a remainder that can still be
+    ordered with no two same-category neighbours?
+
+    Why this exists: a pure greedy spends its 'separator' categories early --
+    the soft penalty pushes the dominant category down, so everything else goes
+    first -- then runs out and is forced to stack the dominant one at the end
+    (Politics, Politics, Politics) even when a clean interleave existed. It
+    passed tests only while separators were plentiful.
+
+    The condition is the standard one for 'no two adjacent equal': with R
+    items left and the next slot barred to category p, an arrangement exists
+    iff every category c has count_c <= ceil(R / 2), and p itself has
+    count_p <= floor(R / 2) (it can't take the first of those R slots).
+    """
+    r = remaining_before - 1
+    after = dict(counts)
+    if picking:
+        after[picking] = after.get(picking, 0) - 1
+    for c, n in after.items():
+        limit = r // 2 if c == picking else (r + 1) // 2
+        if n > limit:
+            return False
+    return True
 
 
 def max_consecutive_repeats(articles: List[dict]) -> int:

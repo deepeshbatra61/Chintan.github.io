@@ -106,6 +106,64 @@ def test_no_article_is_dropped_or_duplicated():
     assert len(ids) == len(set(ids)) == 8
 
 
+# ───────────────────────── guest / recency path ─────────────────────────
+
+def _recency_ranked(categories):
+    """What the unauthenticated feed builds: newest first, rank as score."""
+    n = len(categories)
+    return [(float(n - i), art(f"a{i}", c)) for i, c in enumerate(categories)]
+
+
+def test_guest_feed_never_repeats_a_category_back_to_back():
+    """Regression: the guest/interest-less path returned a raw date sort, so
+    a fresh install opened Politics, Politics."""
+    cats = ["Politics", "Politics", "Politics", "World", "Sports", "Politics", "Business", "World"]
+    out = feed.diversify(_recency_ranked(cats), needed=8, penalty=6.0)
+    assert feed.max_consecutive_repeats(out) == 1
+
+
+def test_guest_feed_keeps_the_newest_story_first():
+    """Diversifying must not demote the freshest story off the top slot."""
+    cats = ["Politics", "Politics", "World", "Sports"]
+    out = feed.diversify(_recency_ranked(cats), needed=4, penalty=6.0)
+    assert out[0]["article_id"] == "a0"
+
+
+def test_guest_penalty_does_not_bury_fresh_news_deep():
+    """With rank-position scores one point apart, the personalised default
+    penalty (22) would push a repeated category ~22 slots down. The guest
+    path's smaller penalty must keep a fresh repeat within a few slots."""
+    cats = ["Politics", "Politics"] + ["World", "Sports", "Business", "Technology"] * 5
+    out = feed.diversify(_recency_ranked(cats), needed=len(cats), penalty=6.0)
+    pos = [a["article_id"] for a in out].index("a1")  # the second-newest story
+    assert pos <= 8, f"second-newest story pushed to slot {pos}"
+
+
+def test_finds_a_clean_order_whenever_one_exists():
+    """Property test. The greedy used to spend its separator categories early
+    and then stack the dominant one at the end, even when a clean interleave
+    existed -- example tests missed it because they always had plenty of
+    separators. Across random catalogues: if a no-repeat order is possible
+    (max category count <= ceil(n/2)), diversify must produce one."""
+    import random
+    rng = random.Random(1234)
+    cats_pool = ["Politics", "World", "Sports", "Business", "Technology"]
+    checked = 0
+    for _ in range(500):
+        n = rng.randint(2, 24)
+        weights = [rng.random() ** 2 for _ in cats_pool]   # skewed, like real feeds
+        cats = rng.choices(cats_pool, weights=weights, k=n)
+        if max(cats.count(c) for c in set(cats)) > (n + 1) // 2:
+            continue  # no clean order exists; nothing to assert
+        scored = [(rng.uniform(0, 200), art(f"a{i}", c)) for i, c in enumerate(cats)]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out = feed.diversify(scored, needed=n)
+        assert len(out) == n
+        assert feed.max_consecutive_repeats(out) == 1, [a["category"] for a in out]
+        checked += 1
+    assert checked > 200  # make sure the property was actually exercised
+
+
 # ───────────────────────── helpers ─────────────────────────
 
 def test_max_consecutive_repeats_counts_runs():

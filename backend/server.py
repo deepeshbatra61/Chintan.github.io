@@ -4533,11 +4533,27 @@ async def get_articles(
     user = await get_current_user(request) if request else None
     user_interests: List[str] = user.get("interests", []) if user else []
 
-    # ── Unauthenticated path: sort by freshness only ──────────────────────────
+    # ── Unauthenticated path: sort by freshness, then diversify ───────────────
+    # Diversify here too. This path is the FIRST feed every new user and every
+    # guest sees, and it used to return a raw date sort -- so the no-two-in-a-
+    # row rule held for signed-in readers and broke on the one screen that
+    # decides whether anyone stays (it opened Politics, Politics on a fresh
+    # install). Recency stands in for the score: newest ranks highest, and
+    # diversify reorders within that so a category can't stack up.
     if not user or not user_interests:
-        return await db.articles.find(query, {"_id": 0}).sort(
+        pool_size = max(60, skip + limit + 40)
+        fresh = await db.articles.find(query, {"_id": 0}).sort(
             "published_at", -1
-        ).skip(skip).limit(limit).to_list(limit)
+        ).limit(pool_size).to_list(pool_size)
+        # Rank position as score: stable, deterministic, preserves freshness.
+        ranked = [(float(len(fresh) - i), a) for i, a in enumerate(fresh)]
+        # penalty=6, not the default 22: that default is sized for personalised
+        # scores spanning ~100 points, but here adjacent stories are 1 point
+        # apart, so 22 would push a repeated category ~22 slots down and bury
+        # genuinely fresh news. 6 keeps recency dominant while the hard
+        # adjacency rule still guarantees no two in a row.
+        ordered = feed.diversify(ranked, needed=skip + limit, penalty=6.0)
+        return ordered[skip:skip + limit]
 
     # ── Authenticated path: fetch candidates, score, paginate ─────────────────
     # candidates / affinity / relevance_docs don't depend on each other -- each
@@ -6017,7 +6033,13 @@ async def admin_reset_summarization(body: dict, admin: dict = Depends(require_ad
 WAVE_FEED_BAR_STALE_DAYS = 60  # quiet this long (~2 months) => tuck into /developing, off the feed bar
 
 @api_router.get("/developing-stories")
-async def get_developing_stories_list(user: dict = Depends(require_auth), feed_bar: bool = False):
+async def get_developing_stories_list(feed_bar: bool = False):
+    # Public, deliberately. This list is global and non-personal -- the
+    # function never read `user` -- but it required auth, so every guest got a
+    # 401 that the feed rendered as a genuine "Nothing developing right now".
+    # That included anyone tapping Skip on first launch, i.e. a Play reviewer,
+    # who was shown the app's most alive feature as dead while two stories
+    # (Asian Games, 115 updates; World Tourism Day) were live.
     """Active developing stories, filtered by rules matched to how each KIND
     actually behaves — a single volume threshold doesn't fit all of them:
     - wave (long-running conflicts/situations): ALWAYS shown on the full
@@ -6135,7 +6157,11 @@ async def get_developing_stories_list(user: dict = Depends(require_auth), feed_b
             "theme": story["theme"],
             "kind": kind,
             "article_count": len(article_ids),
-            "last_updated": story.get("last_updated"),
+            # The newest matched article's time, not the doc's last_updated:
+            # the sync job touches that field every cycle, so it read "1m ago"
+            # on stories with nothing new in a day. Same fix the wave branch
+            # above already had; this branch never got it.
+            "last_updated": (latest_article or {}).get("published_at") or story.get("last_updated"),
             "latest_article": latest_article,
         })
 
@@ -6148,7 +6174,9 @@ async def get_developing_stories_list(user: dict = Depends(require_auth), feed_b
 
 
 @api_router.get("/developing-stories/{story_id}")
-async def get_developing_story_detail(story_id: str, user: dict = Depends(require_auth)):
+async def get_developing_story_detail(story_id: str):
+    # Public for the same reason as the list: a guest could see a story in the
+    # banner (once that was fixed) and then get "Story not found" on tapping it.
     """Return full topic detail with all matched articles sorted newest-first."""
     story = await db.developing_stories.find_one({"story_id": story_id}, {"_id": 0})
     if not story:
@@ -6248,7 +6276,10 @@ async def get_developing_story_detail(story_id: str, user: dict = Depends(requir
         "kind": story.get("kind", "auto"),
         "articles": articles,
         "article_count": count,
-        "last_updated": story.get("last_updated"),
+        # Newest article, not the sync-touched doc field. The detail header
+        # showed "● LIVE · updated 1m ago" directly above "0 updates today",
+        # over a timeline whose newest entry was 24h old.
+        "last_updated": (articles[0].get("published_at") if articles else None) or story.get("last_updated"),
         "state_summary": summary,
         "momentum": momentum,
     }
