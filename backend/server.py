@@ -6363,8 +6363,18 @@ async def health():
 # with the upload key), broken for every actual user. Both are listed now so
 # neither signing path is left unverified again.
 _ANDROID_PACKAGE = "com.chintan.app"
+# Correction (2026-09-27): the value first listed here as the upload cert was
+# really the local DEBUG keystore (~/.android/debug.keystore). The actual
+# upload key (android/app/chintan-upload-key.jks, alias chintan-upload) is
+# 9C:65:... -- verified with keytool against both the keystore and a release
+# AAB. Play installs were never affected (they carry the Play cert below);
+# this only mattered for sideloaded release APKs. All three are listed.
 _ANDROID_CERT_SHA256_UPLOAD = os.environ.get(
     "ANDROID_CERT_SHA256_UPLOAD",
+    "9C:65:39:9C:17:D7:DC:AF:7E:24:AC:1E:D1:0C:6A:0C:DF:62:FB:8D:49:77:35:70:B7:8E:51:FB:87:BD:2A:86",
+)
+_ANDROID_CERT_SHA256_DEBUG = os.environ.get(
+    "ANDROID_CERT_SHA256_DEBUG",
     "A4:6E:20:25:A3:CB:BE:4B:58:07:68:B7:4C:4B:F2:B1:2E:FF:33:D1:7B:DD:22:48:35:46:AD:B6:2B:97:BD:5A",
 )
 _ANDROID_CERT_SHA256_PLAY = os.environ.get(
@@ -6380,7 +6390,9 @@ async def assetlinks():
         "target": {
             "namespace": "android_app",
             "package_name": _ANDROID_PACKAGE,
-            "sha256_cert_fingerprints": [_ANDROID_CERT_SHA256_PLAY, _ANDROID_CERT_SHA256_UPLOAD],
+            "sha256_cert_fingerprints": [
+                _ANDROID_CERT_SHA256_PLAY, _ANDROID_CERT_SHA256_UPLOAD, _ANDROID_CERT_SHA256_DEBUG,
+            ],
         },
     }]
 
