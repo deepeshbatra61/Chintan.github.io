@@ -120,10 +120,17 @@ const AuthProvider = ({ children }) => {
 
   const login = async (userData, access = null, refresh = null) => {
     setIsGuest(false);
-    setUser(userData);
+    // The feed cache exists so returning from an article never reshuffles
+    // what you were reading -- right for navigation, wrong for a change of
+    // WHO is reading. logout() always cleared it; login() didn't, so a guest
+    // who browsed and then signed in kept the unpersonalised guest feed (and
+    // its empty Developing banner) until the app was force-quit. The first
+    // screen of a brand-new account looked like personalisation never ran.
+    clearFeedCache();
     if (access) {
       await setTokens(access, refresh);
     }
+    setUser(userData);
   };
 
   const logout = async () => {
