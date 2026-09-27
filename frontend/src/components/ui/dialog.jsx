@@ -43,21 +43,21 @@ const DialogContent = React.forwardRef(({ className, children, style, ...props }
         ...style,
       }}
       className={cn(
-        "grid w-full max-w-lg gap-4 border-t border-x-0 border-b-0 border-white/10 bg-[#131211] p-5 shadow-lg duration-300 rounded-t-[20px] rounded-b-none",
+        "grid w-full max-w-lg gap-4 border-t border-x-0 border-b-0 border-fg/10 bg-surface p-5 shadow-lg duration-300 rounded-t-[20px] rounded-b-none",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         className
       )}
       {...props}>
-      <div style={{ width: '34px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '-8px auto 2px' }} />
+      <div style={{ width: '34px', height: '4px', borderRadius: '2px', background: 'rgb(var(--c-fg-rgb) / 0.15)', margin: '-8px auto 2px' }} />
       {children}
       <DialogPrimitive.Close
         style={{
           position: 'absolute',
           right: '14px',
           top: '14px',
-          background: 'rgba(255,255,255,0.06)',
+          background: 'rgb(var(--c-fg-rgb) / 0.06)',
           border: 'none',
           borderRadius: '50%',
           width: '30px',
@@ -68,7 +68,7 @@ const DialogContent = React.forwardRef(({ className, children, style, ...props }
           cursor: 'pointer',
           flexShrink: 0,
         }}>
-        <X size={14} color="#9A938A" />
+        <X size={14} style={{ color: "var(--c-muted2)" }} />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -99,7 +99,7 @@ DialogFooter.displayName = "DialogFooter"
 const DialogTitle = React.forwardRef(({ className, style, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: '#F2EEE9', ...style }}
+    style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: 'var(--c-ink)', ...style }}
     className={cn("leading-tight", className)}
     {...props} />
 ))

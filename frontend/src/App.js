@@ -215,7 +215,7 @@ const AuthCallback = () => {
   }, [location, login, navigate, setShowWelcome, setWelcomeDest]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+    <div className="min-h-screen bg-page flex items-center justify-center">
       <div className="text-center">
         <SuryaLogo className="w-16 h-16 mx-auto animate-spin-slow" />
         <p className="mt-4 text-gray-400">Authenticating...</p>
@@ -231,7 +231,7 @@ const ProtectedRoute = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <div className="text-center">
           <SuryaLogo className="w-16 h-16 mx-auto animate-spin-slow" />
           <p className="mt-4 text-gray-400">Loading...</p>
@@ -261,7 +261,7 @@ const GuestOrProtectedRoute = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <div className="text-center">
           <SuryaLogo className="w-16 h-16 mx-auto animate-spin-slow" />
           <p className="mt-4 text-gray-400">Loading...</p>
@@ -519,9 +519,9 @@ function App() {
           offset="calc(var(--sat) + 12px)"
           toastOptions={{
             style: {
-              background: '#171717',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: '#EDEDED'
+              background: 'var(--c-surface)',
+              border: '1px solid rgb(var(--c-fg-rgb) / 0.1)',
+              color: 'var(--c-ink)'
             }
           }}
         />

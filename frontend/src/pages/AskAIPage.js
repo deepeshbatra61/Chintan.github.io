@@ -128,20 +128,20 @@ const AskAIPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-16 h-16 animate-spin-slow" />
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0A0A0A] flex flex-col" data-testid="ask-ai-page">
+    <div className="fixed inset-0 bg-page flex flex-col" data-testid="ask-ai-page">
       {/* Header */}
       <header className="glass-nav px-4 flex-shrink-0" style={{ paddingTop: 'var(--sat)', paddingBottom: '12px' }}>
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button 
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            className="p-2 hover:bg-fg/5 rounded-lg transition-colors"
             data-testid="back-btn"
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
@@ -149,7 +149,7 @@ const AskAIPage = () => {
           
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-red-500" />
-            <span className="text-white font-medium">Ask AI</span>
+            <span className="text-fg font-medium">Ask AI</span>
           </div>
 
           <div className="w-9" />
@@ -158,10 +158,10 @@ const AskAIPage = () => {
 
       {/* Article Context */}
       {article && (
-        <div className="px-4 py-3 border-b border-white/5 flex-shrink-0">
+        <div className="px-4 py-3 border-b border-fg/5 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <p className="text-gray-500 text-xs mb-1">Discussing:</p>
-            <p className="text-white text-sm line-clamp-1">{article.title}</p>
+            <p className="text-fg text-sm line-clamp-1">{article.title}</p>
           </div>
         </div>
       )}
@@ -178,7 +178,7 @@ const AskAIPage = () => {
               <div className="w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center mx-auto mb-6">
                 <Sparkles className="w-8 h-8 text-red-500" />
               </div>
-              <h2 className="font-serif text-2xl text-white mb-3">Ask Chintan AI</h2>
+              <h2 className="font-serif text-2xl text-fg mb-3">Ask Chintan AI</h2>
               <p className="text-gray-500 mb-8 max-w-md mx-auto">
                 I can help you understand this article better, explore different perspectives, 
                 or answer any questions you have.
@@ -192,7 +192,7 @@ const AskAIPage = () => {
                     <button
                       key={idx}
                       onClick={() => sendMessage(question)}
-                      className="w-full max-w-md mx-auto block text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 text-sm"
+                      className="w-full max-w-md mx-auto block text-left p-3 rounded-lg bg-fg/5 hover:bg-fg/10 transition-colors text-gray-400 text-sm"
                       data-testid={`suggested-question-${idx}`}
                     >
                       {question}
@@ -220,7 +220,7 @@ const AskAIPage = () => {
                     <div className={`max-w-[80%] ${
                       message.role === "user" 
                         ? "bg-red-600 text-white rounded-2xl rounded-br-md" 
-                        : "bg-white/5 text-gray-300 rounded-2xl rounded-bl-md"
+                        : "bg-fg/5 text-gray-300 rounded-2xl rounded-bl-md"
                     } px-4 py-3`}>
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">
                         {message.content}
@@ -228,7 +228,7 @@ const AskAIPage = () => {
                     </div>
 
                     {message.role === "user" && (
-                      <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-fg/10 overflow-hidden flex-shrink-0">
                         {user?.picture ? (
                           <img src={user.picture} alt="" className="w-full h-full object-cover" />
                         ) : (
@@ -251,7 +251,7 @@ const AskAIPage = () => {
                   <div className="w-8 h-8 rounded-full bg-red-600/20 flex items-center justify-center flex-shrink-0">
                     <Sparkles className="w-4 h-4 text-red-500" />
                   </div>
-                  <div className="bg-white/5 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="bg-fg/5 rounded-2xl rounded-bl-md px-4 py-3">
                     <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
                   </div>
                 </motion.div>
@@ -273,7 +273,7 @@ const AskAIPage = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask anything about this article..."
-            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-red-500 focus:outline-none"
+            className="flex-1 bg-fg/5 border border-fg/10 rounded-xl px-4 py-3 text-fg placeholder-gray-500 focus:border-red-500 focus:outline-none"
             disabled={sending}
             data-testid="ai-input"
           />
@@ -283,7 +283,7 @@ const AskAIPage = () => {
             className={`p-3 rounded-xl transition-colors ${
               input.trim() && !sending
                 ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-white/5 text-gray-600 cursor-not-allowed"
+                : "bg-fg/5 text-gray-600 cursor-not-allowed"
             }`}
             data-testid="send-message-btn"
           >

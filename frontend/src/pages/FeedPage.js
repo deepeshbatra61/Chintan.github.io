@@ -15,6 +15,7 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import BottomNav from "../components/BottomNav";
 import SignInPrompt from "../components/SignInPrompt";
+import AppearanceControl from "../components/AppearanceControl";
 import {
   getFeedCache, setFeedCache,
   setLatestSeenArticleId, setNewArticlesAvailable,
@@ -90,7 +91,7 @@ const SIDEBAR_PHASES = {
   dawn:  "linear-gradient(135deg, rgba(245,158,11,0.26), rgba(220,38,38,0.06))",
   day:   "linear-gradient(135deg, rgba(220,38,38,0.20), rgba(220,38,38,0.03))",
   dusk:  "linear-gradient(135deg, rgba(234,88,12,0.24), rgba(124,58,237,0.14))",
-  night: "linear-gradient(135deg, rgba(99,102,241,0.22), rgba(10,10,10,0.3))",
+  night: "linear-gradient(135deg, rgba(99,102,241,0.22), rgb(var(--c-bg-rgb) / 0.3))",
 };
 const sidebarPhase = (h) => (h < 5 ? "night" : h < 11 ? "dawn" : h < 17 ? "day" : h < 21 ? "dusk" : "night");
 const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 21 ? "Good evening" : "Good night");
@@ -101,7 +102,7 @@ const sidebarGreeting = (h) => (h < 5 ? "Late night" : h < 12 ? "Good morning" :
 // conflict reads as "surging/simmering/watching" at a glance without any
 // new visual vocabulary. "Watching" gets no pulse at all — a quiet stretch
 // is expected behavior for these stories, not a decayed/dead state.
-const WAVE_INTENSITY_COLOR = { surging: '#DC2626', simmering: '#F59E0B', watching: '#4A453F' };
+const WAVE_INTENSITY_COLOR = { surging: '#DC2626', simmering: 'var(--c-warn-ink)', watching: 'var(--c-dim)' };
 const WAVE_INTENSITY_LABEL = { surging: 'Surging', simmering: 'Simmering', watching: 'Watching' };
 const WaveHeartbeat = ({ intensity, reduced }) => {
   const state = intensity?.state || 'watching';
@@ -460,32 +461,32 @@ const FeedPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-16 h-16 animate-spin-slow" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]" data-testid="feed-page">
+    <div className="min-h-screen bg-page" data-testid="feed-page">
       {/* Header */}
       <header className="glass-nav sticky z-40 px-4" style={{ top: 0, paddingTop: 'var(--sat)', paddingBottom: '12px' }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <SheetTrigger asChild>
-                <button className="p-2 hover:bg-white/5 rounded-lg transition-colors" data-testid="menu-btn">
+                <button className="p-2 hover:bg-fg/5 rounded-lg transition-colors" data-testid="menu-btn">
                   <Menu className="w-5 h-5 text-gray-400" />
                 </button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80 bg-[#0A0A0A] border-r border-white/10 p-0" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+              <SheetContent side="left" className="w-80 bg-page border-r border-fg/10 p-0" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
                 {/* Time-aware crown */}
                 <div style={{ flexShrink: 0, background: SIDEBAR_PHASES[sidebarPhase(_hour)], paddingTop: 'calc(var(--sat) + 22px)', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px' }}>
                   <SuryaLogo className="w-11 h-11 animate-spin-slow" />
-                  <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: '#F2EEE9', margin: '14px 0 0' }}>
+                  <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', color: 'var(--c-ink)', margin: '14px 0 0' }}>
                     {_greeting}{_firstName ? `, ${_firstName}` : ''}
                   </h2>
-                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'rgba(255,255,255,0.55)', margin: '5px 0 0', letterSpacing: '0.04em' }}>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'rgb(var(--c-fg-rgb) / 0.55)', margin: '5px 0 0', letterSpacing: '0.04em' }}>
                     {_timeStr} · Contemplate.
                   </p>
                 </div>
@@ -499,7 +500,7 @@ const FeedPage = () => {
                     labels carry the hierarchy instead of per-item icon colors */}
                 <div style={{ flex: 1, overflowY: 'auto' }} className="hide-scrollbar">
                   <div className="p-4 space-y-1">
-                    <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#524d47' }} className="px-3 py-2">Briefs</p>
+                    <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint2)' }} className="px-3 py-2">Briefs</p>
                     {[
                       { key: "morning", label: "Morning Brief", Icon: Sun },
                       { key: "midday", label: "Midday Update", Icon: CloudSun },
@@ -510,20 +511,20 @@ const FeedPage = () => {
                         <button
                           key={key}
                           onClick={() => { navigate(`/brief/${key}`); setSidebarOpen(false); }}
-                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
                           data-testid={`${key}-brief-nav`}
                           style={{ opacity: isNow ? 1 : 0.42 }}
                         >
-                          <Icon className="w-[18px] h-[18px]" style={{ color: isNow ? '#DC6B5A' : '#6b625a', flexShrink: 0 }} />
-                          <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: isNow ? '#F2EEE9' : '#C9BFB4', flex: 1 }}>{label}</span>
+                          <Icon className="w-[18px] h-[18px]" style={{ color: isNow ? 'var(--c-accent-ink)' : 'var(--c-faint)', flexShrink: 0 }} />
+                          <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: isNow ? 'var(--c-ink)' : 'var(--c-sub)', flex: 1 }}>{label}</span>
                           {isNow && (
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: '#DC6B5A', textTransform: 'uppercase' }}>Now</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.1em', color: 'var(--c-accent-ink)', textTransform: 'uppercase' }}>Now</span>
                           )}
                         </button>
                       );
                     })}
 
-                    <div className="h-px bg-white/10 my-4" />
+                    <div className="h-px bg-fg/10 my-4" />
                     {developingStories.length > 0 ? (
                       <button
                         onClick={() => { navigate("/developing"); setSidebarOpen(false); }}
@@ -533,8 +534,8 @@ const FeedPage = () => {
                       >
                         <span className="animate-pulse" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626', flexShrink: 0 }} />
                         <div>
-                          <div style={{ fontSize: '13.5px', color: '#ECE0D6', fontWeight: 500 }}>Developing Stories</div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#9a8d80', marginTop: '2px' }}>{developingStories.length} topic{developingStories.length !== 1 ? "s" : ""}</div>
+                          <div style={{ fontSize: '13.5px', color: 'var(--c-ink2)', fontWeight: 500 }}>Developing Stories</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'var(--c-muted2)', marginTop: '2px' }}>{developingStories.length} topic{developingStories.length !== 1 ? "s" : ""}</div>
                         </div>
                       </button>
                     ) : (
@@ -542,29 +543,32 @@ const FeedPage = () => {
                         className="w-full flex items-center gap-3 px-3 py-3 rounded-lg"
                         data-testid="developing-stories-empty"
                       >
-                        <Radio className="w-[18px] h-[18px]" style={{ color: "#5B564F", flexShrink: 0 }} />
-                        <span style={{ color: "#6b625a", fontSize: "14px" }}>No developing story right now</span>
+                        <Radio className="w-[18px] h-[18px]" style={{ color: "var(--c-faint2)", flexShrink: 0 }} />
+                        <span style={{ color: "var(--c-faint)", fontSize: "14px" }}>No developing story right now</span>
                       </div>
                     )}
 
-                    <div className="h-px bg-white/10 my-4" />
+                    <div className="h-px bg-fg/10 my-4" />
                     <button
                       onClick={() => { navigate("/contact"); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-white/5 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
                       data-testid="contact-sidebar-nav"
                     >
-                      <Mail className="w-[18px] h-[18px]" style={{ color: '#6b625a', flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: '#C9BFB4' }}>Contact us</span>
+                      <Mail className="w-[18px] h-[18px]" style={{ color: 'var(--c-faint)', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: 'var(--c-sub)' }}>Contact us</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Sign out — a flex row, so it never overlaps the list */}
-                <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', paddingBottom: 'calc(12px + var(--sab))' }}>
+                {/* Appearance + sign out — pinned footer, so it never overlaps the list */}
+                <div style={{ flexShrink: 0, borderTop: '1px solid rgb(var(--c-fg-rgb) / 0.1)', padding: '14px 16px 12px', paddingBottom: 'calc(12px + var(--sab))' }}>
+                  <div style={{ marginBottom: '10px' }}>
+                    <AppearanceControl />
+                  </div>
                   <button
                     onClick={user ? handleLogout : () => navigate("/login")}
                     className="w-full rounded-lg transition-colors hover:bg-red-500/10"
-                    style={{ padding: '11px', color: '#DC6B5A', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+                    style={{ padding: '11px', color: 'var(--c-accent-ink)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
                     data-testid="logout-btn"
                   >
                     {user ? "Sign Out" : "Sign in"}
@@ -575,14 +579,14 @@ const FeedPage = () => {
 
             <div className="flex items-center gap-2">
               <SuryaLogo className="w-8 h-8" />
-              <span className="font-serif text-xl text-white hidden sm:block">Chintan</span>
+              <span className="font-serif text-xl text-fg hidden sm:block">Chintan</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={openNotifications}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors relative"
+              className="p-2 hover:bg-fg/5 rounded-lg transition-colors relative"
               data-testid="notifications-btn"
             >
               <Bell className="w-5 h-5 text-gray-400" />
@@ -592,7 +596,7 @@ const FeedPage = () => {
             </button>
             <button 
               onClick={() => navigate("/profile")}
-              className="w-8 h-8 rounded-full bg-white/10 overflow-hidden"
+              className="w-8 h-8 rounded-full bg-fg/10 overflow-hidden"
               data-testid="profile-btn"
             >
               {user?.picture ? (
@@ -639,24 +643,24 @@ const FeedPage = () => {
               <motion.div
                 animate={{ boxShadow: ['0 0 0px rgba(220,38,38,0)', '0 0 18px rgba(220,38,38,0.12)', '0 0 0px rgba(220,38,38,0)'] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ background: '#131211', border: '1px solid rgba(220,38,38,0.28)', borderRadius: '16px', padding: '14px 16px' }}
+                style={{ background: 'var(--c-surface)', border: '1px solid rgba(220,38,38,0.28)', borderRadius: '16px', padding: '14px 16px' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '12px' }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626' }} className="animate-pulse" />
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#DC6B5A', textTransform: 'uppercase' }}>Developing</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: 'var(--c-accent-ink)', textTransform: 'uppercase' }}>Developing</span>
                 </div>
                 <div className="overflow-x-auto hide-scrollbar">
                   <div style={{ display: 'flex', alignItems: 'stretch' }}>
                     {developingStories.slice(0, 4).map((story, i) => (
                       <React.Fragment key={story.story_id}>
-                        {i > 0 && <div style={{ width: '1px', alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '2px 15px', flexShrink: 0 }} />}
+                        {i > 0 && <div style={{ width: '1px', alignSelf: 'stretch', background: 'rgb(var(--c-fg-rgb) / 0.09)', margin: '2px 15px', flexShrink: 0 }} />}
                         <button
                           onClick={() => navigate(`/developing/${story.story_id}`)}
                           className="group"
                           style={{ flexShrink: 0, maxWidth: '210px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                           data-testid={`developing-${story.story_id}`}
                         >
-                          <p className="group-hover:text-red-400 transition-colors" style={{ color: '#ECE7E1', fontSize: '13.5px', fontWeight: 500, lineHeight: 1.32, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <p className="group-hover:text-red-400 transition-colors" style={{ color: 'var(--c-ink2)', fontSize: '13.5px', fontWeight: 500, lineHeight: 1.32, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                             {story.title}
                           </p>
                           {story.kind === 'wave' ? (
@@ -665,9 +669,9 @@ const FeedPage = () => {
                             // Calendar entries have no articles by definition, so an
                             // update count is both meaningless and (with no
                             // article_count in the payload) literally "undefined".
-                            <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{formatCalendarDate(story.calendar_date)}</p>
+                            <p style={{ color: 'var(--c-muted)', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{formatCalendarDate(story.calendar_date)}</p>
                           ) : (
-                            <p style={{ color: '#8A847C', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
+                            <p style={{ color: 'var(--c-muted)', fontSize: '11px', marginTop: '5px', fontFamily: "'JetBrains Mono', monospace" }}>{story.article_count} update{story.article_count !== 1 ? "s" : ""}</p>
                           )}
                         </button>
                       </React.Fragment>
@@ -677,17 +681,17 @@ const FeedPage = () => {
               </motion.div>
             ) : (
               <div
-                style={{ background: '#131211', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}
+                style={{ background: 'var(--c-surface)', border: '1px solid rgb(var(--c-fg-rgb) / 0.08)', borderRadius: '16px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}
                 data-testid="developing-banner-empty"
               >
                 <motion.span
                   animate={R ? {} : { opacity: [0.35, 0.75, 0.35] }}
                   transition={R ? {} : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#5B564F', flexShrink: 0 }}
+                  style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--c-faint2)', flexShrink: 0 }}
                 />
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#6b625a', textTransform: 'uppercase', marginBottom: '2px' }}>Developing</div>
-                  <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: '13px', color: '#8A847C', margin: 0 }}>Nothing developing right now — we're watching.</p>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: 'var(--c-faint)', textTransform: 'uppercase', marginBottom: '2px' }}>Developing</div>
+                  <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: '13px', color: 'var(--c-muted)', margin: 0 }}>Nothing developing right now — we're watching.</p>
                 </div>
               </div>
             )}
@@ -703,7 +707,7 @@ const FeedPage = () => {
                     key={cat}
                     onClick={() => handleCategoryChange(cat)}
                     className="relative rounded-full text-sm whitespace-nowrap"
-                    style={{ flexShrink: 0, padding: "8px 16px", border: "none", cursor: "pointer", background: active ? "transparent" : "rgba(255,255,255,0.05)", color: active ? "#fff" : "#9ca3af", transition: "color .3s ease" }}
+                    style={{ flexShrink: 0, padding: "8px 16px", border: "none", cursor: "pointer", background: active ? "transparent" : "rgb(var(--c-fg-rgb) / 0.05)", color: active ? "#fff" : "var(--c-muted2)", transition: "color .3s ease" }}
                     data-testid={`category-filter-${cat.toLowerCase()}`}
                   >
                     {active && (
@@ -738,13 +742,13 @@ const FeedPage = () => {
                   whileTap={{ scale: 0.98 }}
                   data-testid={`article-card-${article.article_id}`}
                 >
-                  <div className="relative h-48 overflow-hidden">
+                  <div className="relative h-48 overflow-hidden bg-surface2">
                     <img 
                       src={article.image_url} 
                       alt={article.title}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] to-transparent" />
+                    <div className="img-fade absolute inset-0 bg-gradient-to-t from-page to-transparent" />
                     
                     <div className="absolute top-3 left-3 flex gap-2">
                       {article.is_breaking && (
@@ -768,7 +772,7 @@ const FeedPage = () => {
                   </div>
 
                   <div className="p-4">
-                    <h3 className="font-serif text-lg text-white mb-2 line-clamp-2 leading-tight">
+                    <h3 className="font-serif text-lg text-fg mb-2 line-clamp-2 leading-tight">
                       {article.title}
                     </h3>
                     <p className="text-gray-500 text-sm line-clamp-2 mb-4">
@@ -812,46 +816,46 @@ const FeedPage = () => {
       {/* Long-press quick actions — headline + photo is enough signal to
           decide these, no need to open the article first. */}
       <Sheet open={!!actionSheetArticle} onOpenChange={(open) => !open && closeActionSheet()}>
-        <SheetContent side="bottom" className="bg-[#0A0A0A] border-white/10 rounded-t-2xl">
+        <SheetContent side="bottom" className="bg-page border-fg/10 rounded-t-2xl">
           {actionSheetArticle && (
             <div className="pt-2 pb-2">
               <SheetTitle className="sr-only">{actionSheetArticle.title}</SheetTitle>
               <SheetDescription className="sr-only">Quick actions for this article</SheetDescription>
-              <p className="font-serif text-sm text-white/90 line-clamp-2 mb-5 pr-8">
+              <p className="font-serif text-sm text-fg/90 line-clamp-2 mb-5 pr-8">
                 {actionSheetArticle.title}
               </p>
               <div className="flex flex-col gap-1">
                 <button
-                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 px-2 text-left text-fg hover:bg-fg/5 rounded-lg transition-colors"
                   onClick={() => handleBookmark(actionSheetArticle)}
                 >
                   <Bookmark className="w-5 h-5 text-gray-400" />
                   <span>Add to bookmarks</span>
                 </button>
                 <button
-                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 px-2 text-left text-fg hover:bg-fg/5 rounded-lg transition-colors"
                   onClick={() => handleShare(actionSheetArticle)}
                 >
                   <Share2 className="w-5 h-5 text-gray-400" />
                   <span>Share</span>
                 </button>
                 <button
-                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 px-2 text-left text-fg hover:bg-fg/5 rounded-lg transition-colors"
                   onClick={() => handleSaveForBrief(actionSheetArticle)}
                 >
                   <Sunrise className="w-5 h-5 text-gray-400" />
                   <span>Save for my next Brief</span>
                 </button>
-                <div className="h-px bg-white/10 my-1" />
+                <div className="h-px bg-fg/10 my-1" />
                 <button
-                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 px-2 text-left text-fg hover:bg-fg/5 rounded-lg transition-colors"
                   onClick={() => handleMoreLikeThis(actionSheetArticle)}
                 >
                   <ThumbsUp className="w-5 h-5 text-gray-400" />
                   <span>Show more like this</span>
                 </button>
                 <button
-                  className="flex items-center gap-3 py-3 px-2 text-left text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 px-2 text-left text-fg hover:bg-fg/5 rounded-lg transition-colors"
                   onClick={() => handleLessLikeThis(actionSheetArticle)}
                 >
                   <ThumbsDown className="w-5 h-5 text-gray-400" />
@@ -865,9 +869,9 @@ const FeedPage = () => {
 
       {/* Notifications Dialog */}
       <Dialog open={showNotifications} onOpenChange={setShowNotifications}>
-        <DialogContent className="bg-[#0A0A0A] border-white/10 max-w-md max-h-[70vh]">
+        <DialogContent className="bg-page border-fg/10 max-w-md max-h-[70vh]">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <DialogTitle className="text-fg flex items-center gap-2">
               <Bell className="w-5 h-5 text-red-500" />
               Notifications
             </DialogTitle>
@@ -879,7 +883,7 @@ const FeedPage = () => {
                 {notifications.map((notif, idx) => (
                   <div 
                     key={idx} 
-                    className={`p-4 rounded-lg ${notif.read ? 'bg-white/5' : 'bg-red-950/30 border border-red-900/30'}`}
+                    className={`p-4 rounded-lg ${notif.read ? 'bg-fg/5' : 'bg-red-950/30 border border-red-900/30'}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -892,7 +896,7 @@ const FeedPage = () => {
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className="text-white text-sm">
+                        <p className="text-fg text-sm">
                           <span className="font-medium">{notif.from_user}</span>
                           {notif.type === 'agree' ? ' agreed with' : ' disagreed with'} your comment
                         </p>

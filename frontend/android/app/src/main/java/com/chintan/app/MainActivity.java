@@ -15,6 +15,8 @@ public class MainActivity extends BridgeActivity {
         // near-black background and a small, non-crisp icon render.
         // Must run BEFORE super.onCreate().
         SplashScreen.installSplashScreen(this);
+        // Local plugins must be registered before super.onCreate() builds the bridge.
+        registerPlugin(ThemeBarsPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Required by @capacitor-community/safe-area, and the piece that was

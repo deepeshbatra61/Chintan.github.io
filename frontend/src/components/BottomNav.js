@@ -81,8 +81,8 @@ const BottomNav = () => {
     <nav
       style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-        background: "rgba(10,10,10,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-        borderTop: "1px solid rgba(255,255,255,0.06)",
+        background: "rgb(var(--c-bg-rgb) / 0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+        borderTop: "1px solid rgb(var(--c-fg-rgb) / 0.06)",
         paddingTop: "8px", paddingBottom: "calc(6px + var(--sab))",
         // Landscape with three-button navigation puts the system bar on a SIDE
         // edge, not the bottom. Without these the last tab sits underneath it.
@@ -100,7 +100,7 @@ const BottomNav = () => {
               position: "relative",
               display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
               background: "none", border: "none", cursor: "pointer", flex: 1, padding: "4px 0",
-              color: active ? "#DC2626" : "#6E6862", transition: "color .2s",
+              color: active ? "#DC2626" : "var(--c-faint)", transition: "color .2s",
             }}
           >
             <span style={{ position: "relative", display: "inline-flex" }}>
@@ -108,7 +108,7 @@ const BottomNav = () => {
               {dot && (
                 <span
                   className="animate-pulse"
-                  style={{ position: "absolute", top: "-2px", right: "-3px", width: "8px", height: "8px", borderRadius: "50%", background: "#DC2626", border: "1.5px solid #0A0A0A" }}
+                  style={{ position: "absolute", top: "-2px", right: "-3px", width: "8px", height: "8px", borderRadius: "50%", background: "#DC2626", border: "1.5px solid var(--c-bg)" }}
                   data-testid="feed-new-articles-dot"
                 />
               )}

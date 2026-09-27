@@ -13,6 +13,20 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			// Theme-aware neutrals (see the colour tokens in src/index.css).
+  			// `fg` replaces `white` for text/borders/tints so light mode flips
+  			// them; plain `white` is kept for text on red fills.
+  			fg: 'rgb(var(--c-fg-rgb) / <alpha-value>)',
+  			page: 'rgb(var(--c-bg-rgb) / <alpha-value>)',
+  			surface: 'var(--c-surface)',
+  			surface2: 'var(--c-surface2)',
+  			gray: {
+  				300: 'rgb(var(--c-gray-300) / <alpha-value>)',
+  				400: 'rgb(var(--c-gray-400) / <alpha-value>)',
+  				500: 'rgb(var(--c-gray-500) / <alpha-value>)',
+  				600: 'rgb(var(--c-gray-600) / <alpha-value>)',
+  				700: 'rgb(var(--c-gray-700) / <alpha-value>)'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

@@ -50,7 +50,7 @@ const trendLabel = (m) => {
   return `${head} · ${n} update${n === 1 ? "" : "s"} today`;
 };
 
-const WAVE_STATE_COLOR = { surging: "#DC2626", simmering: "#F59E0B", watching: "#4A453F" };
+const WAVE_STATE_COLOR = { surging: "#DC2626", simmering: "var(--c-warn-ink)", watching: "var(--c-dim)" };
 
 const DevelopingStoryDetail = () => {
   const { storyId } = useParams();
@@ -77,7 +77,7 @@ const DevelopingStoryDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-14 h-14 animate-spin-slow" />
       </div>
     );
@@ -85,10 +85,10 @@ const DevelopingStoryDetail = () => {
 
   if (!story) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <div style={{ textAlign: "center" }}>
-          <p style={{ color: "#8A847C", marginBottom: "14px" }}>Story not found</p>
-          <button onClick={() => navigate(-1)} style={{ color: "#DC6B5A", background: "none", border: "none", cursor: "pointer" }}>Go back</button>
+          <p style={{ color: "var(--c-muted)", marginBottom: "14px" }}>Story not found</p>
+          <button onClick={() => navigate(-1)} style={{ color: "var(--c-accent-ink)", background: "none", border: "none", cursor: "pointer" }}>Go back</button>
         </div>
       </div>
     );
@@ -115,38 +115,38 @@ const DevelopingStoryDetail = () => {
     }
 
     return (
-      <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="developing-story-detail">
-        <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ minHeight: "100vh", background: "var(--c-bg)" }} data-testid="developing-story-detail">
+        <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgb(var(--c-bg-rgb) / 0) 70%)", pointerEvents: "none", zIndex: 0 }} />
 
-        <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgb(var(--c-bg-rgb) / 0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
           <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
-              <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
+              <ArrowLeft className="w-5 h-5" style={{ color: "var(--c-muted2)" }} />
             </button>
             {/* Deliberately not the LIVE pill: nothing here is live. */}
-            <span style={{ color: "#82828A", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", textTransform: "uppercase" }}>Chintan Calendar</span>
-            <Icon className="w-5 h-5" style={{ color: "#DC6B5A" }} />
+            <span style={{ color: "var(--c-muted)", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", textTransform: "uppercase" }}>Chintan Calendar</span>
+            <Icon className="w-5 h-5" style={{ color: "var(--c-accent-ink)" }} />
           </div>
         </header>
 
         <main style={{ position: "relative", zIndex: 1, padding: "18px 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.14em", color: "#DC6B5A", marginBottom: "10px" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.14em", color: "var(--c-accent-ink)", marginBottom: "10px" }}>
               {formatCalendarDate(story.calendar_date)}
             </div>
-            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "#F2EEE9", margin: 0 }}>{story.title}</h1>
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "var(--c-ink)", margin: 0 }}>{story.title}</h1>
           </motion.div>
 
           {story.content && (
             <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-              style={{ marginTop: "18px", marginBottom: 0, fontSize: "15.5px", lineHeight: 1.62, color: "#C9C2BA" }}>
+              style={{ marginTop: "18px", marginBottom: 0, fontSize: "15.5px", lineHeight: 1.62, color: "var(--c-sub)" }}>
               {story.content}
             </motion.p>
           )}
 
           {sources.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} style={{ marginTop: "26px" }}>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "#6E6862", textTransform: "uppercase", marginBottom: "10px" }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "var(--c-faint)", textTransform: "uppercase", marginBottom: "10px" }}>
                 Sources
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -155,15 +155,15 @@ const DevelopingStoryDetail = () => {
                     key={s.url}
                     onClick={() => openSource(s.url)}
                     data-testid={`calendar-source-${s.host}`}
-                    style={{ textAlign: "left", width: "100%", display: "flex", alignItems: "center", gap: "10px", background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "12px 13px", cursor: "pointer" }}
+                    style={{ textAlign: "left", width: "100%", display: "flex", alignItems: "center", gap: "10px", background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)", borderRadius: "12px", padding: "12px 13px", cursor: "pointer" }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "#DC6B5A", marginBottom: s.title ? "4px" : 0 }}>{s.host}</div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", color: "var(--c-accent-ink)", marginBottom: s.title ? "4px" : 0 }}>{s.host}</div>
                       {s.title && (
-                        <div style={{ fontSize: "13px", lineHeight: 1.35, color: "#8A847C", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title}</div>
+                        <div style={{ fontSize: "13px", lineHeight: 1.35, color: "var(--c-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title}</div>
                       )}
                     </div>
-                    <ExternalLink className="w-3.5 h-3.5" style={{ color: "#4A453F", flexShrink: 0 }} />
+                    <ExternalLink className="w-3.5 h-3.5" style={{ color: "var(--c-dim)", flexShrink: 0 }} />
                   </button>
                 ))}
               </div>
@@ -180,29 +180,37 @@ const DevelopingStoryDetail = () => {
   const maxBucket = Math.max(1, ...buckets);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="developing-story-detail">
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)" }} data-testid="developing-story-detail">
       {/* faint top glow */}
-      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "420px", height: "280px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.10), rgb(var(--c-bg-rgb) / 0) 70%)", pointerEvents: "none", zIndex: 0 }} />
 
       {/* Header */}
-      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgb(var(--c-bg-rgb) / 0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
         <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
-            <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
+            <ArrowLeft className="w-5 h-5" style={{ color: "var(--c-muted2)" }} />
           </button>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", color: "#DC6B5A", background: "rgba(220,38,38,0.12)", padding: "4px 10px", borderRadius: "20px" }}>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" />
-            LIVE
-          </span>
-          <Flame className="w-5 h-5" style={{ color: "#DC6B5A" }} />
+          {/* LIVE only when something actually landed in the last 24h. It used
+              to be unconditional, so it sat above "0 updates today". */}
+          {(momentum.today || 0) > 0 ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", color: "var(--c-accent-ink)", background: "rgba(220,38,38,0.12)", padding: "4px 10px", borderRadius: "20px" }}>
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" />
+              LIVE
+            </span>
+          ) : (
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.14em", color: "var(--c-faint)", background: "rgb(var(--c-fg-rgb) / 0.05)", padding: "4px 10px", borderRadius: "20px" }}>
+              DEVELOPING
+            </span>
+          )}
+          <Flame className="w-5 h-5" style={{ color: "var(--c-accent-ink)" }} />
         </div>
       </header>
 
       {/* Content */}
       <main style={{ position: "relative", zIndex: 1, padding: "18px 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "#F2EEE9", margin: "0 0 8px" }}>{story.title}</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#6E6862" }}>
+          <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "var(--c-ink)", margin: "0 0 8px" }}>{story.title}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "var(--c-faint)" }}>
             <span>{story.article_count || articles.length} update{(story.article_count || articles.length) === 1 ? "" : "s"}</span>
             <span>·</span>
             <span>updated {formatRelativeTime(story.last_updated)}</span>
@@ -212,10 +220,10 @@ const DevelopingStoryDetail = () => {
         {/* Where it stands */}
         {(story.state_summary || buckets.length > 0) && (
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-            style={{ background: "linear-gradient(135deg, rgba(220,38,38,0.10), #131211 62%)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "16px", padding: "16px", margin: "16px 0 6px" }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "#DC6B5A", textTransform: "uppercase", marginBottom: "8px" }}>Where it stands</div>
+            style={{ background: "linear-gradient(135deg, rgba(220,38,38,0.10), var(--c-surface) 62%)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "16px", padding: "16px", margin: "16px 0 6px" }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", color: "var(--c-accent-ink)", textTransform: "uppercase", marginBottom: "8px" }}>Where it stands</div>
             {story.state_summary && (
-              <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "#ECE7E1" }}>{story.state_summary}</p>
+              <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "var(--c-ink2)" }}>{story.state_summary}</p>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: "9px", marginTop: story.state_summary ? "12px" : 0 }}>
               <div style={{ display: "flex", alignItems: "flex-end", gap: story.kind === "wave" ? "1.5px" : "2px", height: story.kind === "wave" ? "30px" : "18px" }}>
@@ -225,15 +233,15 @@ const DevelopingStoryDetail = () => {
                   // the whole point, so every bar is colored by the CURRENT
                   // overall intensity rather than spotlighting only the newest.
                   buckets.map((b, i) => (
-                    <span key={i} style={{ width: "3px", borderRadius: "2px 2px 0 0", minHeight: "2px", height: `${Math.max(2, (b / maxBucket) * 30)}px`, background: WAVE_STATE_COLOR[momentum.state] || "#4A453F" }} />
+                    <span key={i} style={{ width: "3px", borderRadius: "2px 2px 0 0", minHeight: "2px", height: `${Math.max(2, (b / maxBucket) * 30)}px`, background: WAVE_STATE_COLOR[momentum.state] || "var(--c-dim)" }} />
                   ))
                 ) : (
                   buckets.map((b, i) => (
-                    <span key={i} style={{ width: "4px", borderRadius: "1px", height: `${Math.max(3, (b / maxBucket) * 18)}px`, background: i === buckets.length - 1 ? "#DC2626" : "#7A2A24" }} />
+                    <span key={i} style={{ width: "4px", borderRadius: "1px", height: `${Math.max(3, (b / maxBucket) * 18)}px`, background: i === buckets.length - 1 ? "#DC2626" : "var(--c-accent-dim)" }} />
                   ))
                 )}
               </div>
-              <span style={{ fontSize: "11px", color: "#8A847C", fontFamily: "'Manrope', sans-serif" }}>{trendLabel(momentum)}</span>
+              <span style={{ fontSize: "11px", color: "var(--c-muted)", fontFamily: "'Manrope', sans-serif" }}>{trendLabel(momentum)}</span>
             </div>
           </motion.div>
         )}
@@ -252,15 +260,15 @@ const DevelopingStoryDetail = () => {
                 data-testid={`timeline-article-${article.article_id}`}
                 style={{ position: "relative", marginBottom: "16px", cursor: "pointer" }}
               >
-                <span style={{ position: "absolute", left: "-21px", top: "4px", width: "11px", height: "11px", borderRadius: "50%", background: idx === 0 ? "#DC2626" : "#5A544D", border: "2px solid #0A0A0A" }} className={idx === 0 ? "animate-pulse" : ""} />
-                <div style={{ background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "13px 14px" }}>
+                <span style={{ position: "absolute", left: "-21px", top: "4px", width: "11px", height: "11px", borderRadius: "50%", background: idx === 0 ? "#DC2626" : "var(--c-faint2)", border: "2px solid var(--c-bg)" }} className={idx === 0 ? "animate-pulse" : ""} />
+                <div style={{ background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)", borderRadius: "14px", padding: "13px 14px" }}>
                   {idx === 0 && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "#DC6B5A", marginBottom: "6px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "var(--c-accent-ink)", marginBottom: "6px" }}>
                       <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" /> LATEST
                     </span>
                   )}
-                  <h3 style={{ fontSize: "14px", lineHeight: 1.36, color: "#ECE7E1", margin: 0, fontWeight: 500 }}>{article.title}</h3>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#6E6862" }}>
+                  <h3 style={{ fontSize: "14px", lineHeight: 1.36, color: "var(--c-ink2)", margin: 0, fontWeight: 500 }}>{article.title}</h3>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "var(--c-faint)" }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{article.source}</span>
                     <span>{formatRelativeTime(article.published_at)}</span>
                   </div>
@@ -270,13 +278,13 @@ const DevelopingStoryDetail = () => {
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "56px 0" }}>
-            <Flame className="w-10 h-10" style={{ color: "#4A453F", margin: "0 auto 14px" }} />
-            <p style={{ color: "#8A847C" }}>No updates yet</p>
-            <p style={{ color: "#5A544D", fontSize: "13px", marginTop: "4px" }}>Check back as this story develops.</p>
+            <Flame className="w-10 h-10" style={{ color: "var(--c-dim)", margin: "0 auto 14px" }} />
+            <p style={{ color: "var(--c-muted)" }}>No updates yet</p>
+            <p style={{ color: "var(--c-faint2)", fontSize: "13px", marginTop: "4px" }}>Check back as this story develops.</p>
           </div>
         )}
 
-        <div style={{ textAlign: "center", marginTop: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "#4A453F", fontSize: "11px" }}>
+        <div style={{ textAlign: "center", marginTop: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "var(--c-dim)", fontSize: "11px" }}>
           <Clock className="w-3 h-3" /> Refreshes every 60 seconds
         </div>
       </main>

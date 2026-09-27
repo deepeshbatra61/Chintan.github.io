@@ -95,25 +95,25 @@ const SourceOrigin = ({ article }) => {
             key={i}
             animate={{ opacity: [0.15, 0.5, 0.15], y: [0, -3, 0] }}
             transition={{ duration: 3.2, repeat: Infinity, delay: i * 0.45, ease: 'easeInOut' }}
-            style={{ width: '2px', height: '2px', borderRadius: '50%', background: '#DC6B5A' }}
+            style={{ width: '2px', height: '2px', borderRadius: '50%', background: 'var(--c-accent-ink)' }}
           />
         ))}
       </div>
       <div style={{ position: 'relative', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(220,38,38,0.55) 50%, transparent)', marginBottom: '21px' }}>
-        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', background: '#0A0A0A', padding: '0 9px' }}>
+        <div style={{ position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)', background: 'var(--c-bg)', padding: '0 9px' }}>
           <SuryaLogo className="w-[22px] h-[22px]" />
         </div>
       </div>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6E6862', textTransform: 'uppercase', marginBottom: '8px' }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: 'var(--c-faint)', textTransform: 'uppercase', marginBottom: '8px' }}>
           Originally reported by
         </div>
-        <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: '#F2EEE9', lineHeight: 1.25 }}>
+        <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '19px', color: 'var(--c-ink)', lineHeight: 1.25 }}>
           {publisher}
         </div>
-        {byline && <div style={{ fontSize: '12px', color: '#82828A', marginTop: '6px' }}>{byline}</div>}
+        {byline && <div style={{ fontSize: '12px', color: 'var(--c-muted)', marginTop: '6px' }}>{byline}</div>}
         {url && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '15px', color: '#DC6B5A', fontSize: '13.5px', fontFamily: "'Manrope', sans-serif" }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '15px', color: 'var(--c-accent-ink)', fontSize: '13.5px', fontFamily: "'Manrope', sans-serif" }}>
             Read it at the source <ArrowUpRight className="w-4 h-4" />
           </div>
         )}
@@ -190,7 +190,7 @@ const SuryaThinking = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.9, ease: 'easeInOut' }}
-            style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '15px', color: '#9A938A' }}
+            style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '15px', color: 'var(--c-muted2)' }}
           >
             {LOADER_PHRASES[i % LOADER_PHRASES.length]}
           </motion.span>
@@ -519,32 +519,32 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           >
             <div style={{ width: '100%', height: '240px', overflow: 'hidden', position: 'relative' }}>
               <img src={article.image_url} alt={article.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '85%', background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.55) 45%, #0A0A0A 100%)', zIndex: 1, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '85%', background: 'linear-gradient(to bottom, transparent 0%, rgb(var(--c-chrome-rgb) / 0.55) 45%, var(--c-bg) 100%)', zIndex: 1, pointerEvents: 'none' }} />
             </div>
             <div style={{ padding: '4px 22px 0' }}>
-              <div style={{ fontSize: '11px', color: '#888', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--c-muted)', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
                 {article.category && <span style={{ color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category}</span>}
-                {article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f87171' }}>Breaking</span></>}
-                {article.is_developing && !article.is_breaking && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#f59e0b' }}>Developing</span></>}
-                {(article.source || article.domain || article.publisher) && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.source || article.domain || article.publisher}</span></>}
-                {article.author && <><span style={{ color: '#4A453F' }}>•</span><span style={{ color: '#82828A' }}>{article.author}</span></>}
+                {article.is_breaking && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-danger-ink)' }}>Breaking</span></>}
+                {article.is_developing && !article.is_breaking && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-warn-ink)' }}>Developing</span></>}
+                {(article.source || article.domain || article.publisher) && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-muted)' }}>{article.source || article.domain || article.publisher}</span></>}
+                {article.author && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-muted)' }}>{article.author}</span></>}
               </div>
-              <h1 style={{ fontSize: 'clamp(1.5rem, 5.5vw, 1.95rem)', fontWeight: 600, lineHeight: 1.18, color: '#F2EEE9', margin: '0 0 16px', fontFamily: "'Playfair Display', 'Georgia', serif" }}>
+              <h1 style={{ fontSize: 'clamp(1.5rem, 5.5vw, 1.95rem)', fontWeight: 600, lineHeight: 1.18, color: 'var(--c-ink)', margin: '0 0 16px', fontFamily: "'Playfair Display', 'Georgia', serif" }}>
                 {article.title}
               </h1>
               {gistText && (
-                <p style={{ margin: 0, color: '#B6AFA6', fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '17px', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, color: 'var(--c-sub)', fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: 'italic', fontSize: '17px', lineHeight: 1.5 }}>
                   {gistText}
                 </p>
               )}
               {beats.length > 0 && (
-                <div style={{ marginTop: '26px', paddingTop: '18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9.5px', letterSpacing: '0.18em', color: '#5A544D', textTransform: 'uppercase', marginBottom: '8px' }}>Inside this story</div>
+                <div style={{ marginTop: '26px', paddingTop: '18px', borderTop: '1px solid rgb(var(--c-fg-rgb) / 0.06)' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9.5px', letterSpacing: '0.18em', color: 'var(--c-faint2)', textTransform: 'uppercase', marginBottom: '8px' }}>Inside this story</div>
                   {beats.map((b, idx) => (
                     <button key={idx} onClick={() => goDepth(1)} style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 0', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }} data-testid={`glance-thread-${idx}`}>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#DC2626', opacity: 0.75 }}>{String(idx + 1).padStart(2, '0')}</span>
-                      <span style={{ color: '#9A938A', fontSize: '14px', fontFamily: "'Manrope', sans-serif", flex: 1, lineHeight: 1.35 }}>{b.hook || truncateWords(b.body, 10)}</span>
-                      <ChevronRight className="w-4 h-4" style={{ flexShrink: 0, color: '#4A453F' }} />
+                      <span style={{ color: 'var(--c-muted2)', fontSize: '14px', fontFamily: "'Manrope', sans-serif", flex: 1, lineHeight: 1.35 }}>{b.hook || truncateWords(b.body, 10)}</span>
+                      <ChevronRight className="w-4 h-4" style={{ flexShrink: 0, color: 'var(--c-dim)' }} />
                     </button>
                   ))}
                 </div>
@@ -565,21 +565,21 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#DC2626', textTransform: 'uppercase', marginBottom: '12px' }}>
               {article.category || 'Story'}
             </div>
-            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', lineHeight: 1.24, color: '#F2EEE9', margin: '0 0 20px' }}>
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '22px', lineHeight: 1.24, color: 'var(--c-ink)', margin: '0 0 20px' }}>
               {article.title}
             </h1>
             {beats.length > 0 ? beats.map((beat, idx) => (
               <motion.div key={idx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 + idx * 0.07, ease: [0.22, 1, 0.36, 1] }}
-                style={{ background: '#141311', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', padding: '15px 16px', marginBottom: '11px' }} data-testid={`beat-${idx}`}>
-                <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: '16.5px', lineHeight: 1.3, color: '#EFEAE4', margin: beat.body ? '0 0 7px' : 0 }}>
+                style={{ background: 'var(--c-surface)', border: '1px solid rgb(var(--c-fg-rgb) / 0.06)', borderRadius: '14px', padding: '15px 16px', marginBottom: '11px' }} data-testid={`beat-${idx}`}>
+                <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: '16.5px', lineHeight: 1.3, color: 'var(--c-ink)', margin: beat.body ? '0 0 7px' : 0 }}>
                   {beat.hook || beat.body}
                 </p>
                 {beat.hook && beat.body && (
-                  <p style={{ fontSize: '13.5px', lineHeight: 1.62, color: '#948E86', margin: 0, fontFamily: "'Manrope', sans-serif" }}>{beat.body}</p>
+                  <p style={{ fontSize: '13.5px', lineHeight: 1.62, color: 'var(--c-muted2)', margin: 0, fontFamily: "'Manrope', sans-serif" }}>{beat.body}</p>
                 )}
               </motion.div>
             )) : gistText ? (
-              <p style={{ color: '#B6AFA6', fontFamily: "'Manrope', sans-serif", fontSize: '15px', lineHeight: 1.65 }}>{gistText}</p>
+              <p style={{ color: 'var(--c-sub)', fontFamily: "'Manrope', sans-serif", fontSize: '15px', lineHeight: 1.65 }}>{gistText}</p>
             ) : null}
             <SourceOrigin article={article} />
             <div style={{ height: '8px' }} />
@@ -593,16 +593,16 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
             style={{ padding: '20px 22px 0' }}
           >
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: '#6E6862', textTransform: 'uppercase', marginBottom: '14px' }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em', color: 'var(--c-faint)', textTransform: 'uppercase', marginBottom: '14px' }}>
               Deep dive · {article.category || 'Story'}
             </div>
             {deep ? (
               <>
-                <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '23px', lineHeight: 1.26, color: '#F2EEE9', margin: '0 0 16px' }}>
+                <h2 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: '23px', lineHeight: 1.26, color: 'var(--c-ink)', margin: '0 0 16px' }}>
                   {deep.title || 'The full story'}
                 </h2>
                 {deep.paragraphs.map((p, idx) => (
-                  <p key={idx} style={{ fontSize: '15px', lineHeight: 1.75, color: '#B9B2A9', margin: '0 0 16px', fontFamily: "'Manrope', sans-serif" }}>
+                  <p key={idx} style={{ fontSize: '15px', lineHeight: 1.75, color: 'var(--c-sub)', margin: '0 0 16px', fontFamily: "'Manrope', sans-serif" }}>
                     {idx === 0 && (
                       <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, float: 'left', fontSize: '42px', lineHeight: 0.82, color: '#DC2626', padding: '4px 9px 0 0' }}>{p.charAt(0)}</span>
                     )}
@@ -613,7 +613,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                 <div style={{ height: '8px' }} />
               </>
             ) : (
-              <p style={{ color: '#8A847C', textAlign: 'center', padding: '48px 0', fontSize: '14px' }}>
+              <p style={{ color: 'var(--c-muted)', textAlign: 'center', padding: '48px 0', fontSize: '14px' }}>
                 Couldn’t load the deep dive. Tap Deep dive again to retry.
               </p>
             )}
@@ -627,9 +627,9 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           insets for landscape where that bar moves to an edge. This previously
           used flat padding and sat underneath the system bar. */}
       {isActive && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, paddingTop: '8px', paddingRight: 'calc(16px + var(--sar))', paddingBottom: 'calc(10px + var(--sab))', paddingLeft: 'calc(16px + var(--sal))', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, paddingTop: '8px', paddingRight: 'calc(16px + var(--sar))', paddingBottom: 'calc(10px + var(--sab))', paddingLeft: 'calc(16px + var(--sal))', background: 'rgb(var(--c-chrome-rgb) / 0.72)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
           <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ flex: 1, minWidth: 0, background: '#121110', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-evenly', alignItems: 'center', padding: '5px' }}>
+            <div style={{ flex: 1, minWidth: 0, background: 'var(--c-surface)', border: '1px solid rgb(var(--c-fg-rgb) / 0.07)', borderRadius: '16px', display: 'flex', justifyContent: 'space-evenly', alignItems: 'center', padding: '5px' }}>
               {['Glance', 'Understand', 'Deep dive'].map((lbl, i) => (
                 <button
                   key={i}
@@ -653,7 +653,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                       {lbl}
                     </motion.span>
                   ) : (
-                    <span style={{ display: 'inline-block', padding: '7px 13px', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, color: '#7C766E' }}>{lbl}</span>
+                    <span style={{ display: 'inline-block', padding: '7px 13px', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 600, color: 'var(--c-muted)' }}>{lbl}</span>
                   )}
                 </button>
               ))}
@@ -662,7 +662,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
               onClick={() => { triggerHaptic('light'); setShowActions(true); }}
               aria-label="More actions"
               data-testid="more-actions-btn"
-              style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '14px', background: '#121110', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9A938A' }}
+              style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '14px', background: 'var(--c-surface)', border: '1px solid rgb(var(--c-fg-rgb) / 0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--c-muted2)' }}
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>
@@ -680,30 +680,30 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#141311', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 16px calc(18px + var(--sab))' }}>
-            <div style={{ width: '38px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)', margin: '6px auto 16px' }} />
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'var(--c-surface)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', border: '1px solid rgb(var(--c-fg-rgb) / 0.08)', padding: '10px 16px calc(18px + var(--sab))' }}>
+            <div style={{ width: '38px', height: '4px', borderRadius: '2px', background: 'rgb(var(--c-fg-rgb) / 0.15)', margin: '6px auto 16px' }} />
             <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
               <button onClick={handleLike} data-testid="like-btn"
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', cursor: 'pointer',
-                  border: '1px solid ' + (userReaction.liked ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.08)'),
-                  background: userReaction.liked ? 'rgba(34,197,94,0.12)' : '#181715',
-                  color: userReaction.liked ? '#4ADE80' : '#9A938A' }}>
+                  border: '1px solid ' + (userReaction.liked ? 'rgba(34,197,94,0.5)' : 'rgb(var(--c-fg-rgb) / 0.08)'),
+                  background: userReaction.liked ? 'rgba(34,197,94,0.12)' : 'var(--c-surface2)',
+                  color: userReaction.liked ? 'var(--c-success-ink)' : 'var(--c-muted2)' }}>
                 <ThumbsUp className="w-4 h-4" /><span style={{ fontSize: '14px' }}>{article.likes || 0}</span>
               </button>
               <button onClick={handleDislike} data-testid="dislike-btn"
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', cursor: 'pointer',
-                  border: '1px solid ' + (userReaction.disliked ? 'rgba(220,38,38,0.5)' : 'rgba(255,255,255,0.08)'),
-                  background: userReaction.disliked ? 'rgba(220,38,38,0.12)' : '#181715',
-                  color: userReaction.disliked ? '#FCA5A5' : '#9A938A' }}>
+                  border: '1px solid ' + (userReaction.disliked ? 'rgba(220,38,38,0.5)' : 'rgb(var(--c-fg-rgb) / 0.08)'),
+                  background: userReaction.disliked ? 'rgba(220,38,38,0.12)' : 'var(--c-surface2)',
+                  color: userReaction.disliked ? 'var(--c-danger-soft)' : 'var(--c-muted2)' }}>
                 <ThumbsDown className="w-4 h-4" /><span style={{ fontSize: '14px' }}>{article.dislikes || 0}</span>
               </button>
             </div>
             {articleActions.map(({ label, Icon, onClick, testid }) => (
               <button key={label} onClick={onClick} data-testid={testid}
-                style={{ display: 'flex', alignItems: 'center', gap: '13px', width: '100%', padding: '15px 6px', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', color: '#DEDEE4', fontFamily: "'Manrope', sans-serif", fontSize: '15px' }}>
-                <Icon className="w-5 h-5" style={{ color: '#9A938A', flexShrink: 0 }} />
+                style={{ display: 'flex', alignItems: 'center', gap: '13px', width: '100%', padding: '15px 6px', background: 'none', border: 'none', borderTop: '1px solid rgb(var(--c-fg-rgb) / 0.05)', cursor: 'pointer', color: 'var(--c-ink2)', fontFamily: "'Manrope', sans-serif", fontSize: '15px' }}>
+                <Icon className="w-5 h-5" style={{ color: 'var(--c-muted2)', flexShrink: 0 }} />
                 <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
-                <ChevronRight className="w-4 h-4" style={{ color: '#4A453F' }} />
+                <ChevronRight className="w-4 h-4" style={{ color: 'var(--c-dim)' }} />
               </button>
             ))}
           </motion.div>
@@ -715,7 +715,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       <Dialog open={showComments} onOpenChange={setShowComments}>
         <DialogContent className="max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Discussion</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Discussion</div>
             <DialogTitle>What people are saying</DialogTitle>
           </DialogHeader>
           <div className="flex gap-2 mb-4">
@@ -724,7 +724,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="Share your thoughts..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:border-red-500"
+              className="flex-1 bg-fg/5 border border-fg/10 rounded-lg px-4 py-2 text-fg placeholder-gray-500 focus:border-red-500"
               data-testid="comment-input"
             />
             <button
@@ -747,9 +747,9 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
               {comments.map(comment => {
                 const isOwnComment = currentUser && comment.user_id === currentUser.user_id;
                 return (
-                <div key={comment.comment_id} className="p-4 rounded-lg bg-white/5" style={{ position: 'relative' }}>
+                <div key={comment.comment_id} className="p-4 rounded-lg bg-fg/5" style={{ position: 'relative' }}>
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden">
+                    <div className="w-8 h-8 rounded-full bg-fg/10 overflow-hidden">
                       {comment.user_picture ? (
                         <img src={comment.user_picture} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -758,13 +758,13 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                         </div>
                       )}
                     </div>
-                    <p className="text-white text-sm font-medium flex-1">{comment.user_name}</p>
+                    <p className="text-fg text-sm font-medium flex-1">{comment.user_name}</p>
                     {!isOwnComment && (
                       <div style={{ position: 'relative' }}>
                         <button
                           onClick={() => setOpenCommentMenu(openCommentMenu === comment.comment_id ? null : comment.comment_id)}
                           data-testid={`comment-menu-${comment.comment_id}`}
-                          style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#6E6862' }}
+                          style={{ padding: '4px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-faint)' }}
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
@@ -772,21 +772,21 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                           <div
                             style={{
                               position: 'absolute', right: 0, top: '100%', marginTop: '4px', zIndex: 20,
-                              background: '#1a1917', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
+                              background: 'var(--c-surface2)', border: '1px solid rgb(var(--c-fg-rgb) / 0.1)', borderRadius: '10px',
                               overflow: 'hidden', minWidth: '150px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                             }}
                           >
                             <button
                               onClick={() => { setOpenCommentMenu(null); handleReportComment(comment.comment_id); }}
                               data-testid={`report-comment-${comment.comment_id}`}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer', color: '#DEDEE4', fontSize: '13px' }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-ink2)', fontSize: '13px' }}
                             >
                               Report comment
                             </button>
                             <button
                               onClick={() => { setOpenCommentMenu(null); handleBlockCommentAuthor(comment.comment_id); }}
                               data-testid={`block-author-${comment.comment_id}`}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', color: '#DC6B5A', fontSize: '13px' }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', borderTop: '1px solid rgb(var(--c-fg-rgb) / 0.06)', cursor: 'pointer', color: 'var(--c-accent-ink)', fontSize: '13px' }}
                             >
                               Block {comment.user_name}
                             </button>
@@ -796,7 +796,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                     )}
                   </div>
                   <p className="text-gray-400 text-sm mb-3">{comment.content}</p>
-                  <div className="flex items-center gap-3 pt-2 border-t border-white/5">
+                  <div className="flex items-center gap-3 pt-2 border-t border-fg/5">
                     {(() => {
                       const myReaction = commentReactions[comment.comment_id];
                       return (
@@ -804,7 +804,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                           <button
                             onClick={() => handleCommentReaction(comment.comment_id, 'agree')}
                             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors ${
-                              myReaction === 'agree' ? "bg-green-500/20 text-green-400" : "bg-white/5 text-gray-400 hover:text-green-400"
+                              myReaction === 'agree' ? "bg-green-500/20 text-green-400" : "bg-fg/5 text-gray-400 hover:text-green-400"
                             }`}
                           >
                             <ThumbsUp className="w-3 h-3" />
@@ -813,7 +813,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                           <button
                             onClick={() => handleCommentReaction(comment.comment_id, 'disagree')}
                             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-colors ${
-                              myReaction === 'disagree' ? "bg-red-500/20 text-red-400" : "bg-white/5 text-gray-400 hover:text-red-400"
+                              myReaction === 'disagree' ? "bg-red-500/20 text-red-400" : "bg-fg/5 text-gray-400 hover:text-red-400"
                             }`}
                           >
                             <ThumbsDown className="w-3 h-3" />
@@ -838,7 +838,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       <Dialog open={showPoll} onOpenChange={setShowPoll}>
         <DialogContent className="max-w-lg" style={{ minWidth: '300px', minHeight: '200px' }}>
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Poll</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Poll</div>
             <DialogTitle>Cast your vote</DialogTitle>
           </DialogHeader>
           {pollLoading ? (
@@ -848,7 +848,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             </div>
           ) : poll ? (
             <div className="space-y-4">
-              <p className="text-white font-medium">{poll.question}</p>
+              <p className="text-fg font-medium">{poll.question}</p>
               <div className="space-y-2">
                 {poll.options.map(option => {
                   const percentage = getVotePercentage(option);
@@ -886,7 +886,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
       <Dialog open={showOtherSide} onOpenChange={setShowOtherSide}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Perspective</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Perspective</div>
             <DialogTitle className="flex items-center gap-2">
               <BrainCircuit className="w-5 h-5 text-red-500" />
               The Other Side
@@ -903,16 +903,16 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
                   try {
                     const parsed = JSON.parse(otherSideAnalysis);
                     return (parsed.points || []).slice(0, 3).map((point, idx) => (
-                      <div key={idx} style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div key={idx} style={{ background: 'var(--c-surface2)', border: '1px solid rgb(var(--c-fg-rgb) / 0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
-                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(point, 20)}</p>
+                        <p style={{ color: 'var(--c-sub)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(point, 20)}</p>
                       </div>
                     ));
                   } catch {
                     return formatOtherSide(otherSideAnalysis).split('\n\n').filter(Boolean).slice(0, 3).map((para, idx) => (
-                      <div key={idx} style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div key={idx} style={{ background: 'var(--c-surface2)', border: '1px solid rgb(var(--c-fg-rgb) / 0.08)', borderRadius: '12px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                         <span style={{ color: '#DC2626', fontSize: '8px', marginTop: '5px', flexShrink: 0 }}>●</span>
-                        <p style={{ color: '#d1d5db', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(para, 20)}</p>
+                        <p style={{ color: 'var(--c-sub)', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{truncateWords(para, 20)}</p>
                       </div>
                     ));
                   }
@@ -1062,7 +1062,7 @@ const ArticlePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-16 h-16 animate-spin-slow" />
       </div>
     );
@@ -1071,7 +1071,7 @@ const ArticlePage = () => {
   if (!allArticles.length) return null;
 
   return (
-    <div data-testid="article-page" style={{ background: '#0A0A0A' }}>
+    <div data-testid="article-page" style={{ background: 'var(--c-bg)' }}>
       {/* Sticky header — outside Swiper */}
       <header
         style={{
@@ -1082,7 +1082,7 @@ const ArticlePage = () => {
           paddingLeft: '16px',
           paddingRight: '16px',
           zIndex: 40,
-          background: 'rgba(0,0,0,0.6)',
+          background: 'rgb(var(--c-chrome-rgb) / 0.6)',
           backdropFilter: 'blur(12px)',
           display: 'flex',
           alignItems: 'center',
@@ -1096,7 +1096,7 @@ const ArticlePage = () => {
             } else { triggerHaptic('medium'); }
             navigate('/feed');
           }}
-          className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+          className="p-2 hover:bg-fg/5 rounded-lg transition-colors"
           data-testid="back-btn"
         >
           <Home className="w-5 h-5 text-gray-400" />
@@ -1105,7 +1105,7 @@ const ArticlePage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleBookmark}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            className="p-2 hover:bg-fg/5 rounded-lg transition-colors"
             data-testid="bookmark-btn"
           >
             {isBookmarked
@@ -1114,7 +1114,7 @@ const ArticlePage = () => {
           </button>
           <button
             onClick={shareArticle}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            className="p-2 hover:bg-fg/5 rounded-lg transition-colors"
             data-testid="share-btn"
           >
             <Share2 className="w-5 h-5 text-gray-400" />

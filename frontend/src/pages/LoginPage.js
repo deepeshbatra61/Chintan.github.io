@@ -196,13 +196,13 @@ const LoginPage = () => {
   };
 
   const inputStyle = {
-    width: "100%", background: "#131211", border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: "12px", padding: "13px 14px", color: "#ECE7E1", fontSize: "15px",
+    width: "100%", background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.09)",
+    borderRadius: "12px", padding: "13px 14px", color: "var(--c-ink2)", fontSize: "15px",
     fontFamily: "'Manrope', sans-serif", outline: "none", marginBottom: "10px",
     transition: "border-color .16s cubic-bezier(.22,1,.36,1), box-shadow .16s cubic-bezier(.22,1,.36,1)",
   };
   const focusOn = (e) => { e.target.style.borderColor = "rgba(220,38,38,0.55)"; e.target.style.boxShadow = "0 0 0 3px rgba(220,38,38,0.14)"; };
-  const focusOff = (e) => { e.target.style.borderColor = "rgba(255,255,255,0.09)"; e.target.style.boxShadow = "none"; };
+  const focusOff = (e) => { e.target.style.borderColor = "rgb(var(--c-fg-rgb) / 0.09)"; e.target.style.boxShadow = "none"; };
 
   const R = useReducedMotion();
   const rise = (delay) => (R
@@ -210,11 +210,11 @@ const LoginPage = () => {
     : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: EASE } });
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0A0A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflowY: "auto", padding: "40px 22px" }}>
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflowY: "auto", padding: "40px 22px" }}>
       {/* Dawn glow — blooms up behind the mark */}
       <motion.div
         {...(R ? { initial: false } : { initial: { opacity: 0, scale: 0.6 }, animate: { opacity: 1, scale: 1 }, transition: { duration: 1, ease: EASE } })}
-        style={{ position: "fixed", top: "8%", left: "50%", marginLeft: "-180px", width: "360px", height: "300px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.16), rgba(10,10,10,0) 70%)", pointerEvents: "none", zIndex: 0 }}
+        style={{ position: "fixed", top: "8%", left: "50%", marginLeft: "-180px", width: "360px", height: "300px", background: "radial-gradient(ellipse at center, rgba(220,38,38,0.16), rgb(var(--c-bg-rgb) / 0) 70%)", pointerEvents: "none", zIndex: 0 }}
       />
 
       {/* Fixed at the top-right rather than appended below the sign-in stack:
@@ -231,7 +231,7 @@ const LoginPage = () => {
         style={{
           position: "fixed", top: "var(--sat)", right: "8px", zIndex: 2,
           padding: "12px 14px", background: "none", border: "none", cursor: "pointer",
-          color: "#8A847C", fontSize: "13px", fontFamily: "'Manrope', sans-serif",
+          color: "var(--c-muted)", fontSize: "13px", fontFamily: "'Manrope', sans-serif",
         }}
       >
         Skip for now
@@ -248,19 +248,19 @@ const LoginPage = () => {
         </motion.div>
 
         {/* Brand + tagline */}
-        <motion.h1 {...rise(0.40)} style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "42px", color: "#F2EEE9", margin: "0 0 8px", letterSpacing: "-0.01em" }}>Chintan</motion.h1>
-        <motion.p {...rise(0.56)} style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontSize: "16px", color: "#8E877E", margin: "0 0 28px" }}>
+        <motion.h1 {...rise(0.40)} style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "42px", color: "var(--c-ink)", margin: "0 0 8px", letterSpacing: "-0.01em" }}>Chintan</motion.h1>
+        <motion.p {...rise(0.56)} style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontSize: "16px", color: "var(--c-muted2)", margin: "0 0 28px" }}>
           Don't just consume.{" "}
           <motion.span
-            initial={R ? false : { color: "#8E877E" }}
-            animate={{ color: "#DC6B5A" }}
+            initial={R ? false : { color: "var(--c-muted2)" }}
+            animate={{ color: "var(--c-accent-ink)" }}
             transition={R ? {} : { delay: 0.9, duration: 0.5 }}
           >Contemplate.</motion.span>
         </motion.p>
 
         {/* Auth card */}
-        <motion.div {...rise(0.72)} style={{ background: "rgba(19,18,17,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "18px", padding: "22px 18px", textAlign: "left" }}>
-          <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "18px", color: "#ECE7E1", marginBottom: "16px", textAlign: "center", minHeight: "24px" }}>
+        <motion.div {...rise(0.72)} style={{ background: "rgb(var(--c-surface-rgb) / 0.7)", border: "1px solid rgb(var(--c-fg-rgb) / 0.07)", borderRadius: "18px", padding: "22px 18px", textAlign: "left" }}>
+          <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "18px", color: "var(--c-ink2)", marginBottom: "16px", textAlign: "center", minHeight: "24px" }}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={mode}
@@ -295,14 +295,14 @@ const LoginPage = () => {
               <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputStyle, marginBottom: 0, paddingRight: "46px" }} data-testid="password-input" />
               <button type="button" onClick={() => setShowPassword((v) => !v)} tabIndex={-1}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "9px", color: "#8A847C", display: "flex", alignItems: "center" }}>
+                style={{ position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "9px", color: "var(--c-muted)", display: "flex", alignItems: "center" }}>
                 {showPassword ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}
               </button>
             </div>
             {mode !== "register" && (
               <div style={{ textAlign: "right", marginBottom: "14px", marginTop: "-6px" }}>
                 <button type="button" onClick={() => navigate("/forgot-password")} data-testid="forgot-password-link"
-                  style={{ background: "none", border: "none", color: "#8A847C", cursor: "pointer", fontSize: "12.5px", padding: 0 }}>
+                  style={{ background: "none", border: "none", color: "var(--c-muted)", cursor: "pointer", fontSize: "12.5px", padding: 0 }}>
                   Forgot password?
                 </button>
               </div>
@@ -314,25 +314,25 @@ const LoginPage = () => {
             </motion.button>
           </form>
 
-          <div style={{ textAlign: "center", marginTop: "14px", fontSize: "13px", color: "#8A847C" }}>
+          <div style={{ textAlign: "center", marginTop: "14px", fontSize: "13px", color: "var(--c-muted)" }}>
             {mode === "register" ? "Already have an account? " : "New to Chintan? "}
             <button onClick={() => setMode(mode === "register" ? "login" : "register")} data-testid="toggle-mode-btn"
-              style={{ background: "none", border: "none", color: "#DC6B5A", cursor: "pointer", fontWeight: 600, fontSize: "13px", padding: 0 }}>
+              style={{ background: "none", border: "none", color: "var(--c-accent-ink)", cursor: "pointer", fontWeight: 600, fontSize: "13px", padding: 0 }}>
               {mode === "register" ? "Sign in" : "Create one"}
             </button>
           </div>
 
           {/* Divider */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "18px 0 14px" }}>
-            <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
-            <span style={{ color: "#5A544D", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>or</span>
-            <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.08)" }} />
+            <div style={{ flex: 1, height: "1px", background: "rgb(var(--c-fg-rgb) / 0.08)" }} />
+            <span style={{ color: "var(--c-faint2)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>or</span>
+            <div style={{ flex: 1, height: "1px", background: "rgb(var(--c-fg-rgb) / 0.08)" }} />
           </div>
 
           {/* Google */}
           <motion.button onClick={handleGoogleLogin} data-testid="google-login-btn"
             whileTap={R ? undefined : { scale: 0.97 }} transition={{ duration: 0.1, ease: EASE }}
-            style={{ width: "100%", background: "#fff", color: "#1a1a1a", border: "none", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", fontFamily: "'Manrope', sans-serif" }}>
+            style={{ width: "100%", background: "#fff", color: "#1a1a1a", border: "1px solid rgb(var(--c-fg-rgb) / 0.14)", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", fontFamily: "'Manrope', sans-serif" }}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" style={{ width: "18px", height: "18px" }}>
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -352,7 +352,7 @@ const LoginPage = () => {
           {isAppleAvailable && (
             <motion.button onClick={handleAppleLogin} data-testid="apple-login-btn"
               whileTap={R ? undefined : { scale: 0.97 }} transition={{ duration: 0.1, ease: EASE }}
-              style={{ width: "100%", marginTop: "10px", background: "#fff", color: "#000", border: "none", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", fontFamily: "'Manrope', sans-serif" }}>
+              style={{ width: "100%", marginTop: "10px", background: "#fff", color: "#000", border: "1px solid rgb(var(--c-fg-rgb) / 0.14)", borderRadius: "12px", padding: "12px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "9px", fontFamily: "'Manrope', sans-serif" }}>
               <svg viewBox="0 0 24 24" style={{ width: "18px", height: "18px" }} fill="currentColor" aria-hidden="true">
                 <path d="M16.365 1.43c0 1.14-.42 2.2-1.12 3.02-.85.99-2.24 1.76-3.4 1.66-.14-1.1.42-2.26 1.09-3.02.77-.88 2.14-1.55 3.43-1.66zM20.7 17.1c-.6 1.38-.88 1.99-1.65 3.2-1.07 1.7-2.58 3.82-4.45 3.83-1.66.02-2.09-1.09-4.35-1.08-2.26.01-2.73 1.1-4.39 1.09-1.87-.02-3.3-1.93-4.37-3.62C-1.5 15.7-1.82 9.2 1.05 5.9c1.02-1.18 2.5-1.93 3.9-1.93 1.66 0 2.7 1.09 4.07 1.09 1.33 0 2.14-1.09 4.06-1.09 1.25 0 2.58.68 3.53 1.85-3.1 1.7-2.6 6.13.09 7.28z"/>
               </svg>
@@ -364,9 +364,9 @@ const LoginPage = () => {
         {/* Contact route sits behind auth, so the address is repeated here as
             plain text: anyone who cannot get past this screen (locked out, or
             a store reviewer whose test login fails) can still reach a human. */}
-        <p style={{ textAlign: 'center', marginTop: '26px', fontSize: '11.5px', color: '#4A453F' }}>
+        <p style={{ textAlign: 'center', marginTop: '26px', fontSize: '11.5px', color: 'var(--c-dim)' }}>
           Questions?{' '}
-          <a href="mailto:team@chintan.news" style={{ color: '#6E6862', textDecoration: 'underline' }} data-testid="login-contact-email">
+          <a href="mailto:team@chintan.news" style={{ color: 'var(--c-faint)', textDecoration: 'underline' }} data-testid="login-contact-email">
             team@chintan.news
           </a>
         </p>

@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
+import { initTheme } from "@/lib/theme";
 
 // Safe-area insets are NOT read here. They come from env(safe-area-inset-*) in
 // index.css, which the platform recomputes on rotation, fold, nav-mode change
@@ -17,6 +18,8 @@ import App from "@/App";
 if (Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('native-platform');
 }
+
+initTheme();
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(

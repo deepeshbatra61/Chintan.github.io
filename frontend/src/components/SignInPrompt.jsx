@@ -16,12 +16,12 @@ const SignInPrompt = ({ open, onOpenChange, reason = "personalize" }) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="sign-in-prompt">
         <DialogHeader>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6E6862', textTransform: 'uppercase', marginBottom: '8px' }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: 'var(--c-faint)', textTransform: 'uppercase', marginBottom: '8px' }}>
             Browsing as guest
           </div>
           <DialogTitle>A more personalized Chintan</DialogTitle>
         </DialogHeader>
-        <p style={{ color: '#8A847C', fontSize: '13.5px', lineHeight: 1.55, margin: '0 0 4px' }}>
+        <p style={{ color: 'var(--c-muted)', fontSize: '13.5px', lineHeight: 1.55, margin: '0 0 4px' }}>
           {copy}
         </p>
         <button
@@ -39,7 +39,7 @@ const SignInPrompt = ({ open, onOpenChange, reason = "personalize" }) => {
           onClick={() => onOpenChange(false)}
           data-testid="sign-in-prompt-dismiss"
           style={{
-            width: '100%', background: 'none', border: 'none', color: '#6E6862', cursor: 'pointer',
+            width: '100%', background: 'none', border: 'none', color: 'var(--c-faint)', cursor: 'pointer',
             fontSize: '13px', fontFamily: "'Manrope', sans-serif", padding: '10px', marginTop: '2px',
           }}
         >

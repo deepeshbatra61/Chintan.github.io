@@ -101,14 +101,14 @@ const OnboardingPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] relative overflow-hidden">
+    <div className="min-h-screen bg-page relative overflow-hidden">
       {/* Subtle background glow */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-red-500/5 rounded-full blur-3xl" />
       </div>
 
       {/* Progress bar */}
-      <div className="fixed left-0 right-0 h-0.5 bg-[#1a1a1a] z-50" style={{ top: 'var(--sat)' }}>
+      <div className="fixed left-0 right-0 h-0.5 bg-surface2 z-50" style={{ top: 'var(--sat)' }}>
         <motion.div 
           className="h-full bg-red-600"
           initial={{ width: "0%" }}
@@ -129,7 +129,7 @@ const OnboardingPage = () => {
               className="pt-8"
             >
               <div className="text-center mb-12">
-                <h1 className="font-serif text-4xl md:text-5xl font-bold text-white mb-4">
+                <h1 className="font-serif text-4xl md:text-5xl font-bold text-fg mb-4">
                   Welcome to Chintan
                 </h1>
                 <p className="text-gray-400 text-lg">
@@ -151,7 +151,7 @@ const OnboardingPage = () => {
                         className={`w-full p-4 rounded-xl border transition-all ${
                           selectedCategories.includes(category)
                             ? "bg-red-950/40 border-red-600/50"
-                            : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                            : "bg-white/[0.02] border-fg/10 hover:border-fg/20"
                         }`}
                         data-testid={`category-${category.toLowerCase()}`}
                       >
@@ -168,7 +168,7 @@ const OnboardingPage = () => {
                               )}
                             </div>
                             <div className="text-left">
-                              <p className="text-white font-medium">{category}</p>
+                              <p className="text-fg font-medium">{category}</p>
                               <p className="text-gray-500 text-sm">{description}</p>
                             </div>
                           </div>
@@ -179,7 +179,7 @@ const OnboardingPage = () => {
                                 e.stopPropagation();
                                 setExpandedCategory(expandedCategory === category ? null : category);
                               }}
-                              className="p-1 hover:bg-white/10 rounded transition-colors"
+                              className="p-1 hover:bg-fg/10 rounded transition-colors"
                             >
                               <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
                                 expandedCategory === category ? "rotate-180" : ""
@@ -210,7 +210,7 @@ const OnboardingPage = () => {
                                     className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
                                       (selectedSubcategories[category] || []).includes(sub)
                                         ? "bg-red-600/30 text-red-400 border border-red-600/50"
-                                        : "bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent"
+                                        : "bg-fg/5 text-gray-400 hover:bg-fg/10 border border-transparent"
                                     }`}
                                     data-testid={`subcategory-${sub.toLowerCase().replace(/\s+/g, '-')}`}
                                   >
@@ -237,7 +237,7 @@ const OnboardingPage = () => {
               <button
                 onClick={() => setStep(2)}
                 disabled={selectedCategories.length < 3}
-                style={{ width: '100%', height: '52px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', border: 'none', fontSize: '15px', fontWeight: 600, cursor: selectedCategories.length >= 3 ? 'pointer' : 'not-allowed', background: selectedCategories.length >= 3 ? '#DC2626' : '#1a1917', color: selectedCategories.length >= 3 ? '#fff' : '#5A544D' }}
+                style={{ width: '100%', height: '52px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', border: 'none', fontSize: '15px', fontWeight: 600, cursor: selectedCategories.length >= 3 ? 'pointer' : 'not-allowed', background: selectedCategories.length >= 3 ? '#DC2626' : 'var(--c-surface2)', color: selectedCategories.length >= 3 ? '#fff' : 'var(--c-faint2)' }}
                 data-testid="onboarding-next-btn"
               >
                 Continue {selectedCategories.length >= 3 && <ChevronRight className="w-4 h-4" />}
@@ -263,7 +263,7 @@ const OnboardingPage = () => {
                 <Check className="w-10 h-10 text-red-500" />
               </motion.div>
 
-              <h2 className="font-serif text-3xl font-bold text-white mb-4">
+              <h2 className="font-serif text-3xl font-bold text-fg mb-4">
                 You're all set
               </h2>
               <p className="text-gray-400 mb-8">
@@ -287,7 +287,7 @@ const OnboardingPage = () => {
               <div style={{ display: 'flex', gap: '10px', maxWidth: '420px', margin: '0 auto' }}>
                 <button
                   onClick={() => setStep(1)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '50px', padding: '0 20px', flexShrink: 0, borderRadius: '14px', background: '#1a1917', border: '1px solid rgba(255,255,255,0.08)', color: '#9A938A', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '50px', padding: '0 20px', flexShrink: 0, borderRadius: '14px', background: 'var(--c-surface2)', border: '1px solid rgb(var(--c-fg-rgb) / 0.08)', color: 'var(--c-muted2)', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
                 >
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>

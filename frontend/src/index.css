@@ -26,18 +26,137 @@
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
-  --obsidian: #0A0A0A;
+
+  /* ── Colour tokens ────────────────────────────────────────────────────────
+   * Dark is the default and every dark value below is the exact hex the UI
+   * used before theming existed, so dark mode renders as it always has. Light
+   * mode ("Surya") is the single override block further down.
+   *
+   * Components reference these as var(--c-*) in inline styles, and Tailwind
+   * reaches them through the page/surface/fg/gray colours in tailwind.config.
+   * The *-rgb tokens are space-separated channels for rgb(var(--x) / alpha).
+   *
+   * Not tokenised on purpose: the red fill #DC2626 (4.8:1 against white, so it
+   * works as a fill in both themes), white text on red, and image scrims.
+   */
+  color-scheme: dark;
+  --c-bg: #0A0A0A;
+  --c-bg-rgb: 10 10 10;
+  --c-bg-deep: #000000;
+  --c-surface: #131211;
+  --c-surface-rgb: 19 18 17;
+  --c-surface2: #1A1917;
+  --c-warm-rgb: 26 20 15;
+  --c-fg-rgb: 255 255 255;
+  /* translucent chrome over content (article header/footer, hero fade) */
+  --c-chrome-rgb: 0 0 0;
+
+  --c-ink: #F2EEE9;
+  --c-ink2: #ECE7E1;
+  --c-sub: #B6AFA6;
+  --c-muted2: #9A938A;
+  --c-muted: #8A847C;
+  /* faint/faint2 carry real text (eyebrows, bylines, empty states). They were
+     #6E6862 / #5A544D, i.e. 3.6:1 and 2.6:1 — below AA. Lifted to pass. */
+  --c-faint: #847D75;
+  --c-faint2: #7F7870;
+  --c-dim: #4A453F;   /* decorative only: separator dots, chevrons */
+  --c-dim2: #3A362F;
+
+  --c-accent-ink: #DC6B5A;
+  --c-accent-soft: #F0A090;
+  --c-accent-soft2: #E88A7C;
+  --c-accent-dim: #7A2A24;
+  --c-danger-ink: #F87171;
+  --c-danger-soft: #FCA5A5;
+  --c-success-ink: #4ADE80;
+  --c-warn-ink: #F59E0B;
+
+  /* Brief page time-of-day sky, top and middle stops */
+  --c-sky-m1: #1A120C; --c-sky-m2: #100B09;
+  --c-sky-d1: #170F0C; --c-sky-d2: #0F0B0A;
+  --c-sky-n1: #0F1018; --c-sky-n2: #0B0B12;
+
+  /* Tailwind gray-300…700, as channels (values are Tailwind's own) */
+  --c-gray-300: 209 213 219;
+  --c-gray-400: 156 163 175;
+  --c-gray-500: 107 114 128;
+  --c-gray-600: 75 85 99;
+  --c-gray-700: 55 65 81;
+
+  --c-scrim: rgb(0 0 0 / 0.8);
+  --c-seg-on: #2A2926;  /* selected segment in the Appearance control */
+
+  --obsidian: var(--c-bg);
   --obsidian-light: #171717;
   --obsidian-lighter: #262626;
   --surya-red: #DC2626;
   --surya-amber: #F59E0B;
   --surya-glow: rgba(220, 38, 38, 0.5);
-  --glass-surface: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.15);
+  --glass-surface: rgb(var(--c-fg-rgb) / 0.03);
+  --glass-border: rgb(var(--c-fg-rgb) / 0.08);
+  --glass-highlight: rgb(var(--c-fg-rgb) / 0.15);
   --text-primary: #EDEDED;
   --text-secondary: #A1A1AA;
   --text-muted: #525252;
+}
+
+/* ── Light · "Surya" ──────────────────────────────────────────────────────────
+ * Neutrals tinted a whisper toward the brand red (hue ~25), not toward cream,
+ * so both themes read as one family. Every text token is ≥4.5:1 on --c-bg,
+ * --c-surface and --c-surface2. Red used AS TEXT darkens to #B42318 — the #DC2626
+ * fill is fine behind white text but too light to carry small red type.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-bg: #FAF4F3;
+  --c-bg-rgb: 250 244 243;
+  --c-bg-deep: #FAF4F3;
+  --c-surface: #FFFFFF;
+  --c-surface-rgb: 255 255 255;
+  --c-surface2: #F2E8E6;
+  --c-warm-rgb: 255 250 248;
+  --c-fg-rgb: 28 20 18;
+  --c-chrome-rgb: 250 244 243;
+
+  --c-ink: #1C1412;
+  --c-ink2: #3A2E2B;
+  --c-sub: #4A3D39;
+  --c-muted2: #5E4F4B;
+  --c-muted: #6B5B57;
+  --c-faint: #76645F;
+  --c-faint2: #7A6863;
+  --c-dim: #B3A29D;
+  --c-dim2: #CDBEB9;
+
+  --c-accent-ink: #B42318;
+  --c-accent-soft: #A61F14;
+  --c-accent-soft2: #A61F14;
+  --c-accent-dim: #E9B8B0;
+  --c-danger-ink: #B91C1C;
+  --c-danger-soft: #B91C1C;
+  --c-success-ink: #15803D;
+  --c-warn-ink: #B45309;
+
+  --c-sky-m1: #FBE9D6; --c-sky-m2: #FAF0EA;
+  --c-sky-d1: #FBE4DE; --c-sky-d2: #FAF0EE;
+  --c-sky-n1: #E9E8F6; --c-sky-n2: #F3F0F5;
+
+  /* gray-300 is the brightest gray in dark, so it maps to the darkest here */
+  --c-gray-300: 58 46 43;
+  --c-gray-400: 94 79 75;
+  --c-gray-500: 107 91 87;
+  --c-gray-600: 122 104 99;
+  --c-gray-700: 168 149 143;
+
+  --c-scrim: rgb(28 20 18 / 0.42);
+  --c-seg-on: #FFFFFF;
+
+  --obsidian-light: #FFFFFF;
+  --obsidian-lighter: #E6D9D6;
+  --text-primary: #1C1412;
+  --text-secondary: #4A3D39;
+  --text-muted: #76645F;
 }
 
 /* Browsers have no system bars, so every inset above resolves to 0 and headers
@@ -59,7 +178,7 @@ body {
   font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #000000;
+  background-color: var(--c-bg-deep);
   color: var(--text-primary);
   overflow-x: hidden;
 }
@@ -93,10 +212,10 @@ body {
 }
 
 .glass-nav {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgb(var(--c-bg-rgb) / 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgb(var(--c-fg-rgb) / 0.05);
 }
 
 /* Surya glow effect */
@@ -294,6 +413,10 @@ body {
   border-radius: 1rem;
   background: rgba(23, 23, 23, 0.5);
   border: 1px solid var(--glass-border);
+}
+
+[data-theme="light"] .news-card {
+  background: var(--c-surface);
   transition: border-color 0.3s, transform 0.3s;
 }
 
@@ -416,6 +539,41 @@ body {
   top: calc(var(--sat) + 10px) !important;
 }
 
+/* Feed card photos fade into the page in dark. In light, a fade to near-white
+   turns the photo milky, so the photo runs clean to the card edge and the
+   category chip sitting on it gets its own dark glass instead. */
+[data-theme="light"] .img-fade { display: none; }
+[data-theme="light"] .category-badge {
+  color: #fff;
+  background: rgb(0 0 0 / 0.45);
+  border-color: rgb(255 255 255 / 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Radix overlays (sheet, dialog) use bg-black/70–80. Right for dark; on a
+   light page a near-black wash reads as an error state, so soften it. */
+[data-theme="light"] .bg-black\/80,
+[data-theme="light"] .bg-black\/70,
+[data-theme="light"] .bg-black\/60 {
+  background-color: var(--c-scrim);
+}
+
+/* Tailwind's -300/-400/-500 reds, greens and ambers were chosen to glow on
+   black; on the light page they drop to 2–3:1. Darken them to the theme's
+   text-grade equivalents rather than touching every call site. */
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400,
+[data-theme="light"] .text-red-500,
+[data-theme="light"] .hover\:text-red-400:hover { color: var(--c-accent-ink); }
+[data-theme="light"] .text-green-400,
+[data-theme="light"] .text-green-500,
+[data-theme="light"] .hover\:text-green-400:hover { color: var(--c-success-ink); }
+[data-theme="light"] .text-amber-500 { color: var(--c-warn-ink); }
+[data-theme="light"] .bg-red-950\/30,
+[data-theme="light"] .bg-red-950\/40 { background-color: rgb(220 38 38 / 0.07); }
+[data-theme="light"] .border-red-900\/30 { border-color: rgb(220 38 38 / 0.25); }
+
 /* Base layer */
 @layer base {
   :root {
@@ -439,6 +597,29 @@ body {
     --input: 0 0% 15%;
     --ring: 0 72% 51%;
     --radius: 0.5rem;
+  }
+
+  /* Surya light, in shadcn's HSL-channel format */
+  :root[data-theme="light"] {
+    --background: 8 50% 97%;
+    --foreground: 10 22% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 10 22% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 10 22% 9%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 8 28% 93%;
+    --secondary-foreground: 10 22% 9%;
+    --muted: 8 28% 93%;
+    --muted-foreground: 10 10% 38%;
+    --accent: 8 28% 93%;
+    --accent-foreground: 10 22% 9%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 8 20% 87%;
+    --input: 8 20% 87%;
+    --ring: 0 72% 51%;
   }
 }
 

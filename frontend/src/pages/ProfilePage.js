@@ -27,7 +27,7 @@ const MAX_NICHES_PER_CATEGORY = 3;
 // both the top category and "your quietest corner, 0 days" on the same profile
 // -- because it always filled two slots whether or not it had two things to
 // say. If nothing is earned now, the card says less.
-const em = { color: "#F0A090", fontWeight: 600 };
+const em = { color: "var(--c-accent-soft)", fontWeight: 600 };
 const B = ({ children }) => <b style={em}>{children}</b>;
 
 const renderObservation = (o) => {
@@ -229,7 +229,7 @@ const ProfilePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-14 h-14 animate-spin-slow" />
       </div>
     );
@@ -243,27 +243,27 @@ const ProfilePage = () => {
     <button
       onClick={onClick}
       style={{
-        background: "#131211", borderRadius: "14px", padding: "14px 8px", textAlign: "center",
-        border: onClick ? "1px solid rgba(220,38,38,0.25)" : "1px solid rgba(255,255,255,0.06)",
+        background: "var(--c-surface)", borderRadius: "14px", padding: "14px 8px", textAlign: "center",
+        border: onClick ? "1px solid rgba(220,38,38,0.25)" : "1px solid rgb(var(--c-fg-rgb) / 0.06)",
         cursor: onClick ? "pointer" : "default",
       }}
     >
-      <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "24px", color: "#F2EEE9", lineHeight: 1 }}>{num}</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", fontSize: "10.5px", color: onClick ? "#DC6B5A" : "#82828A", marginTop: "5px" }}>
+      <div style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "24px", color: "var(--c-ink)", lineHeight: 1 }}>{num}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", fontSize: "10.5px", color: onClick ? "var(--c-accent-ink)" : "var(--c-muted)", marginTop: "5px" }}>
         {Icon && <Icon className="w-3 h-3" />}{label}
       </div>
     </button>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0A0A0A" }} data-testid="profile-page">
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)" }} data-testid="profile-page">
       {/* Header */}
-      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgb(var(--c-bg-rgb) / 0.72)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
         <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
-            <ArrowLeft className="w-5 h-5" style={{ color: "#9A938A" }} />
+            <ArrowLeft className="w-5 h-5" style={{ color: "var(--c-muted2)" }} />
           </button>
-          <span style={{ color: "#82828A", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>Profile</span>
+          <span style={{ color: "var(--c-muted)", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>Profile</span>
           <div style={{ width: "36px" }} />
         </div>
       </header>
@@ -272,12 +272,12 @@ const ProfilePage = () => {
       <main style={{ padding: "20px 22px 96px", maxWidth: "640px", margin: "0 auto" }}>
         {/* Identity */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "22px" }}>
-          <div style={{ width: "60px", height: "60px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "#1a1917", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {user?.picture ? <img src={user.picture} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User className="w-7 h-7" style={{ color: "#6E6862" }} />}
+          <div style={{ width: "60px", height: "60px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "var(--c-surface2)", border: "1px solid rgb(var(--c-fg-rgb) / 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {user?.picture ? <img src={user.picture} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User className="w-7 h-7" style={{ color: "var(--c-faint)" }} />}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "22px", color: "#F2EEE9", margin: "0 0 2px" }}>{user?.name}</h1>
-            <div style={{ wordBreak: "break-all", overflowWrap: "anywhere", fontSize: "12px", color: "#6E6862" }}>{user?.email}</div>
+            <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "22px", color: "var(--c-ink)", margin: "0 0 2px" }}>{user?.name}</h1>
+            <div style={{ wordBreak: "break-all", overflowWrap: "anywhere", fontSize: "12px", color: "var(--c-faint)" }}>{user?.email}</div>
           </div>
         </motion.div>
 
@@ -290,11 +290,11 @@ const ProfilePage = () => {
 
         {/* Insight card — the intelligent moment */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
-          style={{ background: "linear-gradient(135deg, rgba(220,38,38,0.09), #131211 62%)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "16px", padding: "16px", marginBottom: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "#DC6B5A", textTransform: "uppercase", marginBottom: "9px" }}>
+          style={{ background: "linear-gradient(135deg, rgba(220,38,38,0.09), var(--c-surface) 62%)", border: "1px solid rgba(220,38,38,0.22)", borderRadius: "16px", padding: "16px", marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "var(--c-accent-ink)", textTransform: "uppercase", marginBottom: "9px" }}>
             <Sparkles className="w-3 h-3" /> What Chintan noticed
           </div>
-          <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "#ECE7E1" }}>
+          <p style={{ margin: 0, fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15.5px", lineHeight: 1.46, color: "var(--c-ink2)" }}>
             {observations.length > 0
               ? observations.map((o, i) => <span key={o.kind}>{i > 0 && " "}{renderObservation(o)}</span>)
               : <>Read a few stories and Chintan will start spotting your patterns here.</>}
@@ -304,19 +304,19 @@ const ProfilePage = () => {
         {/* Reading breakdown */}
         {breakdown.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} style={{ marginBottom: "24px" }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.2em", color: "#5A544D", textTransform: "uppercase", marginBottom: "13px" }}>Reading breakdown</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.2em", color: "var(--c-faint2)", textTransform: "uppercase", marginBottom: "13px" }}>Reading breakdown</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
               {breakdown.map(([category, count], idx) => {
                 const percentage = Math.round((count / breakdownTotal) * 100);
                 return (
                   <div key={category}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                      <span style={{ color: "#B6AFA6", fontSize: "13px" }}>{category}</span>
-                      <span style={{ color: "#6E6862", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{percentage}%</span>
+                      <span style={{ color: "var(--c-sub)", fontSize: "13px" }}>{category}</span>
+                      <span style={{ color: "var(--c-faint)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{percentage}%</span>
                     </div>
-                    <div style={{ height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ height: "6px", background: "rgb(var(--c-fg-rgb) / 0.05)", borderRadius: "3px", overflow: "hidden" }}>
                       <motion.div initial={{ width: 0 }} animate={{ width: `${percentage}%` }} transition={{ duration: 0.5, delay: 0.3 }}
-                        style={{ height: "100%", borderRadius: "3px", background: idx === 0 ? "#DC2626" : "#5A544D" }} />
+                        style={{ height: "100%", borderRadius: "3px", background: idx === 0 ? "#DC2626" : "var(--c-faint2)" }} />
                     </div>
                   </div>
                 );
@@ -327,13 +327,13 @@ const ProfilePage = () => {
 
         {/* Interests */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} style={{ marginBottom: "24px" }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.2em", color: "#5A544D", textTransform: "uppercase", marginBottom: "13px" }}>Your interests</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.2em", color: "var(--c-faint2)", textTransform: "uppercase", marginBottom: "13px" }}>Your interests</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "7px" }}>
             {user?.interests?.map((interest) => (
-              <span key={interest} style={{ padding: "6px 12px", background: "rgba(220,38,38,0.12)", color: "#E88A7C", borderRadius: "20px", fontSize: "12.5px" }}>{interest}</span>
+              <span key={interest} style={{ padding: "6px 12px", background: "rgba(220,38,38,0.12)", color: "var(--c-accent-soft2)", borderRadius: "20px", fontSize: "12.5px" }}>{interest}</span>
             ))}
             <button onClick={() => setShowEditInterests(true)} data-testid="edit-interests-btn"
-              style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", background: "#151412", border: "1px solid rgba(255,255,255,0.08)", color: "#8A847C", borderRadius: "20px", fontSize: "12.5px", cursor: "pointer" }}>
+              style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.08)", color: "var(--c-muted)", borderRadius: "20px", fontSize: "12.5px", cursor: "pointer" }}>
               <Edit3 className="w-3.5 h-3.5" /> Edit
             </button>
           </div>
@@ -342,39 +342,39 @@ const ProfilePage = () => {
         {/* Actions */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
           <button onClick={openPollsHistory} data-testid="poll-history-btn" style={actionStyle}>
-            <BarChart2 className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <BarChart2 className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Poll history</div>
-              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Where you stood</div>
+              <div style={{ color: "var(--c-ink2)", fontSize: "14px" }}>Poll history</div>
+              <div style={{ color: "var(--c-faint)", fontSize: "11.5px" }}>Where you stood</div>
             </div>
-            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--c-dim)" }} />
           </button>
           <button onClick={openBlockedUsers} data-testid="blocked-users-btn" style={actionStyle}>
-            <UserX className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <UserX className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Blocked users</div>
-              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Comments you've muted</div>
+              <div style={{ color: "var(--c-ink2)", fontSize: "14px" }}>Blocked users</div>
+              <div style={{ color: "var(--c-faint)", fontSize: "11.5px" }}>Comments you've muted</div>
             </div>
-            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--c-dim)" }} />
           </button>
           <button onClick={() => navigate("/about")} data-testid="about-nav-btn" style={actionStyle}>
-            <Info className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <Info className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>About Chintan</div>
-              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Who we are, how the app works</div>
+              <div style={{ color: "var(--c-ink2)", fontSize: "14px" }}>About Chintan</div>
+              <div style={{ color: "var(--c-faint)", fontSize: "11.5px" }}>Who we are, how the app works</div>
             </div>
-            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--c-dim)" }} />
           </button>
           <button onClick={() => navigate("/contact")} data-testid="contact-nav-btn" style={actionStyle}>
-            <Mail className="w-5 h-5" style={{ color: "#9A938A", flexShrink: 0 }} />
+            <Mail className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ color: "#ECE7E1", fontSize: "14px" }}>Contact us</div>
-              <div style={{ color: "#6E6862", fontSize: "11.5px" }}>Reach the team behind Chintan</div>
+              <div style={{ color: "var(--c-ink2)", fontSize: "14px" }}>Contact us</div>
+              <div style={{ color: "var(--c-faint)", fontSize: "11.5px" }}>Reach the team behind Chintan</div>
             </div>
-            <ChevronRight className="w-4 h-4" style={{ color: "#4A453F" }} />
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--c-dim)" }} />
           </button>
           <button onClick={handleLogout} data-testid="logout-btn"
-            style={{ ...actionStyle, justifyContent: "center", gap: "8px", color: "#DC6B5A", border: "1px solid rgba(220,38,38,0.2)" }}>
+            style={{ ...actionStyle, justifyContent: "center", gap: "8px", color: "var(--c-accent-ink)", border: "1px solid rgba(220,38,38,0.2)" }}>
             <LogOut className="w-5 h-5" /> Sign out
           </button>
 
@@ -383,7 +383,7 @@ const ProfilePage = () => {
               people press every day. */}
           <button onClick={() => { setDeleteConfirmText(""); setShowDelete(true); }} data-testid="delete-account-btn"
             style={{ ...actionStyle, justifyContent: "center", gap: "8px", marginTop: "10px",
-                     background: "transparent", border: "1px solid rgba(255,255,255,0.06)", color: "#8A847C" }}>
+                     background: "transparent", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)", color: "var(--c-muted)" }}>
             <Trash2 className="w-4 h-4" /> Delete account
           </button>
         </motion.div>
@@ -391,7 +391,7 @@ const ProfilePage = () => {
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: "40px" }}>
           <SuryaLogo className="w-7 h-7 mx-auto mb-2" style={{ opacity: 0.4 }} />
-          <p style={{ color: "#4A453F", fontSize: "11px" }}>Chintan · Don't just consume. Contemplate.</p>
+          <p style={{ color: "var(--c-dim)", fontSize: "11px" }}>Chintan · Don't just consume. Contemplate.</p>
         </div>
       </main>
 
@@ -399,7 +399,7 @@ const ProfilePage = () => {
       <Dialog open={showEditInterests} onOpenChange={setShowEditInterests}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Interests</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Interests</div>
             <DialogTitle>Edit interests</DialogTitle>
           </DialogHeader>
           <p className="text-gray-500 text-sm" style={{ marginTop: "2px" }}>
@@ -412,17 +412,17 @@ const ProfilePage = () => {
                 const open = !!expandedCats[cat];
                 const nCount = nicheCount(cat);
                 return (
-                  <div key={cat} style={{ border: "1px solid rgba(255,255,255,0.07)", borderRadius: "12px", overflow: "hidden" }}>
+                  <div key={cat} style={{ border: "1px solid rgb(var(--c-fg-rgb) / 0.07)", borderRadius: "12px", overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "11px 12px" }}>
                       <button onClick={() => toggleCategory(cat)} aria-label={`Select ${cat}`}
                         style={{ width: "20px", height: "20px", borderRadius: "6px", flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                          background: picked ? "#DC2626" : "transparent", border: picked ? "1.5px solid #DC2626" : "1.5px solid #4A453F" }}>
+                          background: picked ? "#DC2626" : "transparent", border: picked ? "1.5px solid #DC2626" : "1.5px solid var(--c-dim)" }}>
                         {picked && <Check className="w-3 h-3 text-white" />}
                       </button>
                       <button onClick={() => setExpandedCats((p) => ({ ...p, [cat]: !p[cat] }))}
                         style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "none", cursor: "pointer" }}>
-                        <span style={{ color: "#ECE7E1", fontSize: "14.5px", fontWeight: 500 }}>{cat}{nCount > 0 && <span style={{ color: "#DC6B5A", fontSize: "12px", marginLeft: "7px" }}>{nCount}</span>}</span>
-                        <ChevronDown className="w-4 h-4" style={{ color: "#6E6862", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+                        <span style={{ color: "var(--c-ink2)", fontSize: "14.5px", fontWeight: 500 }}>{cat}{nCount > 0 && <span style={{ color: "var(--c-accent-ink)", fontSize: "12px", marginLeft: "7px" }}>{nCount}</span>}</span>
+                        <ChevronDown className="w-4 h-4" style={{ color: "var(--c-faint)", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
                       </button>
                     </div>
                     {open && (
@@ -433,8 +433,8 @@ const ProfilePage = () => {
                           return (
                             <button key={niche} onClick={() => toggleNiche(cat, niche)}
                               style={{ fontSize: "12px", padding: "6px 12px", borderRadius: "16px", cursor: "pointer", opacity: dim ? 0.4 : 1,
-                                background: on ? "rgba(220,38,38,0.14)" : "#1a1917", color: on ? "#F0A090" : "#B6AFA6",
-                                border: on ? "1px solid rgba(220,38,38,0.5)" : "1px solid rgba(255,255,255,0.08)" }}>
+                                background: on ? "rgba(220,38,38,0.14)" : "var(--c-surface2)", color: on ? "var(--c-accent-soft)" : "var(--c-sub)",
+                                border: on ? "1px solid rgba(220,38,38,0.5)" : "1px solid rgb(var(--c-fg-rgb) / 0.08)" }}>
                               {niche}
                             </button>
                           );
@@ -446,8 +446,8 @@ const ProfilePage = () => {
               })}
             </div>
           </ScrollArea>
-          <div className="flex gap-3 pt-4 border-t border-white/10" style={{ marginTop: "12px" }}>
-            <button onClick={() => setShowEditInterests(false)} className="flex-1 py-2 px-4 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>
+          <div className="flex gap-3 pt-4 border-t border-fg/10" style={{ marginTop: "12px" }}>
+            <button onClick={() => setShowEditInterests(false)} className="flex-1 py-2 px-4 rounded-lg bg-fg/5 text-gray-400 hover:bg-fg/10 transition-colors">Cancel</button>
             <button onClick={saveInterests} disabled={savingInterests || selectedInterests.length < 3}
               className="flex-1 py-2 px-4 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {savingInterests ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save
@@ -460,25 +460,25 @@ const ProfilePage = () => {
       <Dialog open={showDelete} onOpenChange={(o) => { if (!deleting) setShowDelete(o); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Account</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Account</div>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-500" /> Delete your account
             </DialogTitle>
           </DialogHeader>
 
           <div className="py-2">
-            <p style={{ color: "#B6AFA6", fontSize: "14px", lineHeight: 1.6, marginBottom: "12px" }}>
+            <p style={{ color: "var(--c-sub)", fontSize: "14px", lineHeight: 1.6, marginBottom: "12px" }}>
               This permanently deletes your account and everything attached to it —
               your bookmarks, comments, poll votes, blocked list and reading history.
             </p>
-            <p style={{ color: "#8A847C", fontSize: "13.5px", lineHeight: 1.6, marginBottom: "16px" }}>
+            <p style={{ color: "var(--c-muted)", fontSize: "13.5px", lineHeight: 1.6, marginBottom: "16px" }}>
               It cannot be undone, and it happens immediately. There is no recovery
               window and we keep no copy.
             </p>
 
             {/* Typing the word is deliberate friction. A single "are you sure?"
                 tap is too easy to clear by reflex for something irreversible. */}
-            <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6E6862", marginBottom: "7px" }}>
+            <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: "10.5px", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--c-faint)", marginBottom: "7px" }}>
               Type DELETE to confirm
             </label>
             <input
@@ -488,15 +488,15 @@ const ProfilePage = () => {
               autoCapitalize="characters"
               autoCorrect="off"
               data-testid="delete-confirm-input"
-              style={{ width: "100%", background: "#0A0A0A", border: "1px solid rgba(255,255,255,0.09)",
-                       borderRadius: "10px", padding: "12px 13px", color: "#ECE7E1", fontSize: "15px",
+              style={{ width: "100%", background: "var(--c-bg)", border: "1px solid rgb(var(--c-fg-rgb) / 0.09)",
+                       borderRadius: "10px", padding: "12px 13px", color: "var(--c-ink2)", fontSize: "15px",
                        fontFamily: "'Manrope', sans-serif", outline: "none" }}
             />
 
             <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
               <button onClick={() => setShowDelete(false)} disabled={deleting} data-testid="delete-cancel-btn"
-                style={{ flex: 1, background: "#131211", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "11px",
-                         padding: "12px", color: "#ECE7E1", fontSize: "14px", fontWeight: 600,
+                style={{ flex: 1, background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.09)", borderRadius: "11px",
+                         padding: "12px", color: "var(--c-ink2)", fontSize: "14px", fontWeight: 600,
                          fontFamily: "'Manrope', sans-serif", cursor: "pointer", opacity: deleting ? 0.5 : 1 }}>
                 Keep my account
               </button>
@@ -519,7 +519,7 @@ const ProfilePage = () => {
       <Dialog open={showPolls} onOpenChange={setShowPolls}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>History</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>History</div>
             <DialogTitle className="flex items-center gap-2">
               <BarChart2 className="w-5 h-5 text-red-500" /> Poll history
             </DialogTitle>
@@ -536,7 +536,7 @@ const ProfilePage = () => {
                       className={`glass-card rounded-xl p-4 cursor-pointer hover:border-red-500/30 transition-colors ${selectedPoll?.poll_id === poll.poll_id ? "border-red-500/50" : ""}`}
                       onClick={() => setSelectedPoll(selectedPoll?.poll_id === poll.poll_id ? null : poll)}>
                       <div className="flex items-start justify-between mb-2">
-                        <p className="text-white font-medium text-sm flex-1 pr-4">{poll.question}</p>
+                        <p className="text-fg font-medium text-sm flex-1 pr-4">{poll.question}</p>
                         <span className={`text-xs px-2 py-1 rounded ${status.active ? "bg-green-500/20 text-green-400" : "bg-gray-500/20 text-gray-400"}`}>
                           {status.active ? `${status.daysLeft}d left` : "Closed"}
                         </span>
@@ -545,14 +545,14 @@ const ProfilePage = () => {
                       <AnimatePresence>
                         {selectedPoll?.poll_id === poll.poll_id && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                            <div className="pt-3 mt-3 border-t border-white/10 space-y-2">
+                            <div className="pt-3 mt-3 border-t border-fg/10 space-y-2">
                               {poll.options.map((option) => {
                                 const percentage = getVotePercentage(poll, option);
                                 const isUserVote = option === poll.user_vote;
                                 return (
                                   <div key={option} className="relative">
-                                    <div className={`p-2 rounded-lg ${isUserVote ? "bg-red-500/10" : "bg-white/5"}`}>
-                                      <div className={`absolute inset-0 rounded-lg ${isUserVote ? "bg-red-500/20" : "bg-white/5"}`} style={{ width: `${percentage}%` }} />
+                                    <div className={`p-2 rounded-lg ${isUserVote ? "bg-red-500/10" : "bg-fg/5"}`}>
+                                      <div className={`absolute inset-0 rounded-lg ${isUserVote ? "bg-red-500/20" : "bg-fg/5"}`} style={{ width: `${percentage}%` }} />
                                       <div className="relative flex items-center justify-between">
                                         <span className={`text-sm ${isUserVote ? "text-red-400" : "text-gray-400"}`}>{option} {isUserVote && "✓"}</span>
                                         <span className="text-gray-500 text-xs font-mono">{percentage}%</span>
@@ -585,7 +585,7 @@ const ProfilePage = () => {
       <Dialog open={showBlocked} onOpenChange={setShowBlocked}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#6b625a' }}>Moderation</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--c-faint)' }}>Moderation</div>
             <DialogTitle className="flex items-center gap-2">
               <UserX className="w-5 h-5 text-red-500" /> Blocked users
             </DialogTitle>
@@ -596,12 +596,12 @@ const ProfilePage = () => {
             ) : blockedUsers.length > 0 ? (
               <div className="space-y-2 py-4">
                 {blockedUsers.map((b) => (
-                  <div key={b.blocked_user_id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-                    <span className="text-white text-sm">{b.blocked_user_name || "Unknown user"}</span>
+                  <div key={b.blocked_user_id} className="flex items-center justify-between p-3 rounded-lg bg-fg/5">
+                    <span className="text-fg text-sm">{b.blocked_user_name || "Unknown user"}</span>
                     <button
                       onClick={() => unblockUser(b.blocked_user_id)}
                       data-testid={`unblock-${b.blocked_user_id}`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs bg-fg/5 text-gray-400 hover:text-fg hover:bg-fg/10 transition-colors"
                     >
                       <X className="w-3 h-3" /> Unblock
                     </button>
@@ -626,7 +626,7 @@ const ProfilePage = () => {
 
 const actionStyle = {
   display: "flex", alignItems: "center", gap: "12px", width: "100%",
-  background: "#131211", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "13px",
+  background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)", borderRadius: "13px",
   padding: "14px 15px", cursor: "pointer",
 };
 

@@ -16,17 +16,17 @@ const EASE = [0.16, 1, 0.3, 1];
 const briefMeta = {
   morning: {
     greeting: "Good morning", sub: "Three stories to start the day.",
-    sky: "radial-gradient(130% 80% at 50% -8%, rgba(245,158,11,.26), rgba(220,38,38,.09) 32%, rgba(10,10,10,0) 60%), linear-gradient(180deg, #1a120c 0%, #100b09 30%, #0A0A0A 62%)",
+    sky: "radial-gradient(130% 80% at 50% -8%, rgba(245,158,11,.26), rgba(220,38,38,.09) 32%, rgb(var(--c-bg-rgb) / 0) 60%), linear-gradient(180deg, var(--c-sky-m1) 0%, var(--c-sky-m2) 30%, var(--c-bg) 62%)",
     drift: "rgba(245,158,11,0.14)", glow: "rgba(245,158,11,0.55)",
   },
   midday: {
     greeting: "Good afternoon", sub: "Three stories from the day so far.",
-    sky: "radial-gradient(130% 80% at 50% -8%, rgba(220,38,38,.20), rgba(234,88,12,.07) 34%, rgba(10,10,10,0) 60%), linear-gradient(180deg, #170f0c 0%, #0f0b0a 30%, #0A0A0A 62%)",
+    sky: "radial-gradient(130% 80% at 50% -8%, rgba(220,38,38,.20), rgba(234,88,12,.07) 34%, rgb(var(--c-bg-rgb) / 0) 60%), linear-gradient(180deg, var(--c-sky-d1) 0%, var(--c-sky-d2) 30%, var(--c-bg) 62%)",
     drift: "rgba(234,88,12,0.12)", glow: "rgba(220,38,38,0.5)",
   },
   night: {
     greeting: "Good evening", sub: "Three stories that shaped today.",
-    sky: "radial-gradient(130% 80% at 50% -8%, rgba(99,102,241,.22), rgba(124,58,237,.10) 34%, rgba(10,10,10,0) 60%), linear-gradient(180deg, #0f1018 0%, #0b0b12 30%, #0A0A0A 62%)",
+    sky: "radial-gradient(130% 80% at 50% -8%, rgba(99,102,241,.22), rgba(124,58,237,.10) 34%, rgb(var(--c-bg-rgb) / 0) 60%), linear-gradient(180deg, var(--c-sky-n1) 0%, var(--c-sky-n2) 30%, var(--c-bg) 62%)",
     drift: "rgba(99,102,241,0.13)", glow: "rgba(129,140,248,0.5)",
   },
 };
@@ -73,7 +73,7 @@ const BriefPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-14 h-14 animate-spin-slow" />
       </div>
     );
@@ -87,7 +87,7 @@ const BriefPage = () => {
   const greetWords = `${greeting}${firstName ? `, ${firstName}` : ""}`.split(" ");
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0A0A0A", position: "relative" }} data-testid={`brief-${briefType}-page`}>
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)", position: "relative" }} data-testid={`brief-${briefType}-page`}>
       {/* Living dawn sky */}
       <div style={{ position: "fixed", inset: 0, zIndex: 0, background: meta.sky, pointerEvents: "none" }}>
         {!R && (
@@ -105,12 +105,12 @@ const BriefPage = () => {
       </svg>
 
       {/* Header */}
-      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgba(10,10,10,0.55)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
+      <header className="sticky z-40 px-4" style={{ top: 0, paddingTop: "var(--sat)", paddingBottom: "12px", background: "rgb(var(--c-bg-rgb) / 0.55)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
         <div style={{ maxWidth: "640px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button onClick={() => navigate(-1)} style={{ padding: "8px", background: "none", border: "none", cursor: "pointer" }} data-testid="back-btn">
-            <ArrowLeft className="w-5 h-5" style={{ color: "#C9BFB4" }} />
+            <ArrowLeft className="w-5 h-5" style={{ color: "var(--c-sub)" }} />
           </button>
-          <span style={{ color: "#9a8d80", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>Daily brief</span>
+          <span style={{ color: "var(--c-muted2)", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase" }}>Daily brief</span>
           <div style={{ width: "36px" }} />
         </div>
       </header>
@@ -127,7 +127,7 @@ const BriefPage = () => {
             <SuryaLogo className="w-14 h-14" />
           </motion.div>
 
-          <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "clamp(28px, 8vw, 34px)", lineHeight: 1.12, color: "#F4EEE6", margin: 0, letterSpacing: "-0.01em", textWrap: "balance" }}>
+          <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "clamp(28px, 8vw, 34px)", lineHeight: 1.12, color: "var(--c-ink)", margin: 0, letterSpacing: "-0.01em", textWrap: "balance" }}>
             {greetWords.map((w, i) => (
               <motion.span
                 key={i}
@@ -143,20 +143,20 @@ const BriefPage = () => {
 
           <motion.p
             initial={R ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: R ? 0 : 0.5, duration: 0.6 }}
-            style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontSize: "15px", color: "#b7ada2", margin: "12px 0 0" }}
+            style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontSize: "15px", color: "var(--c-sub)", margin: "12px 0 0" }}
           >
             {meta.sub}
           </motion.p>
           <motion.div
             initial={R ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: R ? 0 : 0.62, duration: 0.6 }}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "#8a7d70", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", marginTop: "10px" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", color: "var(--c-muted)", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", marginTop: "10px" }}
           >
             <Clock className="w-3.5 h-3.5" /><span>{readTime}</span>
           </motion.div>
         </div>
 
         {/* Section label */}
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.2em", color: "#6b625a", textTransform: "uppercase", margin: "36px 0 14px" }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.2em", color: "var(--c-faint)", textTransform: "uppercase", margin: "36px 0 14px" }}>
           Across your interests
         </div>
 
@@ -181,29 +181,29 @@ const BriefPage = () => {
                   whileTap={R ? undefined : { scale: 0.985 }}
                   style={{
                     textAlign: "left", width: "100%",
-                    background: "linear-gradient(180deg, rgba(26,20,15,0.66), rgba(19,18,17,0.9))",
-                    border: "1px solid rgba(255,255,255,0.07)", borderRadius: "18px",
+                    background: "linear-gradient(180deg, rgb(var(--c-warm-rgb) / 0.66), rgb(var(--c-surface-rgb) / 0.9))",
+                    border: "1px solid rgb(var(--c-fg-rgb) / 0.07)", borderRadius: "18px",
                     padding: "19px 18px", cursor: "pointer",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
                       {category && (
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.12em", color: "#DC6B5A", textTransform: "uppercase" }}>{category}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.12em", color: "var(--c-accent-ink)", textTransform: "uppercase" }}>{category}</span>
                       )}
                       {story.source && (
                         <>
-                          <span style={{ color: "#3A362F" }}>·</span>
-                          <span style={{ color: "#6E6862", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{story.source}</span>
+                          <span style={{ color: "var(--c-dim2)" }}>·</span>
+                          <span style={{ color: "var(--c-faint)", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{story.source}</span>
                         </>
                       )}
                     </div>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "#3a3128", flexShrink: 0 }}>{String(idx + 1).padStart(2, "0")}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "var(--c-dim2)", flexShrink: 0 }}>{String(idx + 1).padStart(2, "0")}</span>
                   </div>
-                  <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "18px", lineHeight: 1.42, color: "#ECE3D6", margin: 0 }}>
+                  <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "18px", lineHeight: 1.42, color: "var(--c-ink2)", margin: 0 }}>
                     {take}
                   </p>
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "13px", color: "#c9b8a6", fontSize: "12px", fontFamily: "'Manrope', sans-serif" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "13px", color: "var(--c-sub)", fontSize: "12px", fontFamily: "'Manrope', sans-serif" }}>
                     Read the story <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </motion.button>
@@ -211,7 +211,7 @@ const BriefPage = () => {
             })}
           </div>
         ) : (
-          <p style={{ color: "#8A847C", textAlign: "center", padding: "48px 0", fontSize: "14px" }}>
+          <p style={{ color: "var(--c-muted)", textAlign: "center", padding: "48px 0", fontSize: "14px" }}>
             No stories are ready right now. Check back soon.
           </p>
         )}
