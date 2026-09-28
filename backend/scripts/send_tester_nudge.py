@@ -30,13 +30,14 @@ from urllib.parse import quote
 # never fail because a virtualenv is missing the app's dependencies.
 
 # ── The testing window ───────────────────────────────────────────────────────
-# Day 1 = 5 September 2026, the day the nudges actually started going out.
-# 21 days, not Google's minimum 14: the extra week is deliberate buffer, so a
-# tester who joins late or drops out for a few days can't drag the whole group
-# back under the 14-day bar. Google counts continuous days on the running
-# closed test, not from when testers originally joined -- see the rejection.
-START_DATE = date(2026, 9, 5)
-TOTAL_DAYS = 21
+# Second run. Day 1 = 26 September 2026, when the new closed test started
+# (the first run, from 5 September, was rejected and the clock restarted --
+# Google counts continuous days on the running closed test, not from when
+# testers originally joined). 14 days is Google's minimum; the emails ask
+# testers to stay "until at least" the end date and promise an all-clear
+# email, so a late finish never needs a second "please hang on" message.
+START_DATE = date(2026, 9, 26)
+TOTAL_DAYS = 14
 END_DATE = date.fromordinal(START_DATE.toordinal() + TOTAL_DAYS - 1)
 
 FEEDBACK_URL = "https://chintan.news/feedback"
@@ -190,6 +191,111 @@ def render(name: str, day: int) -> tuple[str, str, str]:
     return subject, html, text
 
 
+PLAY_LISTING = "https://play.google.com/store/apps/details?id=com.chintan.app"
+
+
+def render_update(name: str, day: int) -> tuple[str, str, str]:
+    """The 'new version is out' email: update, try light mode, open it daily.
+    Same shell and deliverability choices as render(): no images, no button."""
+    greeting = f"Hi {name}," if name else "Hi,"
+    days_left = max(TOTAL_DAYS - day, 0)
+    end_human = END_DATE.strftime("%d %B").lstrip("0")
+    link = feedback_link(name)
+    subject = "Chintan update is out — light mode is here"
+
+    font = "font-family:-apple-system,Helvetica,Arial,sans-serif;"
+    p = f"{font} font-size:15px; line-height:1.65; color:#B6AFA6; padding-bottom:16px;"
+    small = f"{font} font-size:13px; line-height:1.65; color:#8A847C;"
+    strong = "color:#ECE7E1;"
+    a_style = "color:#DC6B5A; text-decoration:underline;"
+
+    html = f"""\
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>{escape(subject)}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#0A0A0A;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0A0A0A;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%;">
+
+<tr><td align="center" style="padding-bottom:8px; font-family:'Courier New',monospace; font-size:11px; letter-spacing:3px; color:#847D75; text-transform:uppercase;">
+  Chintan &middot; Day {day} of {TOTAL_DAYS}
+</td></tr>
+
+<tr><td style="background-color:#131211; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:34px 28px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td style="{p}">{escape(greeting)}</td></tr>
+    <tr><td style="{p}">
+      A new version of Chintan is out, and the thing most of you asked for is in it:
+      <strong style="{strong}">light mode</strong>.
+    </td></tr>
+    <tr><td style="{p}">
+      <strong style="{strong}">1. Update the app.</strong> Open the Play Store, search Chintan
+      and tap <em>Update</em>, or <a href="{PLAY_LISTING}" style="{a_style}">open it on the Play Store here</a>.
+      No Update button yet? Give it a few hours; Google rolls updates out gradually.
+    </td></tr>
+    <tr><td style="{p}">
+      <strong style="{strong}">2. Try light mode.</strong> Tap the menu (&#9776;, top left),
+      then <em>Appearance</em> at the bottom, then Light. Or pick System to follow your phone.
+    </td></tr>
+    <tr><td style="{p}">
+      <strong style="{strong}">3. Open it once a day.</strong> Read a story or two with your
+      morning chai; two minutes is plenty. Steady daily use through the test is what
+      Google looks at before letting Chintan go public.
+    </td></tr>
+    <tr><td style="{font} font-size:15px; line-height:1.65; color:#B6AFA6;">
+      Also fixed: the white strips at the top and bottom of the screen, stories filed
+      under the wrong section, and a few smaller bugs. If anything looks off,
+      <a href="{link}" style="{a_style}">tell me here</a> or just reply. One line is enough.
+    </td></tr>
+  </table>
+</td></tr>
+
+<tr><td style="padding-top:24px; {small}">
+  Please keep the app installed and stay in the testing group until at least
+  <strong style="color:#B6AFA6;">{end_human}</strong> ({days_left} days from today).
+  I'll email when we're through. If people drop out, Google restarts the clock for everyone.
+</td></tr>
+
+<tr><td align="center" style="padding-top:28px; {font} font-size:11px; color:#847D75;">
+  Chintan &middot; Don't just consume. Contemplate.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+    text = (
+        f"{greeting}\n\n"
+        f"A new version of Chintan is out, and the thing most of you asked for is in it: light mode.\n\n"
+        f"1. Update the app. Open the Play Store, search Chintan and tap Update, or open it here:\n"
+        f"{PLAY_LISTING}\n"
+        f"No Update button yet? Give it a few hours; Google rolls updates out gradually.\n\n"
+        f"2. Try light mode. Tap the menu (top left), then Appearance at the bottom, then Light. "
+        f"Or pick System to follow your phone.\n\n"
+        f"3. Open it once a day. Read a story or two with your morning chai; two minutes is plenty. "
+        f"Steady daily use through the test is what Google looks at before letting Chintan go public.\n\n"
+        f"Also fixed: the white strips at the top and bottom of the screen, stories filed under the "
+        f"wrong section, and a few smaller bugs. If anything looks off, tell me here or just reply. "
+        f"One line is enough:\n{link}\n\n"
+        f"Please keep the app installed and stay in the testing group until at least {end_human} "
+        f"({days_left} days from today). I'll email when we're through. If people drop out, Google "
+        f"restarts the clock for everyone.\n\n"
+        f"Chintan -- Don't just consume. Contemplate."
+    )
+    return subject, html, text
+
+
+TEMPLATES = {"nudge": render, "update": render_update}
+
+
 def send_one(api_key: str, to: str, subject: str, html: str, text: str) -> tuple[bool, str]:
     body = json.dumps({
         "from": EMAIL_FROM,
@@ -240,6 +346,8 @@ def main() -> int:
                     help=f"day number to state in the email (default: computed from {START_DATE})")
     ap.add_argument("--only", metavar="EMAIL",
                     help="send to just this one address — do this first, to yourself")
+    ap.add_argument("--kind", choices=sorted(TEMPLATES), default="nudge",
+                    help="which email: the regular nudge, or the 'new version is out' update")
     ap.add_argument("--list", default=DEFAULT_LIST,
                     help="path to the tester list JSON (default: scripts/testers.json)")
     args = ap.parse_args()
@@ -265,7 +373,7 @@ def main() -> int:
     print()
 
     if not args.send:
-        subject, _, text = render(recipients[0][1], day)
+        subject, _, text = TEMPLATES[args.kind](recipients[0][1], day)
         print(f"Subject: {subject}\n")
         print(text)
         print("\n--- recipients ---")
@@ -281,7 +389,7 @@ def main() -> int:
 
     ok = failed = 0
     for email, name in recipients:
-        subject, html, text = render(name, day)
+        subject, html, text = TEMPLATES[args.kind](name, day)
         good, detail = send_one(api_key, email, subject, html, text)
         print(f"  {'OK  ' if good else 'FAIL'} {email:38} {detail}")
         ok, failed = (ok + 1, failed) if good else (ok, failed + 1)
