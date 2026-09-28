@@ -189,22 +189,26 @@ def _independent_domain_count(citations: list[dict]) -> int:
     return len({_registrable_domain(c["url"]) for c in citations if c.get("url")})
 
 
-def _extract_search_result(content_blocks: list) -> Optional[dict]:
-    """Parse one Messages API response's content blocks into verified content,
-    or None if verification doesn't clear the bar.
+def _block_type(b):
+    return getattr(b, "type", None) or (b.get("type") if isinstance(b, dict) else None)
+
+
+def _collect_answer(content_blocks: list) -> Optional[tuple[str, list[dict]]]:
+    """Raw (answer_text, citations) from one response, or None when the search
+    tool itself reported an error. Shared by the calendar and the Desk; each
+    applies its own cleaning and verification bar on top.
 
     Handles the two ways this can legitimately fail without raising:
       - a web_search_tool_result block carrying a
         web_search_tool_result_error (rate limit, max_uses_exceeded, etc.) --
         these come back as HTTP 200, so this is the only way to detect them
-      - citations that don't reach RESEARCH_MIN_INDEPENDENT_DOMAINS
+      - (the caller's job) citations that don't reach its domain bar
 
     `content_blocks` is `response.content` from the SDK -- a list of objects
     with a `.type` attribute (SDK objects in production, plain dicts with a
     "type" key are also accepted so tests don't need to construct SDK types).
     """
-    def block_type(b):
-        return getattr(b, "type", None) or (b.get("type") if isinstance(b, dict) else None)
+    block_type = _block_type
 
     for block in content_blocks:
         if block_type(block) == "web_search_tool_result":
@@ -248,6 +252,17 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
             if url:
                 citations.append({"url": url, "title": title or ""})
 
+    return "".join(text_parts), citations
+
+
+def _extract_search_result(content_blocks: list) -> Optional[dict]:
+    """Calendar card: verified {content, citations}, or None if verification
+    doesn't clear the bar (see _collect_answer for the tool-error case)."""
+    collected = _collect_answer(content_blocks)
+    if collected is None:
+        return None
+    raw, citations = collected
+
     # Citations are counted from the ANSWER blocks only, deliberately: the
     # claim this module makes is "the text being shown is backed by 2+
     # independent domains." Counting sources the model merely looked at
@@ -256,7 +271,7 @@ def _extract_search_result(content_blocks: list) -> Optional[dict]:
     # Concatenated, NOT space-joined: these are contiguous fragments of one
     # continuous answer, split where citations attach, and they carry their
     # own spacing. _clean_answer repairs either kind of seam defensively.
-    content = _clean_answer("".join(text_parts))
+    content = _clean_answer(raw)
     if not content or _independent_domain_count(citations) < RESEARCH_MIN_INDEPENDENT_DOMAINS:
         return None
 
@@ -387,3 +402,185 @@ async def research_topic(
         upsert=True,
     )
     return result
+
+
+# ── Chintan Desk research ────────────────────────────────────────────────────
+# Same search tool and citation plumbing as the calendar, different contract,
+# decided in /plan-eng-review 2026-09-28 (D9, D11a):
+#   - structured output (headline, summary, key points, keywords), because a
+#     desk item becomes a feed article / developing story, not a card paragraph
+#   - returns the independent-domain COUNT instead of a pass/fail, so the
+#     caller can offer the single-source override (1 domain + a typed reason);
+#     0 domains is always a failure
+#   - its own daily cap, so desk use can't starve the calendar
+#   - NO failure cache: a breaking story that fails at 10:02 must be retryable
+#     at 10:12, not blocked for 20 hours
+#   - a longer timeout, because it runs as a background job, not inline
+
+DESK_MAX_SEARCHES_PER_CALL = 5
+DESK_TIMEOUT_SECONDS = 90
+DESK_HEADLINE_MAX = 120
+DESK_SUMMARY_MAX = 700
+DESK_POINT_MAX = 220
+DESK_MAX_POINTS = 5
+DESK_MIN_KEYWORDS = 3
+DESK_MAX_KEYWORDS = 5
+
+_DESK_SYSTEM = (
+    "You are the research desk for Chintan, an Indian news app. Search the web "
+    "for the topic you're given, then reply in EXACTLY this format and nothing "
+    "else:\n\n"
+    "HEADLINE: <a specific, factual news headline, under 15 words>\n"
+    "SUMMARY: <2-3 sentences: what happened, who, where, when, and why it "
+    "matters to an Indian reader>\n"
+    "POINTS:\n"
+    "- <a key fact, one sentence>\n"
+    "- <another key fact>\n"
+    "- <up to 5 points>\n"
+    "KEYWORDS: <3 to 5 specific terms separated by semicolons that together "
+    "identify THIS story and would not match a different one: names of people, "
+    "places, organisations, events. Never generic words like 'india', "
+    "'government', 'protest', 'match'.>\n\n"
+    "Rules: state only what your search results support. Put the most recent "
+    "verified development first. If sources conflict on a central fact, say "
+    "so as a fact. Never narrate your process, never mention searching or "
+    "sources, no preamble, no sign-off, no markdown other than the dashes."
+)
+
+# Bold may wrap the label ("**HEADLINE**:") or the label and colon
+# ("**HEADLINE:**"); both occur in practice.
+_SECTION_RE = re.compile(
+    r"^\s*\**\s*(HEADLINE|SUMMARY|POINTS|KEYWORDS)\s*\**\s*:\s*\**\s*(.*)$", re.IGNORECASE)
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"\s+", " ", text or "").strip()
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    return re.sub(r"([.!?])([A-Z])", r"\1 \2", text)
+
+
+def _cap(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _parse_desk_answer(raw: str) -> Optional[dict]:
+    """Parse the labelled reply into fields, or None if the reply is unusable
+    (no headline or no summary). Pure, so the format contract is testable
+    without the API.
+
+    Tolerant of what the API actually does to text: citation boundaries split
+    a line into fragments (so sections are found line-by-line on the JOINED
+    text), models sometimes bold the labels, and points may use '-', '*' or
+    '•'. Keywords are lower-cased and de-duplicated; fewer than
+    DESK_MIN_KEYWORDS is not a parse failure (the caller decides), because
+    a normal story can publish without them.
+    """
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in (raw or "").splitlines():
+        m = _SECTION_RE.match(line)
+        if m:
+            current = m.group(1).upper()
+            sections.setdefault(current, [])
+            if m.group(2).strip():
+                sections[current].append(m.group(2).strip())
+        elif current and line.strip():
+            sections[current].append(line.strip())
+
+    headline = _cap(_tidy(" ".join(sections.get("HEADLINE", []))).strip('"'), DESK_HEADLINE_MAX)
+    summary = _cap(_tidy(" ".join(sections.get("SUMMARY", []))), DESK_SUMMARY_MAX)
+    if not headline or not summary:
+        return None
+
+    points = []
+    for line in sections.get("POINTS", []):
+        p = _tidy(re.sub(r"^[-*•\d.)\s]+", "", line))
+        if p:
+            points.append(_cap(p, DESK_POINT_MAX))
+    points = points[:DESK_MAX_POINTS]
+
+    keywords: list[str] = []
+    for kw in re.split(r"[;,\n]", " ".join(sections.get("KEYWORDS", []))):
+        kw = re.sub(r"\s+", " ", kw).strip(" .\"'").lower()
+        if kw and kw not in keywords and len(kw) <= 40:
+            keywords.append(kw)
+    keywords = keywords[:DESK_MAX_KEYWORDS]
+
+    return {"headline": headline, "summary": summary, "points": points, "keywords": keywords}
+
+
+def _dedupe_citations(citations: list[dict]) -> list[dict]:
+    """One entry per URL, first title wins, order preserved (the first-cited
+    source is treated as the strongest)."""
+    seen, out = set(), []
+    for c in citations:
+        url = c.get("url")
+        if url and url not in seen:
+            seen.add(url)
+            out.append({"url": url, "title": c.get("title") or ""})
+    return out
+
+
+async def _under_desk_cap(db, daily_cap: int) -> bool:
+    if daily_cap <= 0:
+        return False
+    today = datetime.now(timezone.utc).date().isoformat()
+    doc = await db.desk_research_stats.find_one({"_id": today})
+    return (doc or {}).get("calls", 0) < daily_cap
+
+
+async def research_desk(anthropic_client, db, model: str, topic: str, daily_cap: int) -> dict:
+    """Research one Desk topic. Always returns a dict:
+        {"ok": True, headline, summary, points, keywords, citations, domain_count}
+        {"ok": False, "reason": "cap" | "timeout" | "error" | "tool_error"
+                                  | "unparseable" | "no_sources"}
+    domain_count may be 1: the caller decides whether the single-source
+    override applies. Nothing is cached, success or failure (see header)."""
+    if not await _under_desk_cap(db, daily_cap):
+        return {"ok": False, "reason": "cap"}
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    await db.desk_research_stats.update_one({"_id": today}, {"$inc": {"calls": 1}}, upsert=True)
+
+    try:
+        response = await asyncio.wait_for(
+            anthropic_client.messages.create(
+                model=model,
+                max_tokens=1500,
+                system=_DESK_SYSTEM,
+                messages=[{"role": "user", "content": f"Topic: {topic}"}],
+                tools=[{
+                    "type": RESEARCH_TOOL_VERSION,
+                    "name": "web_search",
+                    "max_uses": DESK_MAX_SEARCHES_PER_CALL,
+                }],
+            ),
+            timeout=DESK_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"research_desk: timed out on '{topic}'")
+        return {"ok": False, "reason": "timeout"}
+    except Exception as e:
+        logger.error(f"research_desk: error on '{topic}': {e}")
+        return {"ok": False, "reason": "error"}
+
+    return _desk_result_from_blocks(response.content)
+
+
+def _desk_result_from_blocks(content_blocks: list) -> dict:
+    """Pure tail of research_desk, split out so tests can feed recorded
+    response shapes straight in."""
+    collected = _collect_answer(content_blocks)
+    if collected is None:
+        return {"ok": False, "reason": "tool_error"}
+    raw, citations = collected
+    parsed = _parse_desk_answer(raw)
+    if parsed is None:
+        return {"ok": False, "reason": "unparseable"}
+    citations = _dedupe_citations(citations)
+    domain_count = _independent_domain_count(citations)
+    if domain_count == 0:
+        return {"ok": False, "reason": "no_sources"}
+    return {"ok": True, **parsed, "citations": citations, "domain_count": domain_count}

@@ -129,6 +129,23 @@ def _still_arrangeable(counts: Dict[str, int], remaining_before: int, picking: s
     return True
 
 
+def pin_first(ordered: List[dict], is_pinned) -> List[dict]:
+    """Move the single pinned story (a Desk 'Breaking' item inside its pin
+    window) to slot 1. Applied AFTER diversify, and only to page 1 by the
+    caller, so the pin can't be undone by the variety rules and doesn't
+    reappear on later pages. If several qualify, the one already ranked
+    highest wins; the rest keep their (boosted) positions.
+
+    The pinned slot is exempt from the no-two-in-a-row rule by design: a
+    Breaking story outranks variety for its 6 hours."""
+    for i, article in enumerate(ordered):
+        if is_pinned(article):
+            if i == 0:
+                return ordered
+            return [article] + ordered[:i] + ordered[i + 1:]
+    return ordered
+
+
 def max_consecutive_repeats(articles: List[dict]) -> int:
     """Longest run of one category. Used by tests, and handy in a REPL when
     someone reports the feed feeling samey again."""

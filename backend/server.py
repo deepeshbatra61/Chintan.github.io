@@ -60,6 +60,9 @@ import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
 import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
+import desk          # Chintan Desk pure rules — see backend/desk.py
+import desk_auth     # Desk authentication — see backend/desk_auth.py
+import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -117,6 +120,21 @@ def _int_env(name: str, default: int) -> int:
 INGEST_FETCH_LIMIT = _int_env("INGEST_FETCH_LIMIT", 400)         # max articles stored per cycle (doubled)
 INGEST_SUMMARIZE_LIMIT = _int_env("INGEST_SUMMARIZE_LIMIT", 30)  # max LLM summaries per cycle
 INGEST_SCHEDULE_ENABLED = os.environ.get("INGEST_SCHEDULE_ENABLED", "true").lower() != "false"
+
+# ── Chintan Desk (manual news, chintan.news/admin) — desk*.py ────────────────
+# The Desk API is invisible (404) unless DESK_PROXY_SECRET is set AND matches;
+# unset means the whole Desk is off, never open.
+DESK_PROXY_SECRET = os.environ.get("DESK_PROXY_SECRET", "")
+DESK_ENCRYPTION_KEY = os.environ.get("DESK_ENCRYPTION_KEY", "")
+DESK_RESEARCH_DAILY_CAP = _int_env("DESK_RESEARCH_DAILY_CAP", 15)
+# NewsAPI's free tier delivers articles ~24h after publication. Ranking uses
+# rank_at = published_at + this delay so API stories and real-time Desk
+# stories compete on one clock (desk.rank_at). Set to 0 on a real-time plan.
+try:
+    NEWSAPI_DELAY_H = float(os.environ.get("NEWSAPI_DELAY_H", "24"))
+except ValueError:
+    NEWSAPI_DELAY_H = 24.0
+DEFAULT_ARTICLE_IMAGE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
 
 # AI model used for summaries + on-demand features (Ask AI, Other Side, Think
 # Deeper, polls). Default haiku — cheap and safe if AI_MODEL is unset in prod.
@@ -742,11 +760,13 @@ async def _run_ingest_cycle_body() -> None:
     if api_articles:
         new_count = 0
         updated_count = 0
+        new_articles = []
         for article in api_articles:
             existing = await db.articles.find_one({"article_id": article["article_id"]})
             if not existing:
                 await db.articles.insert_one(article)
                 new_count += 1
+                new_articles.append(article)
             else:
                 await db.articles.update_one(
                     {"article_id": article["article_id"]},
@@ -756,6 +776,7 @@ async def _run_ingest_cycle_body() -> None:
                         "content": article["content"],
                         "image_url": article["image_url"],
                         "published_at": article["published_at"],
+                        "rank_at": article["rank_at"],
                         "is_developing": article["is_developing"],
                         "is_breaking": article["is_breaking"],
                     }},
@@ -765,6 +786,7 @@ async def _run_ingest_cycle_body() -> None:
             f"Background ingestor: {new_count} new, {updated_count} updated "
             f"(total fetched: {len(api_articles)})"
         )
+        await _absorb_into_desk(new_articles)
     else:
         logger.warning("Background ingestor: fetch_from_newsapi returned 0 articles")
 
@@ -892,9 +914,11 @@ async def _run_ingest_cycle_body() -> None:
             # keywords (country/leader/capital names like "islamabad" or
             # "tehran") that, on their own, will eventually collide with an
             # unrelated story — so treat them like "auto" and require 2 hits.
-            if kind == "auto" and len(keywords) < 2:
+            if kind in ("auto", "desk") and len(keywords) < 2:
                 continue
-            min_matches = 2 if kind in ("auto", "wave") else 1
+            # "desk" keywords are written by Claude too, so they get the same
+            # 2-hit bar as "auto" (/plan-eng-review 2026-09-28).
+            min_matches = 2 if kind in ("auto", "wave", "desk") else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
@@ -923,6 +947,9 @@ async def _run_ingest_cycle_body() -> None:
                     ).isoformat()
                 await db.developing_stories.update_one({"story_id": topic["story_id"]}, update)
                 logger.info(f"Developing stories: +{len(matched_ids)} article(s) → {topic['story_id']}")
+
+    # ── 6.1. Close Desk developing stories that have gone quiet ──────────────
+    await _close_quiet_desk_stories()
 
     # ── 6.5. Reconcile wave-topic tags against the current (stricter) matcher.
     #       Wave stories accumulate article_ids over months via $addToSet,
@@ -970,6 +997,69 @@ async def _run_ingest_cycle_body() -> None:
 
     # ── 9. Expire scout stories past their rolling TTL ───────────────────────
     await _expire_scout_stories()
+
+
+async def _absorb_into_desk(new_articles: list) -> None:
+    """D10: for ABSORB_WINDOW_H after a Normal Desk story is published, API
+    articles covering the same event (2-hit keyword match) are folded into it
+    instead of appearing as separate cards a day later. They stay in the
+    database with merged_into set; the Desk lists them with an Undo."""
+    if not new_articles:
+        return
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        hosts = await db.articles.find(
+            {"origin": "desk", "absorb_until": {"$gt": now_iso}, "desk_hidden": {"$ne": True}},
+            {"_id": 0, "article_id": 1, "keywords": 1},
+        ).to_list(50)
+        if not hosts:
+            return
+        absorbed = 0
+        for art in new_articles:
+            text = f"{art.get('title', '')} {art.get('description', '')}"
+            for host in hosts:
+                if desk.matches_story(host.get("keywords") or [], text):
+                    await db.articles.update_one(
+                        {"article_id": art["article_id"], "absorb_exempt": {"$ne": True}},
+                        {"$set": {"merged_into": host["article_id"]}},
+                    )
+                    absorbed += 1
+                    break
+        if absorbed:
+            logger.info(f"Desk: absorbed {absorbed} API article(s) into desk stories")
+    except Exception:
+        logger.error(f"Desk absorb failed: {traceback.format_exc()}")
+
+
+async def _close_quiet_desk_stories() -> None:
+    """Desk developing stories end on the rules in desk.lifecycle_decision:
+    minimum 24h, then a heat-based quiet window, 14-day cap unless long-running."""
+    try:
+        now = datetime.now(timezone.utc)
+        async for story in db.developing_stories.find({"kind": "desk", "is_active": True}, {"_id": 0}):
+            decision, reason, _ = desk.lifecycle_decision(story, now)
+            if decision == "end":
+                await db.developing_stories.update_one(
+                    {"story_id": story["story_id"], "is_active": True},
+                    {"$set": {"is_active": False, "ended_reason": reason, "ended_at": now.isoformat()}},
+                )
+                logger.info(f"Desk story {story['story_id']} ended: {reason}")
+    except Exception:
+        logger.error(f"Desk lifecycle failed: {traceback.format_exc()}")
+
+
+async def _backfill_rank_at() -> None:
+    """One-time: give every stored article a rank_at (D8). Idempotent: only
+    touches documents that don't have one yet."""
+    n = 0
+    async for a in db.articles.find({"rank_at": {"$exists": False}}, {"_id": 0, "article_id": 1, "published_at": 1, "origin": 1}):
+        delay = 0.0 if a.get("origin") == "desk" else NEWSAPI_DELAY_H
+        value = desk.rank_at(a.get("published_at"), delay) or a.get("published_at")
+        if value:
+            await db.articles.update_one({"article_id": a["article_id"]}, {"$set": {"rank_at": value}})
+            n += 1
+    if n:
+        logger.info(f"rank_at backfill: {n} articles")
 
 
 async def _run_cleanup_cycle() -> None:
@@ -1122,6 +1212,10 @@ async def _run_startup_migrations() -> None:
     # Sequential: the recategorize pass must see the other migration's output.
     await _run_category_migration()
     await _run_recategorize()
+    try:
+        await _backfill_rank_at()
+    except Exception:
+        logger.error(f"rank_at backfill failed: {traceback.format_exc()}")
 
 
 @asynccontextmanager
@@ -1193,6 +1287,18 @@ async def lifespan(app: FastAPI):
     await db.articles.create_index([("published_at", -1)])
     await db.articles.create_index([("category", 1), ("published_at", -1)])
     await db.developing_stories.create_index("story_id", unique=True)
+    # Ranking clock (D8): both feed paths sort on rank_at.
+    await db.articles.create_index([("rank_at", -1)])
+    await db.articles.create_index([("category", 1), ("rank_at", -1)])
+    await db.articles.create_index("merged_into", sparse=True)
+    await db.articles.create_index("origin", sparse=True)
+    # Desk
+    await db.desk_admins.create_index("email", unique=True)
+    await db.desk_sessions.create_index("token_hash", unique=True)
+    await db.desk_sessions.create_index("admin_id")
+    await db.desk_drafts.create_index("draft_id", unique=True)
+    await db.desk_drafts.create_index([("status", 1), ("created_at", -1)])
+    await db.desk_audit.create_index([("ts", -1)])
     # research_cache/_agent_stats use their own composite string _id (see
     # research.py's _cache_key/_under_daily_cap) — no extra index needed
     # beyond Mongo's default _id index.
@@ -1494,8 +1600,10 @@ def _score_article(
         elif avg < 0.3:
             score -= 10.0
 
-    # Signal 5: Freshness (10 pts max)
-    published_at = article.get("published_at")
+    # Signal 5: Freshness (10 pts max). On rank_at, not published_at: every
+    # NewsAPI article arrives ~24h late, so on published_at this signal never
+    # fired at all (all stories were already >24h old). See desk.rank_at.
+    published_at = article.get("rank_at") or article.get("published_at")
     if isinstance(published_at, str):
         try:
             published_at = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
@@ -4296,7 +4404,7 @@ async def fetch_from_newsapi() -> list:
         raw_content = clean_newsapi_text((a.get("content") or description).strip())
         source_name = (a.get("source") or {}).get("name") or "News Feed"
         published_at = a.get("publishedAt") or datetime.now(timezone.utc).isoformat()
-        image_url = a.get("urlToImage") or "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
+        image_url = a.get("urlToImage") or DEFAULT_ARTICLE_IMAGE
 
         if not title or title == "[Removed]":
             continue
@@ -4358,6 +4466,7 @@ async def fetch_from_newsapi() -> list:
             "author": a.get("author"),
             "published_at": published_at,
             "image_url": image_url,
+            "rank_at": desk.rank_at(published_at, NEWSAPI_DELAY_H) or published_at,
             "is_developing": is_recent,
             "is_breaking": is_breaking,
             "likes": 0,
@@ -4398,6 +4507,10 @@ async def get_articles(
     # Only return articles from the last 7 days
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     query["published_at"] = {"$gte": seven_days_ago.isoformat()}
+    # Desk: hide API articles folded into a Desk story (D10) and unpublished
+    # Desk items. Both fields are absent on nearly every document.
+    query["merged_into"] = {"$exists": False}
+    query["desk_hidden"] = {"$ne": True}
 
     user = await get_current_user(request) if request else None
     user_interests: List[str] = user.get("interests", []) if user else []
@@ -4412,16 +4525,22 @@ async def get_articles(
     if not user or not user_interests:
         pool_size = max(60, skip + limit + 40)
         fresh = await db.articles.find(query, {"_id": 0}).sort(
-            "published_at", -1
+            "rank_at", -1
         ).limit(pool_size).to_list(pool_size)
         # Rank position as score: stable, deterministic, preserves freshness.
-        ranked = [(float(len(fresh) - i), a) for i, a in enumerate(fresh)]
+        # Desk heat adds whole SLOTS here, since adjacent scores are 1 apart
+        # (desk.heat_slots); it's 0 for every ordinary article.
+        now = datetime.now(timezone.utc)
+        ranked = [(float(len(fresh) - i) + desk.heat_slots(a, now), a) for i, a in enumerate(fresh)]
+        ranked.sort(key=lambda x: x[0], reverse=True)
         # penalty=6, not the default 22: that default is sized for personalised
         # scores spanning ~100 points, but here adjacent stories are 1 point
         # apart, so 22 would push a repeated category ~22 slots down and bury
         # genuinely fresh news. 6 keeps recency dominant while the hard
         # adjacency rule still guarantees no two in a row.
         ordered = feed.diversify(ranked, needed=skip + limit, penalty=6.0)
+        if skip == 0:
+            ordered = feed.pin_first(ordered, lambda a: desk.article_is_pinned(a, now))
         return ordered[skip:skip + limit]
 
     # ── Authenticated path: fetch candidates, score, paginate ─────────────────
@@ -4431,7 +4550,7 @@ async def get_articles(
     # round trips into one (bounded by the slowest of the three, not the sum).
     CANDIDATE_LIMIT = max(200, skip + limit + 50)
     candidates, affinity, relevance_docs = await asyncio.gather(
-        db.articles.find(query, {"_id": 0}).sort("published_at", -1).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT),
+        db.articles.find(query, {"_id": 0}).sort("rank_at", -1).limit(CANDIDATE_LIMIT).to_list(CANDIDATE_LIMIT),
         _get_user_affinity_scores(user["user_id"]),
         db.relevance_feedback.find(
             {"user_id": user["user_id"]}, {"_id": 0, "article_id": 1, "is_relevant": 1}
@@ -4474,7 +4593,7 @@ async def get_articles(
     # 3. Score every candidate, sort, paginate
     now = datetime.now(timezone.utc)
     scored = [
-        (_score_article(a, user_interests, affinity, relevance_by_category, now), a)
+        (_score_article(a, user_interests, affinity, relevance_by_category, now) + desk.heat_points(a, now), a)
         for a in candidates
     ]
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -4485,6 +4604,8 @@ async def get_articles(
     # what the previous page ended with, so page 2 would happily open with the
     # same category page 1 closed on.
     ordered = feed.diversify(scored, needed=skip + limit)
+    if skip == 0:
+        ordered = feed.pin_first(ordered, lambda a: desk.article_is_pinned(a, now))
     return ordered[skip:skip + limit]
 
 @api_router.get("/articles/developing")
@@ -6007,7 +6128,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
             })
             continue
 
-        min_articles = 1 if kind in ("scheduled", "scout") else 3
+        min_articles = 1 if kind in ("scheduled", "scout", "desk") else 3
         if len(article_ids) < min_articles:
             continue                         # too thin to be a "story" yet
         latest_article = await db.articles.find_one(
@@ -6015,8 +6136,8 @@ async def get_developing_stories_list(feed_bar: bool = False):
             {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
             sort=[("published_at", -1)],
         )
-        if kind == "scheduled":
-            pass  # the date window already IS the relevance/freshness signal
+        if kind in ("scheduled", "desk"):
+            pass  # date window / Desk lifecycle rules already decide relevance
         elif kind == "scout":
             if not latest_article or not _fresh(latest_article.get("published_at"), hours=12):
                 continue                     # short-lived by design — stale means done
@@ -6035,13 +6156,15 @@ async def get_developing_stories_list(feed_bar: bool = False):
             # above already had; this branch never got it.
             "last_updated": (latest_article or {}).get("published_at") or story.get("last_updated"),
             "latest_article": latest_article,
+            "heat": story.get("heat") if kind == "desk" else None,
         })
 
     # Explicit final sort by effective recency — the initial Mongo query
     # sorts by the raw last_updated field, which (as above) doesn't always
     # reflect real content activity. Re-sorting here guarantees a genuinely
     # fresh story always outranks a dormant one regardless of kind.
-    result.sort(key=lambda r: r.get("last_updated") or "", reverse=True)
+    # Desk stories marked Big/Breaking lead the strip; everything else by recency.
+    result.sort(key=lambda r: ((r.get("heat") or 0) >= desk.HEAT_BIG, r.get("last_updated") or ""), reverse=True)
     return result
 
 
@@ -6126,7 +6249,7 @@ async def get_developing_story_detail(story_id: str):
     # ── "Where it stands" one-liner, cached until new updates arrive ──────────
     count = len(article_ids)
     summary = story.get("state_summary")
-    if ANTHROPIC_API_KEY and articles and (not summary or story.get("state_summary_count") != count):
+    if ANTHROPIC_API_KEY and articles and story.get("kind") != "desk" and (not summary or story.get("state_summary_count") != count):
         try:
             titles = "\n- ".join(a.get("title", "") for a in articles[:8])
             summary = (await _llm(
@@ -6279,6 +6402,25 @@ async def auth_callback_landing():
         "<h3>You're signed in</h3><p>You can return to the Chintan app.</p></body></html>"
     )
 
+
+def _desk_email(to: str, subject: str, text: str):
+    html = ("<pre style='font-family:-apple-system,Helvetica,Arial,sans-serif;"
+            "white-space:pre-wrap;font-size:14px'>" + _esc(text) + "</pre>")
+    return _send_email(to, subject, html, text)
+
+
+api_router.include_router(desk_routes.build_desk_router(
+    db=db,
+    auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
+    proxy_secret=lambda: DESK_PROXY_SECRET,
+    admin_emails=lambda: ADMIN_EMAILS,
+    research=lambda topic: research.research_desk(_anthropic_client, db, AI_MODEL, topic, DESK_RESEARCH_DAILY_CAP),
+    send_email=_desk_email,
+    registrable_domain=research._registrable_domain,
+    suggest_category=lambda topic: detect_category(topic, "")[0],
+    default_image=DEFAULT_ARTICLE_IMAGE,
+    logger=logger,
+))
 
 app.include_router(api_router)
 

@@ -126,3 +126,5 @@ websockets==15.0.1
 yarl==1.22.0
 zipp==3.23.0
 slowapi==0.1.9
+argon2-cffi==23.1.0
+pyotp==2.9.0

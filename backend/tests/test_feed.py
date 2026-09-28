@@ -171,3 +171,29 @@ def test_max_consecutive_repeats_counts_runs():
     assert feed.max_consecutive_repeats([art("a", "B")]) == 1
     assert feed.max_consecutive_repeats([art("a", "B"), art("b", "B"), art("c", "S")]) == 2
     assert feed.max_consecutive_repeats([art("a", "B"), art("b", "S"), art("c", "B")]) == 1
+
+
+# ───────────────────────── Desk Breaking pin ─────────────────────────
+
+def test_pin_moves_pinned_story_to_first_slot():
+    ordered = [art("a0", "Business"), art("a1", "Sports"), art("a2", "Politics")]
+    out = feed.pin_first(ordered, lambda a: a["article_id"] == "a2")
+    assert [a["article_id"] for a in out] == ["a2", "a0", "a1"]
+
+
+def test_pin_only_one_story_highest_ranked_wins():
+    ordered = [art("a0", "Business"), art("a1", "Sports"), art("a2", "Politics")]
+    out = feed.pin_first(ordered, lambda a: a["article_id"] in ("a1", "a2"))
+    assert [a["article_id"] for a in out] == ["a1", "a0", "a2"]
+
+
+def test_pin_noop_when_nothing_pinned_or_already_first():
+    ordered = [art("a0", "Business"), art("a1", "Sports")]
+    assert feed.pin_first(ordered, lambda a: False) == ordered
+    assert feed.pin_first(ordered, lambda a: a["article_id"] == "a0") == ordered
+
+
+def test_pin_never_drops_or_duplicates():
+    ordered = [art(f"a{i}", "Business") for i in range(6)]
+    out = feed.pin_first(ordered, lambda a: a["article_id"] == "a4")
+    assert sorted(a["article_id"] for a in out) == sorted(a["article_id"] for a in ordered)
