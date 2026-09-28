@@ -134,3 +134,51 @@ a separate design question not explored in this review — this TODO is a pointe
 research agent. No design work done yet beyond keeping `research.py`'s interface general.
 
 **Depends on / blocked by:** The research agent itself must ship first.
+
+---
+
+## 6. Real-time RSS ingestion (next after the Desk)
+
+**What:** Add real-time RSS feeds from the Indian outlets already in the NewsAPI domain list
+(The Hindu, Indian Express, NDTV, Hindustan Times, Mint, and others) alongside NewsAPI.
+
+**Why:** NewsAPI's free Developer tier delays every article by ~24h (confirmed 2026-09-28:
+newest stored article is always ~24h old at ingest; 4 requests x 24 cycles = 96 of the
+100/day cap). Nothing is ever "breaking", the LIVE badge rarely fires, and developing-story
+detection runs a day behind.
+
+**Pros:** Every story gets fresh with no human in the loop; free; makes the freshness
+signal and developing detection work as designed.
+
+**Cons:** Per-feed parsing quirks, duplicate stories across RSS and NewsAPI (URL-md5
+dedup covers exact URLs only), and more volume through the categoriser.
+
+**Context:** The user chose to build the Desk first for editorial control and take this on
+"right after" (`/plan-eng-review` 2026-09-28, D7). The Desk introduces `rank_at` =
+published_at + per-source delay (NewsAPI 24h, Desk 0h), so RSS slots in with delay 0 and
+no ranking changes. Start at `fetch_from_newsapi()` in `backend/server.py`; reuse the
+blacklist, India-relevance filter and URL-md5 article_id.
+
+**Depends on / blocked by:** The Desk's `rank_at` field landing first.
+
+---
+
+## 7. Stop trusting forwarded client IPs from anywhere
+
+**What:** `backend/Procfile` runs uvicorn with `--proxy-headers --forwarded-allow-ips=*`,
+so any client can send a fake `X-Forwarded-For` and pick its own IP.
+
+**Why:** slowapi's per-IP limits on the app's login/signup key off that IP, so password-
+guessing limits on the main app can be bypassed with one header.
+
+**Pros:** Restores the rate limits that already exist on paper.
+
+**Cons:** A wrong value makes every request look like the same IP (Railway's proxy), which
+would rate-limit all users together. Must be verified, not guessed.
+
+**Context:** Found by the outside voice in `/plan-eng-review` (2026-09-28). The Desk avoids
+it separately (the website passes the client IP in a header the backend trusts only with
+the proxy secret). Check Railway's docs for its proxy address range, or read the
+right-most trusted hop, before changing.
+
+**Depends on / blocked by:** Nothing.
