@@ -58,7 +58,7 @@ NEWS_TYPES = ("normal", "developing")
 HEADLINE_MIN, HEADLINE_MAX = 8, 160
 SUMMARY_MIN, SUMMARY_MAX = 20, 900
 POINT_MAX, POINTS_MAX = 300, 5
-TOPIC_MIN, TOPIC_MAX = 3, 300
+TOPIC_MIN, TOPIC_MAX = 3, 600          # a pasted link can be long
 REASON_MIN = 10
 IMAGE_URL_MAX = 600
 KEYWORDS_MIN_DEVELOPING = 3
@@ -108,10 +108,25 @@ def normalize_topic(topic: str) -> str:
     return re.sub(r"\s+", " ", (topic or "").strip().lower())
 
 
+def topic_text(topic: str) -> str:
+    """The words a topic is about. For a pasted link that's the article
+    slug ("/news/sc-strikes-down-electoral-bonds-12345.html" → "sc strikes
+    down electoral bonds"), which is how a link can be deduplicated before
+    anything is fetched."""
+    t = (topic or "").strip()
+    if t.lower().startswith(("https://", "http://")) and " " not in t:
+        path = urlparse(t).path
+        slug = max(re.split(r"/+", path), key=len, default="")
+        slug = re.sub(r"\.(html?|cms|php|aspx?)$", "", slug)
+        words = [w for w in re.split(r"[-_]+", slug) if w and not w.isdigit() and len(w) < 30]
+        return " ".join(words)
+    return t
+
+
 def topic_terms(topic: str) -> list[str]:
     """Significant words of a topic, in order, de-duplicated."""
     out: list[str] = []
-    for w in re.findall(r"[a-z0-9][a-z0-9\-']*", normalize_topic(topic)):
+    for w in re.findall(r"[a-z0-9][a-z0-9\-']*", normalize_topic(topic_text(topic))):
         w = w.strip("-'")
         if len(w) > 2 and w not in _STOP and w not in out:
             out.append(w)

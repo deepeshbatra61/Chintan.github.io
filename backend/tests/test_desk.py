@@ -243,3 +243,18 @@ def test_heat_without_boost_flag_is_ignored_on_api_articles():
 def test_boosted_breaking_pins_from_boost_time():
     a = {"boosted": True, "heat": 4, "published_at": ago(30), "heat_from": ago(1)}
     assert desk.article_is_pinned(a, NOW)
+
+
+# ─────────────────────── links as topics ───────────────────────
+
+def test_topic_text_reads_article_slug_from_link():
+    assert desk.topic_text("https://www.thehindu.com/news/national/sc-strikes-down-electoral-bonds-scheme/article67845.ece") \
+        == "sc strikes down electoral bonds scheme"
+    assert desk.topic_text("https://www.ndtv.com/india-news/asian-games-india-medal-tally-12345.html") \
+        == "asian games india medal tally"
+    assert desk.topic_text("Plain headline stays") == "Plain headline stays"
+
+
+def test_link_topic_dedups_by_its_slug():
+    m = desk.dedup_candidates("https://x.com/news/electoral-bonds-struck-down-123.html", ARTS, STORIES)
+    assert m and m[0]["id"] == "a1"

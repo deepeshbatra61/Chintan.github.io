@@ -183,3 +183,14 @@ async def test_timeout_is_reported(monkeypatch):
     client = SimpleNamespace(messages=SimpleNamespace(create=slow))
     out = await research.research_desk(client, FakeDB(), "m", "t", daily_cap=5)
     assert out == {"ok": False, "reason": "timeout"}
+
+
+def test_prompt_plain_topic():
+    assert research.desk_prompt("Asiad medals") == "Topic: Asiad medals"
+
+
+def test_prompt_anchors_on_pasted_article():
+    p = research.desk_prompt("x", {"url": "https://ndtv.com/a", "title": "SC verdict", "site_name": "NDTV",
+                                   "description": "Court rules."})
+    assert "https://ndtv.com/a" in p and "SC verdict" in p and "NDTV" in p and "Court rules." in p
+    assert "\n" in p

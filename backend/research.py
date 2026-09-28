@@ -531,7 +531,25 @@ async def _under_desk_cap(db, daily_cap: int) -> bool:
     return (doc or {}).get("calls", 0) < daily_cap
 
 
-async def research_desk(anthropic_client, db, model: str, topic: str, daily_cap: int) -> dict:
+def desk_prompt(topic: str, source: Optional[dict] = None) -> str:
+    """What the model is asked. With a pasted link, the research is anchored
+    on that article (its title, outlet and description) so it covers THIS
+    story rather than whatever else the words match."""
+    if not source or not source.get("url"):
+        return f"Topic: {topic}"
+    lines = [f"Research this news story. The editor is looking at this article: {source['url']}"]
+    if source.get("title"):
+        lines.append(f"Its headline: {source['title']}")
+    if source.get("site_name"):
+        lines.append(f"Published by: {source['site_name']}")
+    if source.get("description"):
+        lines.append(f"Its standfirst: {source['description']}")
+    lines.append("Find this article and other reporting on the same event.")
+    return "\n".join(lines)
+
+
+async def research_desk(anthropic_client, db, model: str, topic: str, daily_cap: int,
+                        source: Optional[dict] = None) -> dict:
     """Research one Desk topic. Always returns a dict:
         {"ok": True, headline, summary, points, keywords, citations, domain_count}
         {"ok": False, "reason": "cap" | "timeout" | "error" | "tool_error"
@@ -550,7 +568,7 @@ async def research_desk(anthropic_client, db, model: str, topic: str, daily_cap:
                 model=model,
                 max_tokens=1500,
                 system=_DESK_SYSTEM,
-                messages=[{"role": "user", "content": f"Topic: {topic}"}],
+                messages=[{"role": "user", "content": desk_prompt(topic, source)}],
                 tools=[{
                     "type": RESEARCH_TOOL_VERSION,
                     "name": "web_search",

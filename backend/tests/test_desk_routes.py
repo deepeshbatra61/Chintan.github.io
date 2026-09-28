@@ -50,11 +50,13 @@ class Harness:
         self.research_result = dict(GOOD_RESEARCH)
         self.research_calls = 0
         self.research_gate = None
+        self.research_args = []
+        self.pages = {}          # url -> meta dict the fake fetcher returns
         self.auth = A.DeskAuth(self.db, KEY, now=self.now)
         app = FastAPI()
         app.include_router(desk_routes.build_desk_router(
             db=self.db, auth=self.auth, proxy_secret=lambda: PROXY,
-            admin_emails=lambda: {EMAIL}, research=self._research, send_email=self._email,
+            admin_emails=lambda: {EMAIL}, research=self._research, fetch_meta=self._fetch, send_email=self._email,
             registrable_domain=research._registrable_domain,
             suggest_category=lambda t: "Politics", default_image="https://img.example/x.jpg",
             logger=__import__("logging").getLogger("t"),
@@ -65,8 +67,13 @@ class Harness:
     def now(self):
         return datetime.now(timezone.utc) + self.clock_offset
 
-    async def _research(self, topic):
+    async def _fetch(self, url):
+        page = self.pages.get(url)
+        return dict(page) if page else None
+
+    async def _research(self, topic, source=None):
         self.research_calls += 1
+        self.research_args.append((topic, source))
         if self.research_gate:
             await self.research_gate.wait()
         return self.research_result
@@ -165,7 +172,8 @@ async def test_empty_configured_secret_keeps_desk_closed():
     app = FastAPI()
     app.include_router(desk_routes.build_desk_router(
         db=harness.db, auth=harness.auth, proxy_secret=lambda: "", admin_emails=lambda: {EMAIL},
-        research=harness._research, send_email=harness._email, registrable_domain=research._registrable_domain,
+        research=harness._research, fetch_meta=harness._fetch, send_email=harness._email,
+        registrable_domain=research._registrable_domain,
         suggest_category=lambda t: "Politics", default_image="x", logger=__import__("logging").getLogger("t")),
         prefix="/api")
     c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
@@ -408,3 +416,68 @@ async def test_boost_existing_article(h):
     assert desk.heat_points(a, datetime.now(timezone.utc)) > 20
     missing = await h.client.post("/api/desk/boost", headers=h.headers(), json={"type": "article", "id": "nope", "heat": 3})
     assert missing.status_code == 404
+
+
+# ─────────────────────── link or headline in ───────────────────────
+
+LINK = "https://www.ndtv.com/india-news/sc-strikes-down-electoral-bonds-4321.html"
+PAGE = {"title": "SC strikes down electoral bonds", "image": "https://c.ndtvimg.com/lead.jpg",
+        "description": "The Supreme Court on Thursday struck down the scheme.", "site_name": "NDTV"}
+
+
+async def test_link_already_in_chintan_is_an_exact_match(h):
+    await h.login()
+    await h.db.articles.insert_one({"article_id": "api9", "url": LINK, "title": "old", "source": "NDTV",
+                                    "published_at": datetime.now(timezone.utc).isoformat()})
+    out = await _draft(h, {**BODY, "topic": LINK}, force=False)
+    assert out["draft"] is None and out["matches"][0]["detail"].startswith("Same link")
+    assert h.research_calls == 0
+
+
+async def test_link_anchors_research_and_supplies_image_and_lead_source(h):
+    await h.login()
+    h.pages[LINK] = PAGE
+    out = await _draft(h, {**BODY, "topic": LINK})
+    await h.settle()
+    d = (await h.client.get(f"/api/desk/drafts/{out['draft']['draft_id']}", headers=h.headers())).json()
+    topic, source = h.research_args[-1]
+    assert topic == PAGE["title"] and source["url"] == LINK
+    assert d["image_url"] == PAGE["image"] and d["source_url"] == LINK
+    assert d["citations"][0]["url"] == LINK and d["domain_count"] == 3
+    assert d["attribution"] == "Chintan Desk · via NDTV, The Hindu"
+
+
+async def test_link_with_no_other_coverage_becomes_single_source_draft(h):
+    await h.login()
+    h.pages[LINK] = PAGE
+    h.research_result = {"ok": False, "reason": "no_sources"}
+    out = await _draft(h, {**BODY, "topic": LINK})
+    await h.settle()
+    d = (await h.client.get(f"/api/desk/drafts/{out['draft']['draft_id']}", headers=h.headers())).json()
+    assert d["status"] == "ready" and d["domain_count"] == 1 and d["note"]
+    assert any("one source" in e for e in d["errors"])          # needs a reason (D9)
+
+
+async def test_unreadable_link_with_no_research_explains_itself(h):
+    await h.login()
+    h.research_result = {"ok": False, "reason": "no_sources"}
+    out = await _draft(h, {**BODY, "topic": LINK})
+    await h.settle()
+    d = (await h.client.get(f"/api/desk/drafts/{out['draft']['draft_id']}", headers=h.headers())).json()
+    assert d["status"] == "failed" and "Paste the headline" in d["fail_message"]
+
+
+async def test_http_link_is_rejected_up_front(h):
+    await h.login()
+    r = await h.client.post("/api/desk/drafts", headers=h.headers(),
+                            json={**BODY, "topic": "http://example.com/story", "force": True})
+    assert r.status_code == 422 and "https" in r.json()["detail"]
+
+
+async def test_headline_draft_gets_image_from_first_source_with_one(h):
+    await h.login()
+    h.pages["https://indianexpress.com/b"] = {"title": "x", "image": "https://ie.com/i.jpg", "description": ""}
+    out = await _draft(h)
+    await h.settle()
+    d = (await h.client.get(f"/api/desk/drafts/{out['draft']['draft_id']}", headers=h.headers())).json()
+    assert d["image_url"] == "https://ie.com/i.jpg" and d["source_url"] is None

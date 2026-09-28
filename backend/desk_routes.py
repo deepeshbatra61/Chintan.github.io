@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 
 import desk
 import desk_auth as A
+from pagemeta import looks_like_url
 
 try:  # real driver in production; mongomock raises the same class
     from pymongo.errors import DuplicateKeyError
@@ -84,7 +85,7 @@ _PUBLIC_DRAFT_FIELDS = (
     "draft_id", "topic", "category", "news_type", "heat", "status", "fail_reason",
     "headline", "summary", "points", "keywords", "citations", "domain_count",
     "image_url", "single_source_reason", "long_running", "created_at", "updated_at",
-    "published_ref", "attribution",
+    "published_ref", "attribution", "source_url", "note",
 )
 FAIL_MESSAGES = {
     "cap": "Today's research limit is used up. It resets at midnight UTC.",
@@ -94,6 +95,7 @@ FAIL_MESSAGES = {
     "unparseable": "Research came back in an unusable shape. Try again or rephrase the topic.",
     "no_sources": "No source could be found for this. Too early, or worth rephrasing.",
     "stale": "Research was interrupted (server restart). Try again.",
+    "link_unreadable": "That link couldn't be opened (it may block previews or need a login). Paste the headline instead.",
 }
 
 
@@ -103,7 +105,8 @@ def build_desk_router(
     auth: A.DeskAuth,
     proxy_secret: Callable[[], Optional[str]],
     admin_emails: Callable[[], set],
-    research: Callable[[str], Awaitable[dict]],
+    research: Callable[[str, Optional[dict]], Awaitable[dict]],
+    fetch_meta: Callable[[str], Awaitable[Optional[dict]]],
     send_email: Callable[[str, str, str], Awaitable[bool]],
     registrable_domain: Callable[[str], str],
     suggest_category: Callable[[str], str],
@@ -194,6 +197,16 @@ def build_desk_router(
 
     # ── dedup ────────────────────────────────────────────────────────────────
     async def _candidates(topic: str) -> list:
+        exact = []
+        if looks_like_url(topic):
+            # The ingest keys every API article on its URL, so a link we
+            # already carry is an exact duplicate, found without any fetch.
+            hit = await db.articles.find_one(
+                {"url": topic.strip(), "merged_into": {"$exists": False}},
+                {"_id": 0, "article_id": 1, "title": 1, "category": 1, "source": 1})
+            if hit:
+                exact = [{"type": "article", "id": hit["article_id"], "title": hit.get("title", ""),
+                          "score": 1.0, "detail": f"Same link · {hit.get('source', '')}".strip(" ·")}]
         since = (desk.utcnow() - timedelta(days=7)).isoformat()
         articles = await db.articles.find(
             {"published_at": {"$gte": since}, "merged_into": {"$exists": False}},
@@ -202,7 +215,9 @@ def build_desk_router(
         stories = await db.developing_stories.find(
             {"is_active": True}, {"_id": 0, "story_id": 1, "title": 1, "keywords": 1, "kind": 1, "article_ids": 1},
         ).to_list(200)
-        return desk.dedup_candidates(topic, articles, stories)
+        fuzzy = [m for m in desk.dedup_candidates(topic, articles, stories)
+                 if not exact or m["id"] != exact[0]["id"]]
+        return (exact + fuzzy)[:5]
 
     @router.post("/check")
     async def check(body: TopicBody, ctx: dict = Depends(_session)):
@@ -227,22 +242,60 @@ def build_desk_router(
                 d = {**d, "status": "failed", "fail_reason": "stale"}
         return d
 
+    async def _first_image(urls: list) -> str:
+        for u in urls[:3]:
+            meta = await fetch_meta(u)
+            if meta and meta.get("image"):
+                return meta["image"]
+        return ""
+
     async def _run_research(draft_id: str, topic: str):
+        """Link or headline in; a reviewable draft out.
+
+            link ─▶ read its headline/image/description (pagemeta, SSRF-safe)
+                 ─▶ research anchored on that article
+            text ─▶ research on the words
+            then: the pasted link leads the sources; image = the link's, or
+            the first source page that has one.
+        If research finds nothing but the link itself was readable, the draft
+        is built from that one article and marked single-source, which needs
+        the owner's stated reason before it can publish (D9)."""
+        source = None
         try:
-            result = await research(topic)
+            if looks_like_url(topic):
+                source = await fetch_meta(topic.strip())
+                if source:
+                    source["url"] = topic.strip()
+            query = (source or {}).get("title") or desk.topic_text(topic) or topic
+            result = await research(query, source)
         except Exception as e:  # research is already defensive; belt and braces
             logger.error(f"desk research crashed for {draft_id}: {e}")
             result = {"ok": False, "reason": "error"}
+
         now = desk.utcnow().isoformat()
+        note = None
+        if not result.get("ok") and source and source.get("title") and source.get("description"):
+            result = {"ok": True, "headline": source["title"], "summary": source["description"],
+                      "points": [], "keywords": [], "citations": [], "domain_count": 0}
+            note = "Web research found nothing beyond your link yet, so this draft is built from that article alone."
+
         if not result.get("ok"):
             update = {"status": "failed", "fail_reason": result.get("reason", "error"), "updated_at": now}
+            if looks_like_url(topic) and not source:
+                update["fail_reason"] = "link_unreadable"
         else:
+            citations = list(result["citations"])
+            if source:
+                citations = [{"url": source["url"], "title": source.get("title", "")}] +                     [c for c in citations if c.get("url") != source["url"]]
+            domains = len({registrable_domain(c["url"]) for c in citations if c.get("url")})
+            image = (source or {}).get("image") or await _first_image([c["url"] for c in citations])
             update = {
-                "status": "ready", "fail_reason": None, "updated_at": now,
+                "status": "ready", "fail_reason": None, "updated_at": now, "note": note,
                 "headline": result["headline"], "summary": result["summary"],
                 "points": result["points"], "keywords": result["keywords"],
-                "citations": result["citations"], "domain_count": result["domain_count"],
-                "attribution": desk.attribution(result["citations"], registrable_domain),
+                "citations": citations, "domain_count": domains, "image_url": image,
+                "source_url": (source or {}).get("url"),
+                "attribution": desk.attribution(citations, registrable_domain),
             }
         # Only a still-researching draft is updated: a discard mid-research wins.
         await db.desk_drafts.update_one({"draft_id": draft_id, "status": "researching"}, {"$set": update})
@@ -250,6 +303,8 @@ def build_desk_router(
     @router.post("/drafts")
     async def create_draft(body: TopicBody, ctx: dict = Depends(_session)):
         errors = desk.validate_submit(body.topic, body.category, body.news_type, body.heat)
+        if looks_like_url(body.topic) and not body.topic.strip().lower().startswith("https://"):
+            errors.append("Paste the https:// version of the link.")
         if errors:
             raise HTTPException(status_code=422, detail=" ".join(errors))
         if not body.force:
@@ -282,6 +337,7 @@ def build_desk_router(
             "status": "researching", "fail_reason": None, "headline": "", "summary": "",
             "points": [], "keywords": [], "citations": [], "domain_count": 0,
             "image_url": "", "single_source_reason": "", "long_running": False,
+            "source_url": None, "note": None,
             "created_at": now.isoformat(), "updated_at": now.isoformat(),
             "created_by": ctx["email"], "published_ref": None,
         }

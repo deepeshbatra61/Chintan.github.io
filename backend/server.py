@@ -63,6 +63,7 @@ import research  # verified web research (native web_search + citation check) �
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
 import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
+import pagemeta     # SSRF-safe page metadata fetch for Desk links — see backend/pagemeta.py
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -6414,7 +6415,9 @@ api_router.include_router(desk_routes.build_desk_router(
     auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
     proxy_secret=lambda: DESK_PROXY_SECRET,
     admin_emails=lambda: ADMIN_EMAILS,
-    research=lambda topic: research.research_desk(_anthropic_client, db, AI_MODEL, topic, DESK_RESEARCH_DAILY_CAP),
+    research=lambda topic, source=None: research.research_desk(
+        _anthropic_client, db, AI_MODEL, topic, DESK_RESEARCH_DAILY_CAP, source),
+    fetch_meta=pagemeta.fetch_meta,
     send_email=_desk_email,
     registrable_domain=research._registrable_domain,
     suggest_category=lambda topic: detect_category(topic, "")[0],
