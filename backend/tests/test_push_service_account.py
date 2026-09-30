@@ -48,3 +48,24 @@ def test_explains_problems_without_leaking(raw, needle):
     data, problem = parse_service_account(raw)
     assert data is None and needle in problem
     assert "BEGIN PRIVATE KEY" not in problem and PEM[40:80] not in problem
+
+
+@pytest.mark.parametrize("raw", [
+    "FIREBASE_SERVICE_ACCOUNT=" + json.dumps(ACCOUNT),
+    "FIREBASE_SERVICE_ACCOUNT='" + GOOD + "'",
+    "\ufeff" + GOOD,
+])
+def test_accepts_name_prefix_and_bom(raw):
+    data, problem = parse_service_account(raw)
+    assert problem is None and data["client_email"].startswith("firebase-adminsdk")
+
+
+@pytest.mark.parametrize("raw,needle", [
+    (PEM, "only the private key"),
+    (r"C:\Users\me\Downloads\chintan-firebase-adminsdk.json", "file path"),
+    ('"type": "service_account"', "missing project_id"),
+    ("type: service_account", "starts with 't'"),
+])
+def test_names_the_paste_mistake(raw, needle):
+    data, problem = parse_service_account(raw)
+    assert data is None and needle in problem

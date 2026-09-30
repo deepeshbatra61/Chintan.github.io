@@ -69,6 +69,14 @@ def parse_service_account(raw: Optional[str]) -> Tuple[Optional[dict], Optional[
     raw = (raw or "").strip()
     if not raw:
         return None, "FIREBASE_SERVICE_ACCOUNT isn't set on the server."
+    raw = raw.lstrip("﻿")
+    if not raw.startswith("{") and '"type"' in raw and ":" in raw:
+        try:                                             # contents pasted without the outer { }
+            wrapped = "{" + raw.strip().rstrip(",") + "}"
+            if isinstance(_json.loads(wrapped, strict=False), dict):
+                raw = wrapped
+        except ValueError:
+            pass
     if raw.startswith('"'):
         try:                                             # the JSON file pasted as a JSON string
             decoded = _json.loads(raw, strict=False)
@@ -78,12 +86,30 @@ def parse_service_account(raw: Optional[str]) -> Tuple[Optional[dict], Optional[
             pass
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
         raw = raw[1:-1].strip()
+    raw = raw.lstrip("﻿")                           # BOM from some editors
+    if raw.upper().startswith("FIREBASE_SERVICE_ACCOUNT"):  # name pasted into the value
+        raw = raw.split("=", 1)[1].strip() if "=" in raw else ""
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
+            raw = raw[1:-1].strip()
     if not raw.startswith("{"):
+        if raw.startswith("-----BEGIN"):
+            return None, ("FIREBASE_SERVICE_ACCOUNT holds only the private key. Paste the WHOLE "
+                          "downloaded .json file instead (it starts with { and contains the key inside).")
+        if raw.lower().endswith(".json") or ":\\" in raw[:4] or raw.startswith(("/", "~", "C:", "c:")):
+            return None, ("FIREBASE_SERVICE_ACCOUNT looks like a file path. Open the .json file in "
+                          "Notepad and paste its contents instead.")
+        if raw.startswith('"') or raw.startswith("'"):
+            return None, ("FIREBASE_SERVICE_ACCOUNT starts with a quote but isn't a complete quoted "
+                          "value. Paste the file contents with no quotes around them.")
         try:
-            raw = base64.b64decode(raw, validate=False).decode("utf-8").strip()
+            decoded = base64.b64decode(raw, validate=True).decode("utf-8").strip()
         except Exception:
-            return None, ("FIREBASE_SERVICE_ACCOUNT isn't JSON. Paste the whole downloaded file, "
-                          "starting with { and ending with }.")
+            decoded = ""
+        if not decoded.startswith("{"):
+            hint = f"it starts with '{raw[:1]}'" if raw[:1].isalnum() else "it doesn't start with {"
+            return None, (f"FIREBASE_SERVICE_ACCOUNT isn't JSON ({hint}, {len(raw)} characters). "
+                          "Paste the whole downloaded file, starting with { and ending with }.")
+        raw = decoded
     try:
         data = _json.loads(raw, strict=False)          # strict=False: real newlines inside strings
     except ValueError as e:
