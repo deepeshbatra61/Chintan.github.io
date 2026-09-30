@@ -6316,27 +6316,6 @@ async def auth_callback_landing():
     )
 
 
-def _desk_email(to: str, subject: str, text: str):
-    html = ("<pre style='font-family:-apple-system,Helvetica,Arial,sans-serif;"
-            "white-space:pre-wrap;font-size:14px'>" + _esc(text) + "</pre>")
-    return _send_email(to, subject, html, text)
-
-
-api_router.include_router(desk_routes.build_desk_router(
-    db=db,
-    auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
-    proxy_secret=lambda: DESK_PROXY_SECRET,
-    admin_emails=lambda: ADMIN_EMAILS,
-    research=lambda topic, source=None: research.research_desk(
-        _anthropic_client, db, AI_MODEL, topic, DESK_RESEARCH_DAILY_CAP, source),
-    fetch_meta=pagemeta.fetch_meta,
-    send_email=_desk_email,
-    registrable_domain=research._registrable_domain,
-    suggest_category=lambda topic: detect_category(topic, "")[0],
-    default_image=DEFAULT_ARTICLE_IMAGE,
-    logger=logger,
-))
-
 async def _push_top_categories(user: dict) -> List[str]:
     """Top-3 categories for push targeting: reading-history affinity once a
     reader has >= 15 reads, else their declared interests (CEO plan rules)."""
@@ -6384,6 +6363,29 @@ push_svc = push_service.PushService(
 )
 api_router.include_router(push_routes.build_push_router(
     service=push_svc, get_user=get_current_user, client_ip=_push_client_ip))
+
+def _desk_email(to: str, subject: str, text: str):
+    html = ("<pre style='font-family:-apple-system,Helvetica,Arial,sans-serif;"
+            "white-space:pre-wrap;font-size:14px'>" + _esc(text) + "</pre>")
+    return _send_email(to, subject, html, text)
+
+
+api_router.include_router(desk_routes.build_desk_router(
+    db=db,
+    auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
+    proxy_secret=lambda: DESK_PROXY_SECRET,
+    admin_emails=lambda: ADMIN_EMAILS,
+    research=lambda topic, source=None: research.research_desk(
+        _anthropic_client, db, AI_MODEL, topic, DESK_RESEARCH_DAILY_CAP, source),
+    fetch_meta=pagemeta.fetch_meta,
+    send_email=_desk_email,
+    registrable_domain=research._registrable_domain,
+    suggest_category=lambda topic: detect_category(topic, "")[0],
+    default_image=DEFAULT_ARTICLE_IMAGE,
+    logger=logger,
+    push=push_svc,
+    push_test_email=lambda: PUSH_TEST_USER_EMAIL,
+))
 
 app.include_router(api_router)
 

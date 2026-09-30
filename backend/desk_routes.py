@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field
 import desk
 import desk_auth as A
 from pagemeta import looks_like_url
+from push import breaking_copy as push_copy
 
 try:  # real driver in production; mongomock raises the same class
     from pymongo.errors import DuplicateKeyError
@@ -72,6 +73,8 @@ class DraftEdit(BaseModel):
     keywords: Optional[List[str]] = None
     single_source_reason: Optional[str] = Field(default=None, max_length=500)
     long_running: Optional[bool] = None
+    national: Optional[bool] = None      # push: Breaking goes to every reader
+    sensitive: Optional[bool] = None     # push: sober copy, no photo, no wit
 
 
 class BoostBody(BaseModel):
@@ -80,11 +83,22 @@ class BoostBody(BaseModel):
     heat: int
 
 
+class PushSwitchBody(BaseModel):
+    enabled: bool
+    confirm: bool = False
+
+
+class BreakingBody(BaseModel):
+    article_id: str = Field(max_length=120)
+    text: Optional[str] = Field(default=None, max_length=300)
+    confirm: Optional[str] = Field(default=None, max_length=10)
+
+
 _EDITABLE = set(DraftEdit.model_fields)
 _PUBLIC_DRAFT_FIELDS = (
     "draft_id", "topic", "category", "news_type", "heat", "status", "fail_reason",
     "headline", "summary", "points", "keywords", "citations", "domain_count",
-    "image_url", "single_source_reason", "long_running", "created_at", "updated_at",
+    "image_url", "single_source_reason", "long_running", "national", "sensitive", "created_at", "updated_at",
     "published_ref", "attribution", "source_url", "note",
 )
 FAIL_MESSAGES = {
@@ -112,6 +126,8 @@ def build_desk_router(
     suggest_category: Callable[[str], str],
     default_image: str,
     logger,
+    push=None,                                   # push_service.PushService (optional)
+    push_test_email: Callable[[], str] = lambda: "",
 ) -> APIRouter:
     router = APIRouter(prefix="/desk")
     background: set = set()          # strong refs so tasks can't be GC'd mid-flight
@@ -424,6 +440,7 @@ def build_desk_router(
             "citations": d["citations"], "keywords": d.get("keywords") or [],
             "single_source": single, "single_source_reason": d.get("single_source_reason") if single else None,
             "desk_draft_id": draft_id,
+            "desk_national": bool(d.get("national")), "desk_sensitive": bool(d.get("sensitive")),
             # D11f: approved text is final. These keep the hourly summariser
             # and the (currently off) LLM categoriser from rewriting it.
             "claude_summarized": True, "claude_categorized": True, "claude_skip": True,
@@ -555,5 +572,67 @@ def build_desk_router(
             raise HTTPException(status_code=404, detail="Nothing to restore.")
         await _audit(ctx, "absorb_undo", article_id=article_id, absorbed_id=absorbed_id)
         return {"ok": True}
+
+    # ── push (Desk Push panel, go-live switch, test push, Breaking) ──────────
+    if push is not None:
+        @router.get("/push")
+        async def push_panel(ctx: dict = Depends(_session)):
+            return {**(await push.stats()), "next_slot": await push.next_slot_preview(),
+                    "test_email_set": bool(push_test_email())}
+
+        @router.post("/push/enabled")
+        async def push_switch(body: PushSwitchBody, ctx: dict = Depends(_session)):
+            # Going live is deliberate (confirm); stopping is instant (DR-16A).
+            if body.enabled and not body.confirm:
+                raise HTTPException(status_code=409, detail="Confirm to turn push on.")
+            state = await push.set_enabled(body.enabled, ctx["email"])
+            await _audit(ctx, "push_on" if body.enabled else "push_off")
+            return state
+
+        @router.post("/push/test")
+        async def push_test(ctx: dict = Depends(_session)):
+            res = await push.test_push(push_test_email())
+            await _audit(ctx, "push_test", ok=res.get("ok"))
+            return res
+
+        async def _breaking_article(article_id: str) -> dict:
+            a = await db.articles.find_one({"article_id": article_id}, {"_id": 0})
+            if not a:
+                raise HTTPException(status_code=404, detail="That story no longer exists.")
+            return a
+
+        @router.post("/push/breaking/preview")
+        async def breaking_preview(body: BreakingBody, ctx: dict = Depends(_session)):
+            a = await _breaking_article(body.article_id)
+            national = bool(a.get("desk_national"))
+            title, text = push_copy(body.text or a.get("title", ""))
+            already = await db.push_breaking.find_one({"_id": body.article_id})
+            return {"title": title, "body": text, "category": a.get("category"), "national": national,
+                    "already_sent": bool(already),
+                    "reach": await push.reach(body.article_id, a.get("category") or "", national)}
+
+        @router.post("/push/breaking/send")
+        async def breaking_send(body: BreakingBody, ctx: dict = Depends(_session)):
+            if (body.confirm or "") != "SEND":
+                raise HTTPException(status_code=422, detail="Type SEND to confirm.")
+            a = await _breaking_article(body.article_id)
+            text = (body.text or a.get("title", "")).strip()
+            if not text:
+                raise HTTPException(status_code=422, detail="The notification needs some text.")
+            # One Breaking push per story, ever: a double-click or a second tab
+            # loses here instead of interrupting everyone twice.
+            try:
+                await db.push_breaking.insert_one({"_id": body.article_id, "by": ctx["email"],
+                                                   "at": desk.utcnow(), "text": text})
+            except DuplicateKeyError:
+                raise HTTPException(status_code=409, detail="This story was already sent as Breaking.")
+            res = await push.send_breaking(story_id=body.article_id, text=text,
+                                           category=a.get("category") or "", national=bool(a.get("desk_national")))
+            if not res.get("ok"):
+                await db.push_breaking.delete_one({"_id": body.article_id})
+                raise HTTPException(status_code=409, detail=res.get("error") or "Push is switched off.")
+            await _audit(ctx, "push_breaking", article_id=body.article_id, sent=res["sent"],
+                         failed=res["failed"], held=res["held"])
+            return res
 
     return router

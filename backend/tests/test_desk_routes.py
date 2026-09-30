@@ -481,3 +481,22 @@ async def test_headline_draft_gets_image_from_first_source_with_one(h):
     await h.settle()
     d = (await h.client.get(f"/api/desk/drafts/{out['draft']['draft_id']}", headers=h.headers())).json()
     assert d["image_url"] == "https://ie.com/i.jpg" and d["source_url"] is None
+
+
+async def test_push_flags_travel_from_draft_to_article(h):
+    await h.login()
+    did = await _ready(h)
+    r = await h.client.patch(f"/api/desk/drafts/{did}", headers=h.headers(),
+                             json={"national": True, "sensitive": True})
+    assert r.status_code == 200 and r.json()["national"] is True and r.json()["sensitive"] is True
+    assert (await h.client.post(f"/api/desk/drafts/{did}/publish", headers=h.headers())).status_code == 200
+    a = await h.db.articles.find_one({"origin": "desk"})
+    assert a["desk_national"] is True and a["desk_sensitive"] is True
+
+
+async def test_push_flags_default_off(h):
+    await h.login()
+    did = await _ready(h)
+    await h.client.post(f"/api/desk/drafts/{did}/publish", headers=h.headers())
+    a = await h.db.articles.find_one({"origin": "desk"})
+    assert a["desk_national"] is False and a["desk_sensitive"] is False
