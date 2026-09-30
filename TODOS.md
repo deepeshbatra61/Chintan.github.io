@@ -204,3 +204,33 @@ Notifications" capability in Xcode, regenerate the provisioning profile, then se
 sender). **Effort:** S. **Priority:** P3.
 
 **Depends on / blocked by:** iOS push working (phase 1 Mac build with the APNs key).
+
+---
+
+## 9. Phase 2 native Android notification renderer (for Read / Save buttons)
+
+**What:** Replace phase 1's standard FCM notification messages on Android with data
+messages drawn by our own `ChintanMessagingService`, so "Read" / "Save for later" action
+buttons can be added.
+
+**Why:** Action buttons with an authenticated background save need native rendering; FCM's
+standard notification can't do them.
+
+**Pros:** Action buttons and full control of layout, later without another format change.
+
+**Cons:** Native code, plus a payload format switch (the sender must send data-only to
+Android builds that have the new service, and notification messages to older builds).
+
+**Context:** Deferred from phase 1 by `/plan-eng-review` (2026-09-30, decision 11B) to keep
+vc15 low-risk. Three traps found in review:
+1. `@capacitor/push-notifications` declares its own `MessagingService`; remove it in
+   `AndroidManifest.xml` with `tools:node="remove"` and subclass it (call `super`) so token
+   refresh and JS delivery keep working.
+2. The tap `PendingIntent` must carry the `google.message_id` extra (and our data), or
+   Capacitor never fires `pushNotificationActionPerformed` and the `?pin=` link is lost.
+3. Check whether the app is in the foreground before drawing: slot pushes must stay silent
+   there (R4), Breaking goes to the in-app banner.
+**Effort:** M. **Priority:** P2.
+
+**Depends on / blocked by:** Phase 1 shipped; a versioned payload (send `v` in data) so the
+sender knows which builds can render data messages.
