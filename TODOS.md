@@ -182,3 +182,25 @@ the proxy secret). Check Railway's docs for its proxy address range, or read the
 right-most trusted hop, before changing.
 
 **Depends on / blocked by:** Nothing.
+
+---
+
+## 8. iOS "Time Sensitive" level for Breaking pushes
+
+**What:** Breaking pushes on iPhone use Apple's Time Sensitive interruption level so they
+break through Focus modes and notification summaries.
+
+**Why:** v1 sends Breaking at the normal "active" level; a reader in a Focus mode may not
+see it until later.
+
+**Pros:** Breaking behaves like breaking news on iPhone, matching Android's high-importance
+channel.
+
+**Cons:** Apple expects sparing use (our 1/day, 2/week cap satisfies it); needs a Mac session.
+
+**Context:** From `/plan-ceo-review` of push (2026-09-30). Add the "Time Sensitive
+Notifications" capability in Xcode, regenerate the provisioning profile, then set
+`interruption-level: time-sensitive` in the APNs payload for Breaking only (backend push
+sender). **Effort:** S. **Priority:** P3.
+
+**Depends on / blocked by:** iOS push working (phase 1 Mac build with the APNs key).
