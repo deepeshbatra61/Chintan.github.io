@@ -550,6 +550,14 @@ const FeedPage = () => {
 
                     <div className="h-px bg-fg/10 my-4" />
                     <button
+                      onClick={() => { navigate("/notifications"); setSidebarOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
+                      data-testid="notifications-sidebar-nav"
+                    >
+                      <Bell className="w-[18px] h-[18px]" style={{ color: 'var(--c-faint)', flexShrink: 0 }} />
+                      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: 'var(--c-sub)' }}>Notifications</span>
+                    </button>
+                    <button
                       onClick={() => { navigate("/contact"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
                       data-testid="contact-sidebar-nav"

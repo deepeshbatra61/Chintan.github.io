@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="chintan_bg">#0A0A0A</color>
+    <!-- Surya red: notification accent (push). -->
+    <color name="push_accent">#DC2626</color>
 </resources>

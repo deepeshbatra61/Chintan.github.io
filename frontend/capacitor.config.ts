@@ -23,6 +23,12 @@ const config: CapacitorConfig = {
     // tuning detail.
     SystemBars: {
       insetsHandling: 'disable'
+    },
+    // Foreground pushes are silent (R4): slot pushes count as seen, and
+    // Breaking shows our own in-app banner (lib/push.js) instead of a
+    // system notification on top of the app.
+    PushNotifications: {
+      presentationOptions: []
     }
   }
 };

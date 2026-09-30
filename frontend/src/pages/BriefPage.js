@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import axios from "axios";
 import { ArrowLeft, Clock, ChevronRight } from "lucide-react";
@@ -53,21 +53,31 @@ const BriefPage = () => {
   const { user } = useAuth();
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const R = useReducedMotion();
+  // ?pin=<id> from a push tap: the exact brief the push promised (server
+  // falls back to the reader's current brief if the pin has expired).
+  const [params] = useSearchParams();
+  const pin = params.get("pin");
 
   const meta = briefMeta[briefType] || briefMeta.morning;
   const firstName = user?.name?.split(" ")[0] || "";
 
   const fetchBrief = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
     try {
-      const r = await axios.get(`${API}/briefs/${briefType}`, { withCredentials: true });
+      const r = await axios.get(`${API}/briefs/${briefType}`, {
+        withCredentials: true, params: pin ? { pin } : {},
+      });
       setBrief(r.data);
     } catch (e) {
       console.error("Error fetching brief:", e);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [briefType]);
+  }, [briefType, pin]);
 
   useEffect(() => { fetchBrief(); }, [fetchBrief]);
 
@@ -75,6 +85,21 @@ const BriefPage = () => {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center">
         <SuryaLogo className="w-14 h-14 animate-spin-slow" />
+      </div>
+    );
+  }
+
+  if (failed && !brief) {
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center" style={{ padding: "0 22px" }} data-testid="brief-error">
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "15px", color: "var(--c-ink)", margin: "0 0 14px" }}>Couldn't load this brief.</p>
+          <button onClick={fetchBrief}
+            style={{ minHeight: "44px", padding: "0 20px", borderRadius: "10px", border: "1px solid rgb(var(--c-fg-rgb) / 0.14)",
+                     background: "none", color: "var(--c-ink)", fontSize: "14px", cursor: "pointer" }}>
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -119,6 +144,13 @@ const BriefPage = () => {
       <main style={{ position: "relative", zIndex: 1, padding: "0 22px 96px", maxWidth: "640px", margin: "0 auto" }}>
         {/* Crown — turning Surya + word-by-word greeting */}
         <div style={{ textAlign: "center", paddingTop: "30px" }}>
+          {brief?.pinned_from && (
+            <div data-testid="brief-pinned-from"
+              style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.2em",
+                       textTransform: "uppercase", color: "var(--c-muted)", marginBottom: "14px" }}>
+              From your {brief.pinned_from}
+            </div>
+          )}
           <motion.div
             animate={R ? {} : { rotate: 360 }}
             transition={R ? {} : { duration: 26, repeat: Infinity, ease: "linear" }}

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, User, Bookmark, BarChart2, LogOut, ChevronRight, ChevronDown,
   Edit3, Check, Loader2, Sparkles, Flame, BookOpen, Mail, UserX, X, Info,
-  Trash2, AlertTriangle
+  Trash2, AlertTriangle, Bell
 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -341,6 +341,14 @@ const ProfilePage = () => {
 
         {/* Actions */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
+          <button onClick={() => navigate("/notifications")} data-testid="notifications-nav-btn" style={actionStyle}>
+            <Bell className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ color: "var(--c-ink2)", fontSize: "14px" }}>Notifications</div>
+              <div style={{ color: "var(--c-faint)", fontSize: "11.5px" }}>Sunrise, Dusk and Breaking</div>
+            </div>
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--c-dim)" }} />
+          </button>
           <button onClick={openPollsHistory} data-testid="poll-history-btn" style={actionStyle}>
             <BarChart2 className="w-5 h-5" style={{ color: "var(--c-muted2)", flexShrink: 0 }} />
             <div style={{ flex: 1, textAlign: "left" }}>

@@ -493,12 +493,34 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     { label: "Ask Chintan", Icon: Sparkles, onClick: () => { setShowActions(false); navigate(`/ask-ai/${articleId}`); }, testid: "ask-ai-btn" },
   ];
 
+  // "Finished this article": scrolled to the end of real content, or 45s spent
+  // on it. Fires once per article; the push soft ask (PushAsk) listens for it.
+  const finishedSent = useRef(false);
+  const markFinished = () => {
+    if (finishedSent.current) return;
+    finishedSent.current = true;
+    window.dispatchEvent(new CustomEvent("chintan:article-finished", { detail: { articleId } }));
+  };
+  useEffect(() => {
+    if (!isActive) return undefined;
+    const t = setTimeout(markFinished, 45000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+  const onArticleScroll = (e) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight > el.clientHeight + 200 && el.scrollTop + el.clientHeight >= el.scrollHeight - 140) {
+      markFinished();
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       {/* Scrollable article content */}
       <main
         ref={scrollRef}
+        onScroll={isActive ? onArticleScroll : undefined}
         style={{
           height: 'calc(100vh - var(--sat) - 56px)',
           overflowY: 'auto',

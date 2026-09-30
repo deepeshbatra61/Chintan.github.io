@@ -638,3 +638,12 @@ input:focus, textarea:focus {
   border-color: var(--surya-red);
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
 }
+
+/* Push: the Breaking banner (a sonner toast) fades instead of sliding when
+   the reader has asked for less motion (design review DR-12A). */
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] {
+    transition: opacity 0.2s ease !important;
+    transform: none !important;
+  }
+}

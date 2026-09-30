@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon for push: the Surya sun arc. Android draws status icons
+     from the alpha channel only, so this is solid white on transparent and
+     gets tinted with @color/push_accent in the shade. 24dp, 2dp safe margin. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Arc: a half ring from (3,17) over the top to (21,17), 2.4 thick. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M1.8,17 A10.2,10.2 0 0,1 22.2,17 L19.8,17 A7.8,7.8 0 0,0 4.2,17 Z" />
+    <!-- The sun, sitting on the horizon. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,13.8 A3.2,3.2 0 1,1 11.99,13.8 Z" />
+    <!-- Horizon line. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2,19.2 L22,19.2 L22,20.8 L2,20.8 Z" />
+</vector>

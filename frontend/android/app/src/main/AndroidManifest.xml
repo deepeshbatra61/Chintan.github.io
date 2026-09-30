@@ -73,9 +73,25 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Push (phase 1: standard FCM notification messages, drawn by Android).
+             Defaults apply when a message doesn't set its own icon/colour/channel;
+             the server sets all three, these are the safety net. Channels
+             "daily" and "breaking" are created from JS (lib/push.js). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_surya" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/push_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="daily" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: asked only after the in-app soft ask, never on launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

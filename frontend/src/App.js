@@ -79,6 +79,10 @@ import AboutPage from "./pages/AboutPage";
 import AskAIPage from "./pages/AskAIPage";
 import DevelopingPage from "./pages/DevelopingPage";
 import DevelopingStoryDetail from "./pages/DevelopingStoryDetail";
+import NotificationsPage from "./pages/NotificationsPage";
+import PushController from "./components/PushController";
+import PushAsk from "./components/PushAsk";
+import { unregisterDevice } from "./lib/push";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -143,6 +147,8 @@ const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Logout error:", error);
     }
+    // Stop pushes to this device for the account being signed out of.
+    await unregisterDevice();
     await clearToken();
     clearFeedCache();
     setUser(null);
@@ -444,6 +450,8 @@ function AppRouter() {
         }} />
       )}
       <NativeAuthHandler />
+      <PushController />
+      <PushAsk />
       <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -497,6 +505,11 @@ function AppRouter() {
         <ProtectedRoute>
           <ContactPage />
         </ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <GuestOrProtectedRoute>
+          <NotificationsPage />
+        </GuestOrProtectedRoute>
       } />
       <Route path="/about" element={
         <ProtectedRoute>
