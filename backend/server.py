@@ -57,6 +57,7 @@ ALLOWED_ORIGINS = list({
 })
 
 import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
+import brief_service  # brief build/cache/pin with I/O, shared by the brief page and push
 import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
@@ -1300,6 +1301,12 @@ async def lifespan(app: FastAPI):
     await db.desk_drafts.create_index("draft_id", unique=True)
     await db.desk_drafts.create_index([("status", 1), ("created_at", -1)])
     await db.desk_audit.create_index([("ts", -1)])
+    # Push: pinned briefs (the exact brief a push promised) and brief opens.
+    await db.push_briefs.create_index("pin_id", unique=True)
+    await db.push_briefs.create_index([("user_id", 1), ("brief_type", 1), ("created_at", -1)])
+    await db.push_briefs.create_index("expires_at", expireAfterSeconds=0)
+    await db.brief_opens.create_index([("user_id", 1), ("brief_type", 1), ("opened_at", -1)])
+    await db.brief_opens.create_index("opened_at", expireAfterSeconds=30 * 86400)
     # research_cache/_agent_stats use their own composite string _id (see
     # research.py's _cache_key/_under_daily_cap) — no extra index needed
     # beyond Mongo's default _id index.
@@ -4845,163 +4852,36 @@ async def _attach_saved_for_brief(brief: dict, user_id: Optional[str]) -> dict:
     return brief
 
 
-@api_router.get("/briefs/{brief_type}")
-async def get_brief(brief_type: str, request: Request = None):
-    """Get morning/midday/night brief with Claude-generated narrative."""
-    if brief_type not in ["morning", "midday", "night"]:
-        raise HTTPException(status_code=400, detail="Invalid brief type")
-
-    user = await get_current_user(request) if request else None
-    user_interests: List[str] = (user.get("interests") or []) if user else []
-    raw_name: str = (user.get("name") or "") if user else ""
-    user_name = raw_name.split()[0] if raw_name else "there"
-
-    # Cache the generated brief for 1 hour, per user + brief type. Briefs don't
-    # change minute to minute, so this avoids a fresh LLM call on every open.
-    _user_id = user.get("user_id") if user else None
-    # The "v2:" prefix is a schema version, not decoration. Brief documents now
-    # carry a per-story `take`; without bumping the key, cached v1 documents
-    # would be served for up to an hour after deploy and the client would fall
-    # back to re-deriving card text by splitting prose — the exact bug this
-    # change removes. Bumping the prefix makes every stale-shape entry a miss.
-    _brief_cache_key = f"v2:{brief_type}:{_user_id or 'anon'}"
-    _cached = await db.brief_cache.find_one({"_id": _brief_cache_key})
-    if _cached and _cached.get("brief"):
-        try:
-            _gen = _cached.get("generated_at")
-            _gen_dt = datetime.fromisoformat(_gen) if isinstance(_gen, str) else _gen
-            if _gen_dt and (datetime.now(timezone.utc) - _gen_dt).total_seconds() < 3600:
-                return await _attach_saved_for_brief(_cached["brief"], _user_id)
-        except Exception:
-            pass
-
-    # Sentence case, matching the app's own copy (BriefPage, side nav). These
-    # override the app's text, so Title Case here made the brief say "Good
-    # Afternoon" while the sidebar said "Good afternoon".
-    _greetings = {
-        "morning": ("Good morning",  "while you were sleeping, we curated your morning brief"),
-        "midday":  ("Good afternoon", "while you were working, we were curating your tailored afternoon brief"),
-        "night":   ("Good evening",  "while you wound down, here's what shaped your world today"),
-    }
-    greeting, subtitle = _greetings[brief_type]
-
-    # Interests can be broad categories or specific niches — match either.
-    category_query: dict = (
-        {"$or": [{"category": {"$in": user_interests}}, {"subcategory": {"$in": user_interests}}]}
-        if user_interests else {}
-    )
-
-    # ── 1. Cascade: 24 h → 72 h → no time filter → drop interest filter ──────
-    fresh_articles: list = []
-    for hours in (24, 72):
-        cutoff_str = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-        fresh_articles = await db.articles.find(
-            {"published_at": {"$gte": cutoff_str}, **category_query},
-            {"_id": 0},
-        ).sort("published_at", -1).to_list(300)
-        if len(fresh_articles) >= 3:
-            break
-
-    if len(fresh_articles) < 3:
-        # Drop the time window entirely, keep interest filter
-        fresh_articles = await db.articles.find(
-            category_query if category_query else {},
-            {"_id": 0},
-        ).sort("published_at", -1).to_list(50)
-
-    if len(fresh_articles) < 3 and user_interests:
-        # Last resort: ignore interests too
-        fresh_articles = await db.articles.find(
-            {}, {"_id": 0}
-        ).sort("published_at", -1).to_list(50)
-
-    # ── 2. Group by category, no minimum threshold ───────────────────────────
-    by_category: Dict[str, list] = {}
-    for a in fresh_articles:
-        cat = a.get("category")
-        if cat:
-            by_category.setdefault(cat, []).append(a)
-
-    if user_interests:
-        ordered = [c for c in user_interests if c in by_category]
-        ordered += [c for c in sorted(by_category, key=lambda x: len(by_category[x]), reverse=True)
-                    if c not in ordered]
-    else:
-        ordered = sorted(by_category, key=lambda c: len(by_category[c]), reverse=True)
-
-    top_cats = ordered[:3]
-
-    # ── 3. Hard fallback — only if DB is completely empty ────────────────────
-    if not top_cats:
-        any_articles = await db.articles.find({}, {"_id": 0}).sort(
-            "published_at", -1).limit(3).to_list(3)
-        # Same shape as the main path, deliberately. This branch previously
-        # omitted `categories` entirely, so BriefPage's categories[idx] lookup
-        # silently dropped every card's label, and it carried no `take` either.
-        # Two response shapes from one endpoint is how that stayed unnoticed.
-        return await _attach_saved_for_brief({
-            "greeting": greeting,
-            "subtitle": subtitle,
-            "summary": "No stories are available right now. Check back soon.",
-            "categories": [a.get("category", "") for a in any_articles],
-            "referenced_stories": [
-                {"title": a.get("title", ""), "source": a.get("source", ""),
-                 "article_id": a.get("article_id", ""),
-                 "take": brief.fallback_take(a)}
-                for a in any_articles
-            ],
-            "read_time": "1 min read",
-        }, _user_id)
-
-    # ── 4. One ranked article per category ───────────────────────────────────
-    # Exactly one, deliberately. The card's link and the card's text are both
-    # written from this single object, so they cannot disagree. Showing Claude
-    # three candidates while hardcoding the link to the first is what made
-    # brief cards open a different story than the one they described.
-    # (category, article) pairs — never two parallel lists that could drift.
-    pairs = brief.select_stories(top_cats, by_category, user_interests, datetime.now(timezone.utc))
-
-    # ── 5. Ask Claude for one line per story ─────────────────────────────────
-    llm_text = None
+async def _brief_llm(prompt: str) -> Optional[str]:
+    """One brief LLM call. brief_service treats None / an exception as "use the
+    deterministic takes", so a failed call still yields a correct brief."""
     try:
         msg = await _anthropic_client.messages.create(
             model=AI_MODEL,
             max_tokens=400,
-            messages=[{"role": "user", "content": brief.build_prompt(brief_type, user_name, pairs)}],
+            messages=[{"role": "user", "content": prompt}],
         )
-        llm_text = _extract_text(msg).strip()
+        return _extract_text(msg).strip()
     except Exception as e:
-        # Not fatal: assemble() falls back to a deterministic take per story,
-        # which still points at the right article.
         logger.error(f"Brief Claude call failed: {e}")
+        return None
 
-    assembled = brief.assemble(pairs, llm_text)
 
-    brief_doc = {
-        "greeting":           greeting,
-        "subtitle":           subtitle,
-        "summary":            assembled["summary"],
-        "categories":         assembled["categories"],
-        "referenced_stories": assembled["referenced_stories"],
-        "read_time":          assembled["read_time"],
-    }
-    # Cache BEFORE attaching saved_for_you -- that field must never be
-    # persisted into brief_cache, or a delivered-once save would incorrectly
-    # keep reappearing on every cache hit for the next hour.
-    _now = datetime.now(timezone.utc)
-    await db.brief_cache.update_one(
-        {"_id": _brief_cache_key},
-        {"$set": {
-            "brief": brief_doc,
-            # Kept as a string because the freshness check above parses it that
-            # way. The TTL index needs a real BSON date, so both are written --
-            # the string stays authoritative for reads, the date only expires.
-            "generated_at": _now.isoformat(),
-            "generated_at_dt": _now,
-        }},
-        upsert=True,
-    )
-    return await _attach_saved_for_brief(brief_doc, _user_id)
+@api_router.get("/briefs/{brief_type}")
+async def get_brief(brief_type: str, request: Request = None, pin: Optional[str] = None):
+    """Get morning/midday/night brief. A push-pinned brief wins (the exact one
+    the push promised), then the 1h per-user cache, then a fresh build.
+    See brief_service for the flow."""
+    if brief_type not in brief_service.BRIEF_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid brief type")
+    user = await get_current_user(request) if request else None
+    user_id = user.get("user_id") if user else None
+    now = datetime.now(timezone.utc)
+    doc = await brief_service.read_brief(db, user, brief_type, _brief_llm, now, pin_id=pin)
+    if user_id:
+        # "Brief opened" (R7): push skips a slot whose brief was already read.
+        await db.brief_opens.insert_one({"user_id": user_id, "brief_type": brief_type, "opened_at": now})
+    return await _attach_saved_for_brief(dict(doc), user_id)
 
 # ===================== AI ROUTES =====================
 
