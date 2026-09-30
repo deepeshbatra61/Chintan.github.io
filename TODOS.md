@@ -234,3 +234,26 @@ vc15 low-risk. Three traps found in review:
 
 **Depends on / blocked by:** Phase 1 shipped; a versioned payload (send `v` in data) so the
 sender knows which builds can render data messages.
+
+---
+
+## 10. DESIGN.md for the app
+
+**What:** One DESIGN.md capturing the app's design system: Surya tokens (dark + light),
+type (Playfair Display headings, Manrope body, JetBrains Mono small caps), the sheet,
+switch, segmented-control and toast patterns, and the push copy rules.
+
+**Why:** The push design review (2026-09-30) had to reconstruct the system from
+`frontend/src/index.css`, `SignInPrompt.jsx` and `AppearanceControl.js`. Push adds new
+patterns (bottom sheet ask, notification settings rows, Breaking banner) that later
+screens should match.
+
+**Pros:** Reviews and builds calibrate against one file; fewer one-off inline styles.
+
+**Cons:** One more doc to keep current.
+
+**Context:** The website (`chintan-website`) has PRODUCT.md; the app has none. Generate
+from code with `/impeccable document` (documents what exists, no redesign). Include the
+push copy rules from the CEO plan's "Design review" section. **Effort:** S. **Priority:** P3.
+
+**Depends on / blocked by:** Best after phase 1's push UI ships.
