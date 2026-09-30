@@ -59,6 +59,60 @@ def _utc(dt):
 
 # ── Firebase sender ──────────────────────────────────────────────────────────
 
+def parse_service_account(raw: Optional[str]) -> Tuple[Optional[dict], Optional[str]]:
+    """Read FIREBASE_SERVICE_ACCOUNT as pasted into Railway. Tolerates the
+    usual paste damage: surrounding quotes, base64, and the private key's
+    "\\n" escapes turned into real line breaks. Returns (account, None) or
+    (None, reason). The reason never contains any part of the key."""
+    import base64
+    import json as _json
+    raw = (raw or "").strip()
+    if not raw:
+        return None, "FIREBASE_SERVICE_ACCOUNT isn't set on the server."
+    if raw.startswith('"'):
+        try:                                             # the JSON file pasted as a JSON string
+            decoded = _json.loads(raw, strict=False)
+            if isinstance(decoded, str):
+                raw = decoded.strip()
+        except ValueError:
+            pass
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
+        raw = raw[1:-1].strip()
+    if not raw.startswith("{"):
+        try:
+            raw = base64.b64decode(raw, validate=False).decode("utf-8").strip()
+        except Exception:
+            return None, ("FIREBASE_SERVICE_ACCOUNT isn't JSON. Paste the whole downloaded file, "
+                          "starting with { and ending with }.")
+    try:
+        data = _json.loads(raw, strict=False)          # strict=False: real newlines inside strings
+    except ValueError as e:
+        return None, (f"FIREBASE_SERVICE_ACCOUNT couldn't be read as JSON (line {getattr(e, 'lineno', '?')}). "
+                      "Paste the whole downloaded file again, unchanged.")
+    if isinstance(data, str):                            # JSON pasted as a quoted JSON string
+        try:
+            data = _json.loads(data, strict=False)
+        except ValueError:
+            return None, "FIREBASE_SERVICE_ACCOUNT is a quoted string, not the JSON file itself."
+    if not isinstance(data, dict):
+        return None, "FIREBASE_SERVICE_ACCOUNT isn't a JSON object."
+    if data.get("type") != "service_account":
+        return None, ("FIREBASE_SERVICE_ACCOUNT isn't a service-account key. Use Firebase > Project settings > "
+                      "Service accounts > Generate new private key (not google-services.json).")
+    missing = [k for k in ("project_id", "private_key", "client_email") if not data.get(k)]
+    if missing:
+        return None, f"FIREBASE_SERVICE_ACCOUNT is missing {', '.join(missing)}."
+    if "\\n" in data["private_key"]:                     # double-escaped newlines
+        data["private_key"] = data["private_key"].replace("\\n", "\n")
+    try:
+        from google.oauth2 import service_account as sa
+        sa.Credentials.from_service_account_info(data, scopes=[FCM_SCOPE])
+    except Exception:
+        return None, ("FIREBASE_SERVICE_ACCOUNT's private key couldn't be loaded. Generate a new key "
+                      "in Firebase and paste the whole file again.")
+    return data, None
+
+
 class FCMSender:
     """FCM HTTP v1 with a service account. The OAuth token is cached until 5 min
     before expiry; google-auth's refresh is blocking, so it runs in a thread."""

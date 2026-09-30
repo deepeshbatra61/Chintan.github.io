@@ -142,19 +142,6 @@ PUSH_ALERT_EMAIL = os.environ.get("PUSH_ALERT_EMAIL", "").strip().lower()
 PUSH_LLM_DAILY_CAP = _int_env("PUSH_LLM_DAILY_CAP", 2000)
 
 
-def _firebase_service_account() -> Optional[dict]:
-    raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()
-    if not raw:
-        return None
-    try:
-        if not raw.startswith("{"):
-            raw = base64.b64decode(raw).decode()
-        data = json.loads(raw)
-        return data if data.get("project_id") and data.get("private_key") else None
-    except Exception:
-        return None
-
-
 # NewsAPI's free tier delivers articles ~24h after publication. Ranking uses
 # rank_at = published_at + this delay so API stories and real-time Desk
 # stories compete on one clock (desk.rank_at). Set to 0 on a real-time plan.
@@ -6346,7 +6333,9 @@ def _push_client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
-_FIREBASE_SA = _firebase_service_account()
+_FIREBASE_SA, _FIREBASE_SA_PROBLEM = push_service.parse_service_account(os.environ.get("FIREBASE_SERVICE_ACCOUNT"))
+if _FIREBASE_SA_PROBLEM:
+    logger.warning(f"Push: {_FIREBASE_SA_PROBLEM}")
 push_svc = push_service.PushService(
     db=db,
     sender=push_service.FCMSender(_FIREBASE_SA) if _FIREBASE_SA else None,
@@ -6356,8 +6345,7 @@ push_svc = push_service.PushService(
     top_categories=_push_top_categories,
     env_enabled=lambda: PUSH_ENABLED and _FIREBASE_SA is not None,
     env_reason=lambda: ("Forced off by server setting PUSH_ENABLED." if not PUSH_ENABLED
-                        else "Firebase isn't configured on the server (FIREBASE_SERVICE_ACCOUNT)."
-                        if _FIREBASE_SA is None else None),
+                        else _FIREBASE_SA_PROBLEM),
     llm_daily_cap=PUSH_LLM_DAILY_CAP,
     logger=logger,
 )
