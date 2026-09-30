@@ -120,9 +120,12 @@ export async function enablePush() {
   return { permission: "granted", registration };
 }
 
-/** Re-register silently (resume, sign-in). No prompt, ever. */
+/** Re-register silently (resume, sign-in). No prompt, ever.
+ *  Only after the reader opted in (soft ask or Profile): on Android <= 12 the
+ *  permission reads "granted" by default, and a yes should mean a yes. */
 export async function refreshRegistration() {
   if (!isPushSupported()) return;
+  if (!(await getAsk()).optedIn) return;
   if ((await permissionState()) !== "granted") return;
   try {
     await PushNotifications.register();
