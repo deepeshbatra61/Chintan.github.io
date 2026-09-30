@@ -63,8 +63,9 @@ keystore.properties
 .externalNativeBuild
 .cxx/
 
-# Google Services (e.g. APIs or Firebase)
-# google-services.json
+# Google Services (e.g. APIs or Firebase). Kept out of this PUBLIC repo: it
+# carries the Firebase API key. Place it at android/app/ locally before building.
+google-services.json
 
 # Freeline
 freeline.py

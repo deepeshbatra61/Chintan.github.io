@@ -1,0 +1,30 @@
+{
+  "_about": "Push copy eval (eng review 7A). Run scripts/eval_push_copy.py on every change to push.hook_prompt. Sensitive cases must come back sensitive=true (so they get sober copy); any pun, emoji or exclamation on them fails the run. Light cases are printed for the owner to judge tone.",
+  "cases": [
+    {"slot": "sunrise", "sensitive": true, "headline": "Bus falls into gorge in Himachal, 14 passengers killed", "summary": "A state transport bus skidded off the road near Chamba late on Monday; rescue teams recovered 14 bodies."},
+    {"slot": "dusk", "sensitive": true, "headline": "Floods displace 2 lakh people in Assam as Brahmaputra crosses danger mark", "summary": "Twenty-one districts are affected; relief camps have been set up across the state."},
+    {"slot": "sunrise", "sensitive": true, "headline": "Communal clashes in Nuh: curfew imposed, internet suspended", "summary": "Police said stones were thrown during a procession; several vehicles were set on fire."},
+    {"slot": "noon", "sensitive": true, "headline": "Actor found dead at Mumbai home; police register accidental death report", "summary": "The actor, 34, was found by family members on Tuesday morning."},
+    {"slot": "dusk", "sensitive": true, "headline": "Earthquake of magnitude 6.1 strikes Uttarakhand; houses damaged in Chamoli", "summary": "Tremors were felt across north India; the NDRF has been deployed."},
+    {"slot": "sunrise", "sensitive": true, "headline": "Hospital fire in Jhansi kills 10 newborns", "summary": "A short circuit in the neonatal ICU is suspected; the state has ordered an inquiry."},
+    {"slot": "dusk", "sensitive": true, "headline": "Dengue cases cross 20,000 in Delhi as hospitals run short of beds", "summary": "The city recorded 1,200 new cases in the past week."},
+    {"slot": "noon", "sensitive": true, "headline": "Stampede at temple festival in Andhra leaves 6 dead", "summary": "Crowds surged at the entrance during the early-morning darshan."},
+    {"slot": "sunrise", "sensitive": false, "headline": "RBI holds repo rate at 6.5% for the tenth straight meeting", "summary": "The MPC cited sticky food inflation and kept its stance at withdrawal of accommodation."},
+    {"slot": "dusk", "sensitive": false, "headline": "India clinch Test series against England with a day to spare", "summary": "The spinners took eight wickets on the fourth day in Ranchi."},
+    {"slot": "sunrise", "sensitive": false, "headline": "ISRO launches PSLV-C62 carrying Oceansat-3A", "summary": "The ocean-observation satellite joins two others already in orbit."},
+    {"slot": "noon", "sensitive": false, "headline": "Onion prices double in a week as rains hit Nashik crop", "summary": "Retail prices in Delhi touched Rs 80 a kilo."},
+    {"slot": "dusk", "sensitive": false, "headline": "Parliament passes the Digital Personal Data Protection amendment", "summary": "The bill clears the Rajya Sabha after a four-hour debate."},
+    {"slot": "sunrise", "sensitive": false, "headline": "Monsoon withdraws from the country, 12 days later than usual", "summary": "The IMD said the season ended with 7% above-normal rainfall."},
+    {"slot": "noon", "sensitive": false, "headline": "Sensex crosses 90,000 for the first time", "summary": "Banking and IT stocks led the rally after strong quarterly results."},
+    {"slot": "dusk", "sensitive": false, "headline": "Mumbai metro Line 3 opens fully, Colaba to Aarey in 50 minutes", "summary": "The underground line is expected to carry 13 lakh passengers a day."},
+    {"slot": "sunrise", "sensitive": false, "headline": "Supreme Court to hear electoral bonds review petition next week", "summary": "A five-judge bench will take up the matter on Tuesday."},
+    {"slot": "noon", "sensitive": false, "headline": "Zomato and Swiggy fees go up in 20 cities", "summary": "The platform fee rises by Rs 2 per order from Monday."},
+    {"slot": "dusk", "sensitive": false, "headline": "Gukesh wins the Norway Chess title", "summary": "The world champion beat Carlsen in the final round."},
+    {"slot": "sunrise", "sensitive": false, "headline": "Bengaluru water tanker prices capped by the state", "summary": "The government set rates by distance after complaints of price gouging."},
+    {"slot": "dusk", "sensitive": false, "headline": "Kerala becomes the first state with 100% digital land records", "summary": "All 1,666 villages are now covered by the Ente Bhoomi portal."},
+    {"slot": "noon", "sensitive": false, "headline": "Air India orders 100 more Airbus jets", "summary": "The deal includes 90 A321neo and 10 A350 aircraft."},
+    {"slot": "sunrise", "sensitive": false, "headline": "Delhi's air quality turns 'very poor' as stubble burning rises", "summary": "The AQI crossed 320 at several monitoring stations."},
+    {"slot": "dusk", "sensitive": false, "headline": "UPI crosses 20 billion transactions in a month", "summary": "Payments worth Rs 25 lakh crore were made in October."},
+    {"slot": "noon", "sensitive": false, "headline": "Mango exports to the US resume after two years", "summary": "The first consignment of Alphonsos left Mumbai on Monday."}
+  ]
+}
