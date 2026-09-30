@@ -22,6 +22,7 @@ and returns a receipt.
 
 import asyncio
 import hashlib
+import html as _html
 import logging
 import secrets
 import time as _time
@@ -578,7 +579,7 @@ class PushService:
         self.log.error(f"push alert [{kind}]: {text}")
         sent = False
         for to in self.alert_to():
-            html = f"<p>{text}</p><p>Push panel: https://chintan.news/admin</p>"
+            html = f"<p>{_html.escape(text)}</p><p>Push panel: https://chintan.news/admin</p>"
             sent = await self.send_email(to, subject, html) or sent
         return sent
 

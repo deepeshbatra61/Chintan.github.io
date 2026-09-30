@@ -13,6 +13,7 @@ import uuid
 import time
 import random
 import asyncio
+import base64
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
@@ -64,6 +65,8 @@ import research  # verified web research (native web_search + citation check) �
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
 import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
+import push_routes   # app-facing push endpoints — see backend/push_routes.py
+import push_service  # FCM sender + slot scheduler — see backend/push_service.py
 import pagemeta     # SSRF-safe page metadata fetch for Desk links — see backend/pagemeta.py
 
 # MongoDB connection
@@ -129,6 +132,29 @@ INGEST_SCHEDULE_ENABLED = os.environ.get("INGEST_SCHEDULE_ENABLED", "true").lowe
 DESK_PROXY_SECRET = os.environ.get("DESK_PROXY_SECRET", "")
 DESK_ENCRYPTION_KEY = os.environ.get("DESK_ENCRYPTION_KEY", "")
 DESK_RESEARCH_DAILY_CAP = _int_env("DESK_RESEARCH_DAILY_CAP", 15)
+# ── Push notifications — push*.py ────────────────────────────────────────────
+# PUSH_ENABLED=false is the hard off; the Desk switch (DB flag, starts OFF) is
+# the everyday one. Nothing sends without FIREBASE_SERVICE_ACCOUNT (the service
+# account JSON, raw or base64).
+PUSH_ENABLED = os.environ.get("PUSH_ENABLED", "true").lower() != "false"
+PUSH_TEST_USER_EMAIL = os.environ.get("PUSH_TEST_USER_EMAIL", "").strip().lower()
+PUSH_ALERT_EMAIL = os.environ.get("PUSH_ALERT_EMAIL", "").strip().lower()
+PUSH_LLM_DAILY_CAP = _int_env("PUSH_LLM_DAILY_CAP", 2000)
+
+
+def _firebase_service_account() -> Optional[dict]:
+    raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()
+    if not raw:
+        return None
+    try:
+        if not raw.startswith("{"):
+            raw = base64.b64decode(raw).decode()
+        data = json.loads(raw)
+        return data if data.get("project_id") and data.get("private_key") else None
+    except Exception:
+        return None
+
+
 # NewsAPI's free tier delivers articles ~24h after publication. Ranking uses
 # rank_at = published_at + this delay so API stories and real-time Desk
 # stories compete on one clock (desk.rank_at). Set to 0 on a real-time plan.
@@ -1344,14 +1370,20 @@ async def lifespan(app: FastAPI):
     ingestor_task = asyncio.create_task(_background_news_ingestor())
     logger.info("Background news ingestor started")
 
+    await push_svc.ensure_indexes()
+    push_task = asyncio.create_task(push_service.run_scheduler(push_svc, logger))
+    logger.info(f"Push scheduler started (env enabled: {PUSH_ENABLED}, firebase: {_FIREBASE_SA is not None})")
+
     yield  # ── App is running ────────────────────────────────────────────────
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
     ingestor_task.cancel()
-    try:
-        await ingestor_task
-    except asyncio.CancelledError:
-        pass
+    push_task.cancel()
+    for task in (ingestor_task, push_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     client.close()
     if _redis:
         await _redis.aclose()
@@ -6304,6 +6336,54 @@ api_router.include_router(desk_routes.build_desk_router(
     default_image=DEFAULT_ARTICLE_IMAGE,
     logger=logger,
 ))
+
+async def _push_top_categories(user: dict) -> List[str]:
+    """Top-3 categories for push targeting: reading-history affinity once a
+    reader has >= 15 reads, else their declared interests (CEO plan rules)."""
+    uid = user.get("user_id")
+    if uid and await db.reading_history.count_documents({"user_id": uid}) >= 15:
+        scores = await _get_user_affinity_scores(uid)
+        total: Dict[str, float] = {}
+        for part in ("completion", "engagement"):
+            for cat, v in (scores.get(part) or {}).items():
+                total[cat] = total.get(cat, 0) + float(v or 0)
+        ranked = [c for c, v in sorted(total.items(), key=lambda kv: kv[1], reverse=True) if v > 0]
+        if ranked:
+            return ranked[:3]
+    return (user.get("interests") or [])[:3]
+
+
+async def _push_llm(prompt: str) -> Optional[str]:
+    try:
+        msg = await _anthropic_client.messages.create(
+            model=AI_MODEL, max_tokens=300, messages=[{"role": "user", "content": prompt}])
+        return _extract_text(msg).strip()
+    except Exception as e:
+        logger.error(f"Push LLM call failed: {e}")
+        return None
+
+
+def _push_client_ip(request: Request) -> str:
+    return get_remote_address(request)
+
+
+_FIREBASE_SA = _firebase_service_account()
+push_svc = push_service.PushService(
+    db=db,
+    sender=push_service.FCMSender(_FIREBASE_SA) if _FIREBASE_SA else None,
+    llm=_push_llm,
+    send_email=lambda to, subject, html: _send_email(to, subject, html),
+    alert_to=lambda: [PUSH_ALERT_EMAIL] if PUSH_ALERT_EMAIL else sorted(ADMIN_EMAILS),
+    top_categories=_push_top_categories,
+    env_enabled=lambda: PUSH_ENABLED and _FIREBASE_SA is not None,
+    env_reason=lambda: ("Forced off by server setting PUSH_ENABLED." if not PUSH_ENABLED
+                        else "Firebase isn't configured on the server (FIREBASE_SERVICE_ACCOUNT)."
+                        if _FIREBASE_SA is None else None),
+    llm_daily_cap=PUSH_LLM_DAILY_CAP,
+    logger=logger,
+)
+api_router.include_router(push_routes.build_push_router(
+    service=push_svc, get_user=get_current_user, client_ip=_push_client_ip))
 
 app.include_router(api_router)
 
