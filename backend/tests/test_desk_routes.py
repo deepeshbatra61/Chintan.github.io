@@ -365,6 +365,10 @@ async def test_publish_developing_creates_story_with_lifecycle(h):
     assert s["state_summary"] == GOOD_RESEARCH["summary"]
     items = (await h.client.get("/api/desk/items", headers=h.headers())).json()
     assert items["published"][0]["story"]["active"] and items["published"][0]["story"]["closes_at"]
+    # 2026-10-01: developing cards fold duplicate coverage too, and the story has
+    # last_updated so the Developing list doesn't sort it last.
+    a = await h.db.articles.find_one({"origin": "desk"})
+    assert a["absorb_until"] and s["last_updated"] == s["detected_at"]
 
 
 async def test_edit_is_validated_and_image_must_be_https(h):

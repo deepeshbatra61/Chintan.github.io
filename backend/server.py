@@ -945,7 +945,12 @@ async def _run_ingest_cycle_body() -> None:
                 # "spoke"/"spokesperson"), which is how unrelated domestic,
                 # business, and sports stories got tagged onto conflict
                 # wave topics like india-pakistan-tensions.
-                hits = sum(1 for kw in keywords if _kw_pattern(kw).search(haystack))
+                if kind == "desk":
+                    # Desk keywords are research-written phrases ("dubai tel
+                    # aviv flight"); match on their words, not the exact phrase.
+                    hits = desk.story_keyword_hits(keywords, haystack)
+                else:
+                    hits = sum(1 for kw in keywords if _kw_pattern(kw).search(haystack))
                 if hits >= min_matches:
                     matched_ids.append(article["article_id"])
             if matched_ids:
@@ -1015,35 +1020,87 @@ async def _run_ingest_cycle_body() -> None:
 
 
 async def _absorb_into_desk(new_articles: list) -> None:
-    """D10: for ABSORB_WINDOW_H after a Normal Desk story is published, API
-    articles covering the same event (2-hit keyword match) are folded into it
-    instead of appearing as separate cards a day later. They stay in the
-    database with merged_into set; the Desk lists them with an Undo."""
+    """D10: for ABSORB_WINDOW_H after a Desk story is published (Normal OR
+    developing), API articles covering the same event (2-hit keyword match)
+    are folded into it instead of appearing as separate cards. They stay in
+    the database with merged_into set; the Desk lists them with an Undo. For a
+    developing story they also join its timeline.
+
+    Each fold moves the Desk card's rank_at up to the folded article's: the
+    event is still moving, and without this the late API copies (rank_at =
+    arrival time) outranked the Desk original (2026-10-01, FlyDubai)."""
     if not new_articles:
         return
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
         hosts = await db.articles.find(
             {"origin": "desk", "absorb_until": {"$gt": now_iso}, "desk_hidden": {"$ne": True}},
-            {"_id": 0, "article_id": 1, "keywords": 1},
+            {"_id": 0, "article_id": 1, "keywords": 1, "desk_story_id": 1},
         ).to_list(50)
         if not hosts:
             return
         absorbed = 0
         for art in new_articles:
+            if art.get("origin") == "desk" or art.get("merged_into"):
+                continue
             text = f"{art.get('title', '')} {art.get('description', '')}"
             for host in hosts:
+                if art.get("article_id") == host["article_id"]:
+                    continue
                 if desk.matches_story(host.get("keywords") or [], text):
-                    await db.articles.update_one(
-                        {"article_id": art["article_id"], "absorb_exempt": {"$ne": True}},
+                    res = await db.articles.update_one(
+                        {"article_id": art["article_id"], "absorb_exempt": {"$ne": True},
+                         "merged_into": {"$exists": False}},
                         {"$set": {"merged_into": host["article_id"]}},
                     )
-                    absorbed += 1
+                    if getattr(res, "modified_count", 0):
+                        absorbed += 1
+                        bump = art.get("rank_at") or now_iso
+                        await db.articles.update_one({"article_id": host["article_id"]},
+                                                     {"$max": {"rank_at": bump}})
+                        if host.get("desk_story_id"):
+                            await db.developing_stories.update_one(
+                                {"story_id": host["desk_story_id"]},
+                                {"$addToSet": {"article_ids": art["article_id"]},
+                                 "$set": {"last_updated": now_iso}})
                     break
         if absorbed:
             logger.info(f"Desk: absorbed {absorbed} API article(s) into desk stories")
     except Exception:
         logger.error(f"Desk absorb failed: {traceback.format_exc()}")
+
+
+async def _desk_catch_up() -> None:
+    """One-time repair (idempotent) for Desk stories published before the
+    2026-10-01 fixes: developing Desk cards get an absorb window, Desk stories
+    get last_updated (the Developing list sorted them last and cut them off),
+    and the last 3 days of API coverage is folded in with the new matcher."""
+    try:
+        now = datetime.now(timezone.utc)
+        async for a in db.articles.find(
+                {"origin": "desk", "desk_hidden": {"$ne": True}, "absorb_until": None},
+                {"_id": 0, "article_id": 1, "published_at": 1}):
+            pub = a.get("published_at") or now.isoformat()
+            try:
+                until = datetime.fromisoformat(pub.replace("Z", "+00:00")) + timedelta(hours=desk.ABSORB_WINDOW_H)
+            except ValueError:
+                until = now + timedelta(hours=desk.ABSORB_WINDOW_H)
+            if until > now:
+                await db.articles.update_one({"article_id": a["article_id"]},
+                                             {"$set": {"absorb_until": until.isoformat()}})
+        async for st in db.developing_stories.find({"kind": "desk", "last_updated": {"$exists": False}},
+                                                   {"_id": 0, "story_id": 1, "detected_at": 1}):
+            await db.developing_stories.update_one(
+                {"story_id": st["story_id"]},
+                {"$set": {"last_updated": st.get("detected_at") or now.isoformat()}})
+        since = (now - timedelta(days=3)).isoformat()
+        recent = await db.articles.find(
+            {"published_at": {"$gte": since}, "origin": {"$ne": "desk"}, "merged_into": {"$exists": False}},
+            {"_id": 0, "article_id": 1, "title": 1, "description": 1, "rank_at": 1, "origin": 1},
+        ).to_list(5000)
+        await _absorb_into_desk(recent)
+    except Exception:
+        logger.error(f"Desk catch-up failed: {traceback.format_exc()}")
 
 
 async def _close_quiet_desk_stories() -> None:
@@ -1227,6 +1284,7 @@ async def _run_startup_migrations() -> None:
     # Sequential: the recategorize pass must see the other migration's output.
     await _run_category_migration()
     await _run_recategorize()
+    await _desk_catch_up()
     try:
         await _backfill_rank_at()
     except Exception:
@@ -5975,7 +6033,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
       state to filter here; if it's active, it already cleared verification."""
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
-    ).sort("last_updated", -1).to_list(100)
+    ).sort("last_updated", -1).to_list(1000)
 
     now = datetime.now(timezone.utc)
 

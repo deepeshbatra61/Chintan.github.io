@@ -146,6 +146,40 @@ def keyword_hits(keywords: Iterable[str], text: str) -> int:
     return sum(1 for kw in keywords if kw and _kw_pattern(kw).search(text or ""))
 
 
+_MONTHS = {"january", "february", "march", "april", "may", "june", "july", "august", "september",
+           "october", "november", "december", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep",
+           "sept", "oct", "nov", "dec"}
+_PHRASE_STOP = {"the", "and", "for", "with", "from", "into", "over", "after", "amid", "about", "says",
+                "said", "new", "its", "his", "her", "their", "this", "that", "was", "are", "has", "had"}
+
+
+def _phrase_tokens(kw: str) -> list[str]:
+    """The words of a keyword phrase that must appear for it to count. Codes,
+    years and dates ('fz1073', '2026', 'september') are dropped: research
+    writes them into keywords, but coverage of the same event rarely repeats
+    them verbatim."""
+    out = []
+    for t in re.findall(r"[a-z0-9][a-z0-9'\-]*", kw.lower()):
+        if any(ch.isdigit() for ch in t) or t in _MONTHS or t in _PHRASE_STOP or len(t) < 3:
+            continue
+        out.append(t)
+    return out
+
+
+def story_keyword_hits(keywords: Iterable[str], text: str) -> int:
+    """Desk-story matching: a keyword counts when ALL its meaningful words
+    appear (any order, word boundaries). 'dubai tel aviv flight' matches
+    'a Flydubai flight from Dubai to Tel Aviv'; an exact-phrase rule missed it
+    and let duplicate coverage outrank the Desk original (2026-10-01)."""
+    low = (text or "").lower()
+    hits = 0
+    for kw in keywords:
+        toks = _phrase_tokens(kw or "")
+        if toks and all(re.search(r"\b" + re.escape(t) + r"\b", low) for t in toks):
+            hits += 1
+    return hits
+
+
 def matches_story(keywords: list[str], text: str, min_hits: int = 2) -> bool:
     """The 2-hit rule shared with auto/wave stories (D-2hit, D10). A story
     with fewer than 2 keywords can never match: one generic word gluing
@@ -153,7 +187,7 @@ def matches_story(keywords: list[str], text: str, min_hits: int = 2) -> bool:
     kws = [k for k in keywords if k]
     if len(kws) < min_hits:
         return False
-    return keyword_hits(kws, text) >= min_hits
+    return story_keyword_hits(kws, text) >= min_hits
 
 
 def dedup_candidates(topic: str, articles: list[dict], stories: list[dict], limit: int = 5) -> list[dict]:

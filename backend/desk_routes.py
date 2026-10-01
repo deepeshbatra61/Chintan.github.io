@@ -445,8 +445,9 @@ def build_desk_router(
             # and the (currently off) LLM categoriser from rewriting it.
             "claude_summarized": True, "claude_categorized": True, "claude_skip": True,
         }
-        if d["news_type"] == "normal":
-            article["absorb_until"] = (now + timedelta(hours=desk.ABSORB_WINDOW_H)).isoformat()
+        # Fold same-event API coverage into the Desk card (Normal AND developing):
+        # otherwise the late API copies outrank the original (2026-10-01).
+        article["absorb_until"] = (now + timedelta(hours=desk.ABSORB_WINDOW_H)).isoformat()
         await db.articles.insert_one(dict(article))
 
         ref = {"type": "article", "id": article_id}
@@ -457,7 +458,7 @@ def build_desk_router(
                 "story_id": story_id, "title": d["headline"], "theme": d["category"].lower(),
                 "category": d["category"], "keywords": d["keywords"], "source": "desk", "kind": "desk",
                 "is_active": True, "state_summary": d["summary"], "citations": d["citations"],
-                "article_ids": [article_id], "detected_at": now_iso,
+                "article_ids": [article_id], "detected_at": now_iso, "last_updated": now_iso,
                 **desk.lifecycle_fields(d["heat"], now, bool(d.get("long_running"))),
                 "extra_h": 0, "desk_draft_id": draft_id,
             })

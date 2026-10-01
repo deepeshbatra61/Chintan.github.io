@@ -258,3 +258,29 @@ def test_topic_text_reads_article_slug_from_link():
 def test_link_topic_dedups_by_its_slug():
     m = desk.dedup_candidates("https://x.com/news/electoral-bonds-struck-down-123.html", ARTS, STORIES)
     assert m and m[0]["id"] == "a1"
+
+
+# ── story matching on phrase WORDS (2026-10-01: FlyDubai duplicates outranked the Desk card) ──
+
+FLY_KW = ["flydubai fz1073", "benjamin netanyahu", "tabuk saudi arabia", "dubai tel aviv flight",
+          "cockpit stabbing september 2026"]
+
+
+def test_phrase_words_match_real_coverage():
+    a = ("Flydubai flight incident: What we know about the pilot under investigation. A flydubai "
+         "flight from Dubai to Tel Aviv had to make an emergency landing in Saudi Arabia")
+    assert desk.story_keyword_hits(FLY_KW, a) == 2 and desk.matches_story(FLY_KW, a)
+
+
+def test_phrase_words_do_not_glue_unrelated_news():
+    for t in ("Emirates launches a new Dubai to London service",
+              "Netanyahu addresses the Knesset on the budget",
+              "Saudi Arabia hosts a tech summit in Riyadh"):
+        assert not desk.matches_story(FLY_KW, t), t
+
+
+def test_codes_years_and_months_are_ignored():
+    assert desk._phrase_tokens("cockpit stabbing september 2026") == ["cockpit", "stabbing"]
+    assert desk._phrase_tokens("flydubai fz1073") == ["flydubai"]
+    assert desk._phrase_tokens("2026") == []
+    assert desk.story_keyword_hits(["2026", "september"], "anything 2026 september") == 0
