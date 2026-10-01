@@ -3117,6 +3117,20 @@ async def _purge_user(user_id: str) -> None:
     await db.refresh_tokens.delete_many({"user_id": user_id})
     await db.user_sessions.delete_many({"user_id": user_id})
     await db.password_reset_tokens.delete_many({"user_id": user_id})
+    # Reading activity (was missing before 2026-10-01).
+    await db.reading_history.delete_many({"user_id": user_id})
+    await db.article_likes.delete_many({"user_id": user_id})
+    await db.article_dislikes.delete_many({"user_id": user_id})
+    await db.saved_for_brief.delete_many({"user_id": user_id})
+    await db.brief_opens.delete_many({"user_id": user_id})
+    await db.brief_cache.delete_many({"_id": {"$in": [brief_service.cache_key(t, user_id) for t in brief_service.BRIEF_TYPES]}})
+    # Push notifications: device tokens, choices, delivery history, pinned briefs.
+    await db.push_devices.delete_many({"user_id": user_id})
+    await db.push_prefs.delete_many({"user_id": user_id})
+    await db.push_log.delete_many({"user_id": user_id})
+    await db.push_briefs.delete_many({"user_id": user_id})
+    await db.push_prep.delete_many({"user_id": user_id})
+    await db.push_claims.delete_many({"user_id": user_id})
 
 
 @api_router.post("/account/delete")
