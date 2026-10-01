@@ -1030,7 +1030,7 @@ async def _absorb_into_desk(new_articles: list) -> None:
     event is still moving, and without this the late API copies (rank_at =
     arrival time) outranked the Desk original (2026-10-01, FlyDubai)."""
     if not new_articles:
-        return
+        return 0
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
         hosts = await db.articles.find(
@@ -1038,7 +1038,7 @@ async def _absorb_into_desk(new_articles: list) -> None:
             {"_id": 0, "article_id": 1, "keywords": 1, "desk_story_id": 1},
         ).to_list(50)
         if not hosts:
-            return
+            return 0
         absorbed = 0
         for art in new_articles:
             if art.get("origin") == "desk" or art.get("merged_into"):
@@ -1066,8 +1066,20 @@ async def _absorb_into_desk(new_articles: list) -> None:
                     break
         if absorbed:
             logger.info(f"Desk: absorbed {absorbed} API article(s) into desk stories")
+        return absorbed
     except Exception:
         logger.error(f"Desk absorb failed: {traceback.format_exc()}")
+        return 0
+
+
+async def _fold_recent_into_desk() -> int:
+    """Fold the last 3 days of API coverage into Desk stories (run at publish)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    recent = await db.articles.find(
+        {"published_at": {"$gte": since}, "origin": {"$ne": "desk"}, "merged_into": {"$exists": False}},
+        {"_id": 0, "article_id": 1, "title": 1, "description": 1, "rank_at": 1, "origin": 1},
+    ).to_list(5000)
+    return await _absorb_into_desk(recent) or 0
 
 
 async def _desk_catch_up() -> None:
@@ -6100,7 +6112,8 @@ async def get_developing_stories_list(feed_bar: bool = False):
             })
             continue
 
-        min_articles = 1 if kind in ("scheduled", "scout", "desk") else 3
+        boosted = bool(story.get("desk_boosted_at"))
+        min_articles = 1 if kind in ("scheduled", "scout", "desk") or boosted else 3
         if len(article_ids) < min_articles:
             continue                         # too thin to be a "story" yet
         latest_article = await db.articles.find_one(
@@ -6108,8 +6121,8 @@ async def get_developing_stories_list(feed_bar: bool = False):
             {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
             sort=[("published_at", -1)],
         )
-        if kind in ("scheduled", "desk"):
-            pass  # date window / Desk lifecycle rules already decide relevance
+        if kind in ("scheduled", "desk") or boosted:
+            pass  # date window / Desk lifecycle / an editor's boost decide relevance
         elif kind == "scout":
             if not latest_article or not _fresh(latest_article.get("published_at"), hours=12):
                 continue                     # short-lived by design — stale means done
@@ -6128,7 +6141,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
             # above already had; this branch never got it.
             "last_updated": (latest_article or {}).get("published_at") or story.get("last_updated"),
             "latest_article": latest_article,
-            "heat": story.get("heat") if kind == "desk" else None,
+            "heat": story.get("heat") if kind == "desk" or boosted else None,
         })
 
     # Explicit final sort by effective recency — the initial Mongo query
@@ -6445,6 +6458,7 @@ api_router.include_router(desk_routes.build_desk_router(
     logger=logger,
     push=push_svc,
     push_test_email=lambda: PUSH_TEST_USER_EMAIL,
+    fold_recent=_fold_recent_into_desk,
 ))
 
 app.include_router(api_router)

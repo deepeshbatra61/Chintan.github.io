@@ -504,3 +504,43 @@ async def test_push_flags_default_off(h):
     await h.client.post(f"/api/desk/drafts/{did}/publish", headers=h.headers())
     a = await h.db.articles.find_one({"origin": "desk"})
     assert a["desk_national"] is False and a["desk_sensitive"] is False
+
+
+async def test_boosts_are_listed_and_stories_marked(h):
+    await h.login()
+    await h.db.articles.insert_one({"article_id": "api_oct2", "title": "Oct 2 march announced", "category": "Politics",
+                                    "published_at": datetime.now(timezone.utc).isoformat()})
+    await h.db.developing_stories.insert_one({"story_id": "auto-oct2", "title": "Oct 2 protests", "kind": "auto",
+                                              "is_active": True, "article_ids": ["api_oct2"], "keywords": ["a", "b"]})
+    assert (await h.client.post("/api/desk/boost", headers=h.headers(),
+                                json={"type": "story", "id": "auto-oct2", "heat": 3})).status_code == 200
+    assert (await h.client.post("/api/desk/boost", headers=h.headers(),
+                                json={"type": "article", "id": "api_oct2", "heat": 2})).status_code == 200
+    s = await h.db.developing_stories.find_one({"story_id": "auto-oct2"})
+    assert s["desk_boosted_at"] and s["heat"] == 3
+    boosted = (await h.client.get("/api/desk/items", headers=h.headers())).json()["boosted"]
+    assert {(b["type"], b["id"]) for b in boosted} == {("story", "auto-oct2"), ("article", "api_oct2")}
+    assert all(b["visible"] for b in boosted)
+
+
+async def test_publish_folds_existing_coverage_now():
+    harness = Harness()
+    calls = []
+
+    async def fold():
+        calls.append(1)
+        return 2
+    app = FastAPI()
+    app.include_router(desk_routes.build_desk_router(
+        db=harness.db, auth=harness.auth, proxy_secret=lambda: PROXY, admin_emails=lambda: {EMAIL},
+        research=harness._research, fetch_meta=harness._fetch, send_email=harness._email,
+        registrable_domain=research._registrable_domain, suggest_category=lambda t: "Politics",
+        default_image="x", logger=__import__("logging").getLogger("t"), fold_recent=fold), prefix="/api")
+    harness.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
+    await harness.seed_admin()
+    await harness.login()
+    did = await _ready(harness)
+    assert (await harness.client.post(f"/api/desk/drafts/{did}/publish", headers=harness.headers())).status_code == 200
+    await harness.settle()
+    assert calls == [1]
+    await harness.client.aclose()

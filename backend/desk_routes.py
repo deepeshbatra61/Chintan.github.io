@@ -127,6 +127,7 @@ def build_desk_router(
     default_image: str,
     logger,
     push=None,                                   # push_service.PushService (optional)
+    fold_recent: Optional[Callable[[], Awaitable[int]]] = None,  # fold recent API coverage into Desk stories
     push_test_email: Callable[[], str] = lambda: "",
 ) -> APIRouter:
     router = APIRouter(prefix="/desk")
@@ -467,6 +468,10 @@ def build_desk_router(
 
         await db.desk_drafts.update_one({"draft_id": draft_id}, {"$set": {
             "status": "published", "published_ref": ref, "published_at": now_iso}})
+        if fold_recent is not None:
+            # Coverage already in the feed folds in now, not only future
+            # articles: otherwise existing copies keep outranking the new story.
+            _spawn(fold_recent())
         await db.desk_draft_locks.delete_one({"_id": d.get("topic_key")})
         await _audit(ctx, "publish", draft_id=draft_id, ref=ref, heat=d["heat"],
                      single_source=single, reason=d.get("single_source_reason") if single else None)
@@ -480,10 +485,16 @@ def build_desk_router(
         now_iso = desk.utcnow().isoformat()
         if body.type == "article":
             res = await db.articles.update_one({"article_id": body.id},
-                                               {"$set": {"heat": body.heat, "heat_from": now_iso, "boosted": True}})
+                                               {"$set": {"heat": body.heat, "heat_from": now_iso, "boosted": True,
+                                                         "boosted_at": now_iso}})
         else:
+            # desk_boosted_at makes the story show in the app's Developing list
+            # even if its automatic rules would hide it (2026-10-01: a boost on
+            # a hidden auto story changed nothing a reader could see).
             res = await db.developing_stories.update_one({"story_id": body.id, "is_active": True},
-                                                         {"$set": {"heat": body.heat, "heat_from": now_iso}})
+                                                         {"$set": {"heat": body.heat, "heat_from": now_iso,
+                                                                   "desk_boosted_at": now_iso,
+                                                                   "last_updated": now_iso}})
         if getattr(res, "matched_count", 1) == 0:
             raise HTTPException(status_code=404, detail="That item no longer exists.")
         await _audit(ctx, "boost", type=body.type, id=body.id, heat=body.heat)
@@ -526,7 +537,22 @@ def build_desk_router(
                         "long_running": bool(s.get("long_running")),
                     }
             published.append(item)
-        return {"drafts": drafts, "published": published}
+        boosted = []
+        async for a in db.articles.find({"boosted_at": {"$gte": since}, "origin": {"$ne": "desk"}},
+                                        {"_id": 0, "article_id": 1, "title": 1, "heat": 1, "boosted_at": 1,
+                                         "merged_into": 1, "desk_hidden": 1}).sort("boosted_at", -1).limit(30):
+            boosted.append({"type": "article", "id": a["article_id"], "title": a.get("title", ""),
+                            "heat": a.get("heat"), "boosted_at": a.get("boosted_at"),
+                            "visible": not a.get("merged_into") and not a.get("desk_hidden")})
+        async for st in db.developing_stories.find({"desk_boosted_at": {"$gte": since}},
+                                                   {"_id": 0, "story_id": 1, "title": 1, "heat": 1,
+                                                    "desk_boosted_at": 1, "is_active": 1, "article_ids": 1}
+                                                   ).sort("desk_boosted_at", -1).limit(30):
+            boosted.append({"type": "story", "id": st["story_id"], "title": st.get("title", ""),
+                            "heat": st.get("heat"), "boosted_at": st.get("desk_boosted_at"),
+                            "visible": bool(st.get("is_active")) and bool(st.get("article_ids"))})
+        boosted.sort(key=lambda b: b.get("boosted_at") or "", reverse=True)
+        return {"drafts": drafts, "published": published, "boosted": boosted}
 
     async def _story(story_id: str) -> dict:
         s = await db.developing_stories.find_one({"story_id": story_id, "kind": "desk"}, {"_id": 0})
