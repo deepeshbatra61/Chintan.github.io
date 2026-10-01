@@ -52,17 +52,35 @@ The Desk's Push panel says "Firebase isn't configured on the server" until
 
 ## 5. iOS build (Bani, on the Mac)
 
-1. `npx cap sync ios` (adds the push plugin pod).
-2. In `ios/App/Podfile`, inside `target 'App'`, add `pod 'FirebaseMessaging'`,
-   then `cd ios/App && pod install`.
+This project's iOS side uses **Swift Package Manager** (`ios/App/CapApp-SPM`),
+not CocoaPods: there is no Podfile and no `pod install`.
+
+Do NOT add `@capacitor-firebase/messaging` or any second push plugin. The app's
+push code uses `@capacitor/push-notifications` (already in package.json and
+working on Android); a second plugin would put two Firebase message handlers on
+Android and nothing in the app would call it. iOS only needs the Firebase SDK
+and the token hand-off below.
+
+1. `git pull`, then in `frontend`: `yarn install` (or `npm install`),
+   `yarn build`, `npx cap sync ios`. This adds `@capacitor/push-notifications`
+   to `CapApp-SPM/Package.swift` automatically.
+2. Add the Firebase SDK in Xcode (NOT in `CapApp-SPM/Package.swift`, which
+   `cap sync` regenerates): **File → Add Package Dependencies…** → paste
+   `https://github.com/firebase/firebase-ios-sdk` → Dependency Rule "Up to Next
+   Major Version" → **Add Package** → in the product list tick only
+   **FirebaseMessaging**, target **App** → Add Package.
 3. Xcode: drag **GoogleService-Info.plist** into the `App` group (tick "Copy
    items if needed", target App).
 4. Xcode → App target → **Signing & Capabilities → + Capability**:
    **Push Notifications**, and **Background Modes** with **Remote
    notifications** ticked.
-5. Replace the three functions below in `ios/App/App/AppDelegate.swift` (keep
-   the rest of the file). Without this, iPhones report Apple's token, which
-   Firebase can't send to.
+5. In `ios/App/App/AppDelegate.swift`: add the two Firebase imports at the
+   top, put `FirebaseApp.configure()` at the start of the existing
+   `didFinishLaunchingWithOptions` (keep anything else already in it, e.g. Sign
+   in with Apple setup), and add the two remote-notification functions if they
+   aren't there (replace them if they are). This is the hand-off from
+   Capacitor's own "Push Notifications with Firebase" guide: without it, iPhones
+   report Apple's token, which Firebase can't send to.
 
 ```swift
 import UIKit
@@ -74,7 +92,8 @@ import FirebaseMessaging
 
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-    FirebaseApp.configure()
+    FirebaseApp.configure()   // add this line first; keep whatever else is already here
+    // ...existing code...
     return true
 }
 
