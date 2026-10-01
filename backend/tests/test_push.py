@@ -3,6 +3,8 @@ rules, images, FCM message shapes and the FCM error table."""
 
 from datetime import date, datetime, timedelta, timezone
 
+import re
+
 import pytest
 
 import push as P
@@ -124,19 +126,29 @@ def test_every_template_passes_its_own_rules():
         assert P.copy_problem(title, body.format(hook="x" * P.HOOK_MAX), slot, True, from_ai=False) is None, tid
 
 
-def test_sun_emoji_only_in_templates():
-    assert P.copy_problem("Rise and read ☀", "ok body", "sunrise", False, from_ai=False) is None
-    assert P.copy_problem("Rise and read ☀", "ok body", "sunrise", False, from_ai=True) == "emoji"
-    assert P.copy_problem("Rise and read 🚀", "ok body", "sunrise", False, from_ai=False) == "emoji"
+def test_no_emoji_anywhere_and_no_sun_in_templates():
+    assert P.copy_problem("Rise and read ☀", "This morning: ok", "sunrise", False, from_ai=False) == "emoji"
+    for slot, lines in P.TEMPLATES.items():
+        for tid, title, body in lines:
+            assert not P.leans_on_brand(title.format(name="Asha"), ""), tid
+            assert not re.search(r"opens with|leads|led by", body, re.I), tid   # hook may not be story #1
+
+
+def test_brand_check():
+    assert P.leans_on_brand("Sun's down on imports", "Rajnath: boost indigenous defence")
+    assert P.leans_on_brand("Chintan on chips", "India's chip plan")
+    assert not P.leans_on_brand("Sun Pharma's big week", "Sun Pharma shares jump 8%")
+    assert not P.leans_on_brand("Sunday's big match", "India face Pakistan on Sunday")
+    assert not P.leans_on_brand("Ships ahoy for exports", "Rajnath wants more warship exports")
 
 
 @pytest.mark.parametrize("title,body,why", [
-    ("x" * 33 + " sunrise", "b", "title_long"),
-    ("Sunrise", "b" * 111, "body_long"),
-    ("Sunrise!", "b", "exclamation"),
-    ("Sunrise: just in", "b", "banned"),
-    ("Good morning", "b", "no_sun_word"),
-    ("", "b", "empty"),
+    ("x" * 33, "this morning", "title_long"),
+    ("Morning", "b" * 111, "body_long"),
+    ("Morning!", "b", "exclamation"),
+    ("Morning: just in", "b", "banned"),
+    ("Good news", "b", "no_time_cue"),
+    ("", "this morning", "empty"),
 ])
 def test_copy_problems(title, body, why):
     assert P.copy_problem(title, body, "sunrise", False, from_ai=True) == why
@@ -156,13 +168,19 @@ def test_clip_words():
     assert len(out) <= 20 and out.endswith("…") and " " not in out[-2:]
 
 
-GOOD_AI = {"sensitive": False, "hook": "RBI holds rates, again", "title": "Surya's up, rates aren't"}
+GOOD_AI = {"sensitive": False, "hook": "RBI holds rates, again", "title": "Rates stay put, again"}
 
 
 def test_compose_ai_path():
     c = P.compose_slot_copy("sunrise", "RBI holds repo rate", GOOD_AI, [], "Deepesh Batra", 0)
-    assert (c.title, c.source, c.sober) == ("Surya's up, rates aren't", "ai", False)
+    assert (c.title, c.source, c.sober) == ("Rates stay put, again", "ai", False)
     assert "RBI holds rates, again" in c.body
+
+
+def test_ai_title_forcing_sun_is_rejected():
+    ai = dict(GOOD_AI, title="Sun's down on rates")
+    c = P.compose_slot_copy("dusk", "RBI holds repo rate", ai, [], None, 0)
+    assert c.title in {t[1] for t in P.TEMPLATES["dusk"]}
 
 
 def test_compose_bad_ai_title_uses_template_title():
@@ -181,20 +199,20 @@ def test_compose_bad_hook_uses_headline():
 @pytest.mark.parametrize("ai", [None, {"sensitive": True, "hook": "h", "title": "Sunrise pun"}])
 def test_sensitive_or_no_verdict_is_sober(ai):
     c = P.compose_slot_copy("sunrise", "Bus accident kills 12 in Himachal", ai, [], "Asha", 0)
-    assert c.sober and c.title == "Your Sunrise brief" and c.source == "sober"
+    assert c.sober and c.title == "Your morning brief" and c.source == "sober"
     assert not P.has_emoji(c.title + c.body)
 
 
 def test_desk_sensitive_forces_sober():
     c = P.compose_slot_copy("dusk", "Headline", GOOD_AI, [], None, 0, force_sober=True)
-    assert c.sober and c.title == "Your Dusk brief"
+    assert c.sober and c.title == "Your evening brief"
 
 
 def test_rotation_avoids_recent_and_name_lines_without_name():
-    ids = {P.pick_template("sunrise", ["sr1", "sr2"], None, s)[0] for s in range(10)}
-    assert ids == {"sr4"}                       # sr3 needs a name
-    ids = {P.pick_template("sunrise", ["sr1", "sr2", "sr3", "sr4"], "Asha", s)[0] for s in range(10)}
-    assert ids == {"sr1", "sr2", "sr3", "sr4"}  # all recent → rotate through all
+    ids = {P.pick_template("sunrise", ["sr5", "sr6"], None, s)[0] for s in range(10)}
+    assert ids == {"sr8"}                       # sr7 needs a name
+    ids = {P.pick_template("sunrise", ["sr5", "sr6", "sr7", "sr8"], "Asha", s)[0] for s in range(10)}
+    assert ids == {"sr5", "sr6", "sr7", "sr8"}  # all recent -> rotate through all
 
 
 def test_every_composed_copy_is_sendable():
@@ -222,7 +240,8 @@ def test_parse_hook():
 
 def test_hook_prompt_mentions_limits():
     p = P.hook_prompt("dusk", "Headline", "Summary")
-    assert str(P.HOOK_MAX) in p and str(P.TITLE_MAX) in p and "Dusk" in p
+    assert str(P.HOOK_MAX) in p and str(P.TITLE_MAX) in p and "evening" in p
+    assert "Do NOT mention the sun" in p
 
 
 # ── images ──────────────────────────────────────────────────────────────────

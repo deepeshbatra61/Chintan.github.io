@@ -47,7 +47,7 @@ class FakeFCM:
         return 200, {"name": "projects/x/messages/1"}
 
 
-GOOD_HOOK = json.dumps({"sensitive": False, "hook": "RBI holds rates, again", "title": "Surya's up, rates aren't"})
+GOOD_HOOK = json.dumps({"sensitive": False, "hook": "RBI holds rates, again", "title": "Rates stay put, again"})
 
 
 class Env:
@@ -170,14 +170,14 @@ def test_prepare_then_send_once_with_pin_and_copy():
     summary = e.tick()                                   # 06:30 IST
     assert summary["prepared"] == 1
     prep = run(e.db.push_prep.find_one({}))
-    assert prep["title"] == "Surya's up, rates aren't" and prep["source"] == "ai"
+    assert prep["title"] == "Rates stay put, again" and prep["source"] == "ai"
     assert prep["image"] == "https://img.example/rbi.jpg"
     pin = run(e.db.push_briefs.find_one({"pin_id": prep["pin_id"]}))
     assert pin["slot_label"] == "07:30 Sunrise"
 
     assert e.tick(SUNRISE)["sent"] == 1
     msg = e.fcm.sent[-1]
-    assert msg["notification"]["title"] == "Surya's up, rates aren't"
+    assert msg["notification"]["title"] == "Rates stay put, again"
     assert msg["data"]["route"] == f"/brief/morning?pin={prep['pin_id']}"
     assert msg["android"]["notification"]["channel_id"] == "daily"
     assert e.tick(SUNRISE + timedelta(minutes=1))["sent"] == 0           # claimed already
@@ -305,7 +305,7 @@ def test_sensitive_hook_is_sober_and_photo_free():
     e.user("u1")
     e.tick()
     prep = run(e.db.push_prep.find_one({}))
-    assert prep["title"] == "Your Sunrise brief" and prep["sober"] and prep["image"] is None
+    assert prep["title"] == "Your morning brief" and prep["sober"] and prep["image"] is None
 
 
 def test_llm_down_is_sober():
@@ -481,3 +481,31 @@ def test_alert_throttle():
     assert run(e.svc.alert("x", "s", "t")) is False
     e.clock.t += timedelta(hours=6, minutes=1)
     assert run(e.svc.alert("x", "s", "t")) is True
+
+
+
+# ── 48h story repeat rule (owner saw Noon and Dusk both feature one article) ─
+
+def test_next_slot_features_a_different_story():
+    e = Env(now=P.slot_instant("noon", date(2026, 10, 1), IST) - timedelta(minutes=60))
+    e.user("u1", interests=("Economy", "Sports"))
+    run(e.svc.set_prefs("u1", {"noon": True}))
+    noon = P.slot_instant("noon", date(2026, 10, 1), IST)
+    e.tick()
+    e.tick(noon)
+    first = run(e.db.push_prep.find_one({"slot": "noon"}))["story_id"]
+    e.tick(DUSK - timedelta(minutes=60))
+    second = run(e.db.push_prep.find_one({"slot": "dusk"}))
+    assert second["story_id"] and second["story_id"] != first
+
+
+def test_slot_skipped_when_every_story_was_already_pushed():
+    e = Env()
+    e.user("u1", interests=("Economy", "Sports"))
+    for i, aid in enumerate(("a1", "a2")):
+        run(e.db.push_log.insert_one({"push_id": f"old{i}", "user_id": "u1", "status": "sent", "kind": "slot",
+                                      "story_id": aid, "sent_at": SUNRISE - timedelta(hours=10), "opened_at": None}))
+    e.tick()
+    assert run(e.db.push_prep.find_one({}))["skip"] == "repeat"
+    assert e.tick(SUNRISE)["skipped"] == 1 and e.fcm.sent == []
+    assert run(e.db.push_claims.find_one({}))["reason"] == "repeat"

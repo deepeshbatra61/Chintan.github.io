@@ -389,10 +389,23 @@ class PushService:
         if not user:
             return False
         doc = await brief_service.build_brief(self.db, user, slot.brief_type, self._capped_llm, now)
-        stories = doc.get("referenced_stories") or []
+        stories = [st for st in (doc.get("referenced_stories") or []) if st.get("article_id")]
         if not stories:
             return False
-        lead = stories[0]
+        # Never the same story to the same reader twice within 48h (CEO plan
+        # rule; owner saw Noon and Dusk both lead with one article). Feature the
+        # first brief story they haven't been pushed; if all were, skip the slot.
+        recent_story_ids = await self._recent_story_ids(user_id, key, now)
+        fresh = [st for st in stories if st["article_id"] not in recent_story_ids]
+        if not fresh:
+            try:
+                await self.db.push_prep.insert_one({
+                    "_id": key, "user_id": user_id, "slot": slot_key, "slot_at": at, "skip": "repeat",
+                    "created_at": now, "expires_at": now + timedelta(days=3)})
+            except DuplicateKeyError:
+                pass
+            return False
+        lead = fresh[0]
         article = await self.db.articles.find_one({"article_id": lead.get("article_id")}, {"_id": 0}) or {}
         label = f"{P.local_now(at, tz).strftime('%H:%M')} {slot.label}"
         pin_id = await brief_service.create_pin(self.db, user_id, slot.brief_type, doc, now,
@@ -416,6 +429,16 @@ class PushService:
         except DuplicateKeyError:
             return False
         return True
+
+    async def _recent_story_ids(self, user_id: str, this_key: str, now: datetime) -> set:
+        """Stories pushed (or already prepared for another slot) to this reader in 48h."""
+        since = now - DEDUPE_STORY
+        ids = {d.get("story_id") async for d in self.db.push_log.find(
+            {"user_id": user_id, "status": "sent", "sent_at": {"$gte": since}}, {"story_id": 1})}
+        ids |= {d.get("story_id") async for d in self.db.push_prep.find(
+            {"user_id": user_id, "created_at": {"$gte": since}, "_id": {"$ne": this_key}}, {"story_id": 1})}
+        ids.discard(None)
+        return ids
 
     async def _send_slot(self, user_id: str, r: dict, slot_key: str, day, at: datetime, now: datetime) -> str:
         key = self._key(user_id, slot_key, day)
@@ -441,6 +464,9 @@ class PushService:
         if not prep:
             await self._finish_claim(key, "failed", "no_prep")
             return "failed"
+        if prep.get("skip"):
+            await self._finish_claim(key, "skipped", prep["skip"])
+            return "skipped"
         ok = await self._deliver(
             devices=r["devices"], user_id=user_id, kind="slot", slot_key=slot_key,
             title=prep["title"], body=prep["body"], image=prep.get("image"),
@@ -593,7 +619,7 @@ class PushService:
         results = []
         for d in devices:
             msg = P.build_message(token=d["token"], platform=d.get("platform", "android"), kind="slot",
-                                  title="Surya's up. This is a test.", body="If you can read this, push works.",
+                                  title="A quick test from Chintan", body="If you can read this, notifications work on this phone.",
                                   data={"push_id": "test", "kind": "test", "route": "/feed", "slot": ""},
                                   ttl_seconds=600, now_epoch=int(self.now().timestamp()), slot_key="sunrise")
             status, cls, detail = await self._send_with_retry(msg)

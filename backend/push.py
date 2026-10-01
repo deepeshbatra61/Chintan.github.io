@@ -8,10 +8,12 @@ Slots ("slots, not streams"): at most one push per slot per reader.
                ├── prep at slot-60m ──┤ send in [slot, slot+30m) ── then skipped, never late
                └── never two pushes within 90 min (Breaking included)
 
-Copy: every slot TITLE carries its sun word (Android's header can't show the slot,
-design review DR-5A). Title <= 32, body <= 110. AI hooks are garnish: any failed
-check falls back to a hand-written template (R9). Sober mode = no wit, no emoji,
-no photo (DR-10A, DR-11A).
+Copy (v2, owner feedback 2026-10-01): the time of day is a subtle hint in the
+BODY ("This morning:", "Lunch, with a side of context:", "Tonight:"), never forced
+sun/Surya/Chintan wordplay in the title. The title is free to be a witty line about
+the story itself. Title <= 32, body <= 110. AI copy is garnish: any failed check
+falls back to a hand-written template (R9). Sober mode = no wit, no emoji, no photo.
+A story is never pushed to the same reader twice within 48h (push_service).
 
 FCM error table (eng review 6A): dead token -> delete; busy -> retry in window;
 our key/auth broken -> keep tokens + alert owner.
@@ -33,16 +35,16 @@ class Slot:
     at: time            # local time
     default_on: bool
     label: str          # reader-facing name
-    sun_words: Tuple[str, ...]   # one must appear in any title for this slot
+    time_words: Tuple[str, ...]  # a subtle time-of-day cue; one must appear in title or body
 
 
 SLOTS: Dict[str, Slot] = {
     "sunrise": Slot("sunrise", "morning", time(7, 30), True, "Sunrise",
-                    ("sunrise", "surya", "sun's up", "sun is up", "rise")),
+                    ("morning", "breakfast", "chai", "start the day", "the day gets", "wake")),
     "noon":    Slot("noon", "midday", time(13, 0), False, "High Noon",
-                    ("noon", "midday sun", "high sun")),
+                    ("lunch", "midday", "afternoon", "noon", "half the day", "since morning")),
     "dusk":    Slot("dusk", "night", time(19, 30), True, "Dusk",
-                    ("dusk", "sun's down", "sunset", "sundown", "sun is down")),
+                    ("evening", "tonight", "night", "the day", "call it a day", "dinner")),
 }
 SLOT_ORDER = ("sunrise", "noon", "dusk")
 
@@ -198,31 +200,35 @@ BODY_MAX = 110
 HOOK_MAX = 45
 NAME_MAX = 12
 
-# Hand-written lines (the floor under the AI). Every title carries its sun
-# word. ☀ is the ONLY emoji anywhere, and only here (DR-11A).
+# Hand-written lines (the floor under the AI). Every BODY carries a subtle
+# time-of-day cue, so any title (template or AI) can sit on top. No line claims
+# the hook is the brief's first story ("opens with"/"leads"): after the 48h
+# repeat rule the hook may be the 2nd or 3rd story. No emoji anywhere.
 TEMPLATES: Dict[str, List[Tuple[str, str, str]]] = {
-    # (template_id, title, body) — body contains {hook}; title may contain {name}
+    # (template_id, title, body) - body contains {hook}; title may contain {name}
     "sunrise": [
-        ("sr1", "Surya's up. So is the news.", "{hook}. 3 stories, 2 minutes."),
-        ("sr2", "Rise and read ☀", "Opens with: {hook}. Your 3-story start is ready."),
-        ("sr3", "Sun's up, {name}", "Before the day gets loud: {hook}, and 2 more."),
-        ("sr4", "Sunrise: 3 stories, 1 chai", "Opens with: {hook}."),
+        ("sr5", "Your morning three", "This morning: {hook}, and 2 more."),
+        ("sr6", "Before the day gets loud", "Over chai: {hook}, and two more worth knowing."),
+        ("sr7", "Morning, {name}", "This morning: {hook}. Three stories, two minutes."),
+        ("sr8", "Three for your chai", "Before the day gets loud: {hook}, and 2 more."),
     ],
     "noon": [
-        ("nn1", "High noon, whole picture", "{hook}, plus what else moved since morning."),
-        ("nn2", "Midday sun, fresh context", "Lunch, with a side of context: {hook}."),
+        ("nn3", "Half the day, whole picture", "{hook}, plus what else moved since morning."),
+        ("nn4", "Your lunchtime read", "Lunch, with a side of context: {hook}."),
     ],
     "dusk": [
-        ("dk1", "Sun's down. The day, distilled.", "{hook} leads tonight's 3."),
-        ("dk2", "Dusk: the day, in three", "{hook}, and two more worth knowing."),
-        ("dk3", "Sunset read, 2 minutes", "Before you scroll the night away: {hook}."),
+        ("dk4", "The day, distilled", "Tonight: {hook}, and two more worth knowing."),
+        ("dk5", "Tonight's three", "Before you scroll the night away: {hook}."),
+        ("dk6", "Before you call it a day", "The day in three, including {hook}."),
     ],
 }
 SOBER_TEMPLATES: Dict[str, Tuple[str, str, str]] = {
-    "sunrise": ("srS", "Your Sunrise brief", "{hook}. And 2 more stories."),
-    "noon":    ("nnS", "Your High Noon brief", "{hook}. And 2 more stories."),
-    "dusk":    ("dkS", "Your Dusk brief", "{hook}. And 2 more stories."),
+    "sunrise": ("srS", "Your morning brief", "This morning: {hook}. And 2 more stories."),
+    "noon":    ("nnS", "Your afternoon brief", "This afternoon: {hook}. And 2 more stories."),
+    "dusk":    ("dkS", "Your evening brief", "This evening: {hook}. And 2 more stories."),
 }
+# Brand words an AI title may not lean on (unless the story itself is about them).
+BRAND_WORDS = ("sun", "surya", "chintan", "sunrise", "sunset", "dusk")
 
 _EMOJI = re.compile(
     "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\U00002B00-\U00002BFF️‍]"
@@ -283,13 +289,20 @@ def copy_problem(title: str, body: str, slot_key: Optional[str], sober: bool,
         return "exclamation"
     if (from_ai or sober) and (has_emoji(title) or has_emoji(body)):
         return "emoji"
-    if has_emoji(title.replace("☀", "")) or has_emoji(body):
+    if has_emoji(title) or has_emoji(body):
         return "emoji"
     if slot_key and _BANNED.search(title + " " + body):
         return "banned"
-    if slot_key and not any(w in title.lower() for w in SLOTS[slot_key].sun_words):
-        return "no_sun_word"
+    if slot_key and not any(w in (title + " " + body).lower() for w in SLOTS[slot_key].time_words):
+        return "no_time_cue"
     return None
+
+
+def leans_on_brand(title: str, headline: str) -> bool:
+    """True if an AI title forces sun/Surya/Chintan wordplay the story doesn't
+    contain (owner feedback: 'too much SUN SUN')."""
+    t, h = title.lower(), (headline or "").lower()
+    return any(re.search(rf"\b{w}\b", t) and not re.search(rf"\b{w}\b", h) for w in BRAND_WORDS)
 
 
 def pick_template(slot_key: str, recent_ids: Iterable[str], name: Optional[str], salt: int) -> Tuple[str, str, str]:
@@ -346,7 +359,8 @@ def compose_slot_copy(slot_key: str, lead_headline: str, ai: Optional[dict], rec
     ai_title = ai.get("title") if ai else None
     if isinstance(ai_title, str) and ai_title.strip():
         cand = ai_title.strip()
-        if copy_problem(cand, body, slot_key, False, from_ai=True) is None:
+        if (copy_problem(cand, body, slot_key, False, from_ai=True) is None
+                and not leans_on_brand(cand, lead_headline)):
             title, source = cand, "ai"
     if copy_problem(title, body, slot_key, False, from_ai=False):
         # Last guard: the plainest template line for this slot.
@@ -367,20 +381,21 @@ def breaking_copy(text: str) -> Tuple[str, str]:
 
 def hook_prompt(slot_key: str, headline: str, summary: str) -> str:
     slot = SLOTS[slot_key]
-    words = ", ".join(f'"{w}"' for w in slot.sun_words[:3])
+    when = {"sunrise": "morning", "noon": "lunchtime", "dusk": "evening"}[slot_key]
     return (
-        "You write push-notification copy for Chintan, an Indian news app whose mark is Surya, the sun. "
-        "Voice: warm, witty, Indian English, never clickbait. The push leads with this story:\n"
+        "You write push-notification copy for Chintan, an Indian news app. "
+        "Voice: warm, witty, Indian English, never clickbait. This is the reader's "
+        f"{when} brief, and the push features this story:\n"
         f"HEADLINE: {headline[:300]}\nSUMMARY: {summary[:600]}\n\n"
-        f"This is the {slot.label} brief push.\n"
         "Return ONLY a JSON object with keys:\n"
         '  "sensitive": true if the story involves death, disaster, violence, crime against people, '
         "communal or religious conflict, illness, or anything a reader could be grieving; also true if unsure.\n"
         f'  "hook": the story compressed to <= {HOOK_MAX} characters, factual, no emoji, no exclamation mark, '
         'no "just in"/"right now".\n'
-        f'  "title": only if sensitive is false, a title of <= {TITLE_MAX} characters that contains one of {words}; '
-        "a light wordplay on the story is welcome if it is kind and clear. No emoji, no exclamation mark. "
-        "If you can't do it well, use null.\n"
+        f'  "title": only if sensitive is false, a title of <= {TITLE_MAX} characters with light, kind wordplay '
+        "drawn from THE STORY ITSELF (its people, place, numbers or stakes). Do NOT mention the sun, sunrise, "
+        "sunset, dusk, Surya or Chintan, and do not force a time-of-day pun; a time hint is fine only if it "
+        "comes naturally. No emoji, no exclamation mark. If you can't do it well, use null.\n"
     )
 
 
