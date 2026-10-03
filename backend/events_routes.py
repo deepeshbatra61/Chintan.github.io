@@ -7,17 +7,21 @@
                                     seen_at so the app can draw "SINCE YOU LOOKED"
     GET    /events/{event_id}/coverage  every outlet covering an event, grouped by
                                     type (public: it's the same news the feed shows)
+    GET    /states/top             states with the most stories in the last 24h
+                                    (the States chip's pills; public)
 
 Identity comes ONLY from the session (get_user), as in push_routes: a request
 body can never name an account. Story ids are either an event ("ev-…") or a
 developing_stories container id; anything else is a 404, never stored.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+import publishers as P
 
 MAX_FOLLOWS = 50
 STORY_ID_MAX = 120
@@ -133,11 +137,24 @@ def build_events_router(*, db_getter: Callable[[], object],
             groups.setdefault(g, []).append({
                 "article_id": a["article_id"], "title": a.get("title", ""),
                 "outlet": "Chintan Desk" if a.get("origin") == "desk" else (a.get("publisher_name") or key),
+                "initials": "CD" if a.get("origin") == "desk" else P.initials_of(key, a.get("publisher_name") or key),
                 "published_at": a.get("published_at")})
         order = ["national", "regional", "wire", "international", "other"]
         return {"event_id": event_id, "developing": ev.get("status") == "developing",
                 "outlets_count": sum(len(v) for v in groups.values()),
                 "groups": [{"group": g, "outlets": groups[g]} for g in order if g in groups]}
+
+    @router.get("/states/top")
+    async def top_states(limit: int = 5):
+        db = db_getter()
+        since = (_now() - timedelta(hours=24)).isoformat()
+        counts: dict = {}
+        async for a in db.articles.find({"state": {"$nin": [None, ""]}, "published_at": {"$gte": since},
+                                         "event_hidden": {"$ne": True}, "merged_into": {"$exists": False}},
+                                        {"_id": 0, "state": 1}):
+            counts[a["state"]] = counts.get(a["state"], 0) + 1
+        top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:max(1, min(limit, 10))]
+        return {"states": [{"state": st, "count": n} for st, n in top]}
 
     @router.post("/stories/{story_id}/seen")
     async def mark_seen(story_id: str, request: Request):

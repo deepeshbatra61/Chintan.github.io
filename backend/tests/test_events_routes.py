@@ -143,3 +143,13 @@ async def test_coverage_lists_each_voice_once_grouped(h):
     assert body["groups"][1]["outlets"][0]["outlet"] == "ANI"
     assert (await h.client.get("/events/ev-hidden/coverage")).status_code == 404
     assert (await h.client.get("/events/nope/coverage")).status_code == 404
+
+
+async def test_top_states(h):
+    await h.db.articles.insert_many(
+        [{"article_id": f"k{i}", "state": "Kerala", "published_at": iso(-1)} for i in range(3)] +
+        [{"article_id": "m1", "state": "Maharashtra", "published_at": iso(-2)},
+         {"article_id": "old", "state": "Goa", "published_at": iso(-30)},
+         {"article_id": "hid", "state": "Goa", "published_at": iso(-1), "event_hidden": True}])
+    body = (await h.client.get("/states/top")).json()
+    assert body["states"] == [{"state": "Kerala", "count": 3}, {"state": "Maharashtra", "count": 1}]

@@ -4979,7 +4979,8 @@ async def get_articles(
     if subcategory:
         query["subcategory_v2" if v2 else "subcategory"] = subcategory
     if state and v2:
-        query["state"] = state
+        # "*" = the States chip with no state picked: every state-tagged story
+        query["state"] = {"$nin": [None, ""]} if state == "*" else state
     if developing is not None:
         query["is_developing"] = developing
 

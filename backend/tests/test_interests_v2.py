@@ -77,3 +77,14 @@ async def test_feed_filters_by_client(db):
     assert [a["article_id"] for a in by_state] == ["h"]
     ignored = await server.get_articles(state="Kerala", request=Req())   # 1.12 never sends it; ignore if it did
     assert {a["article_id"] for a in ignored} == {"h", "s"}
+
+
+async def test_any_state_filter(db):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    await db.articles.insert_many([
+        {"article_id": "k", "title": "Kochi", "category": "Politics", "published_at": now, "rank_at": now, "state": "Kerala"},
+        {"article_id": "n", "title": "National", "category": "Politics", "published_at": now, "rank_at": now, "state": None},
+    ])
+    got = await server.get_articles(state="*", request=Req("1.13"))
+    assert [a["article_id"] for a in got] == ["k"]
