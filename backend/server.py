@@ -541,6 +541,34 @@ def _significant_terms(title: str) -> set:
     return terms
 
 
+# Words a scout headline uses for HOW it happened, not WHAT happened. "India vs
+# Zimbabwe 3rd T20I live" must not tag every live match, and "india" (already in
+# _DEV_STOPWORDS) must never be a story keyword: scout titles used every word over
+# 3 letters, one hit tagged an article and extended the story's life, so ~60
+# stories keyed on "india" tagged 254 of 275 fresh GNews stories (2026-10-03).
+_SCOUT_GENERIC = frozenset(
+    "live ongoing underway result results match matches series final finals semi "
+    "versus against wins win won beats beat defeats routs crushes sweeps reaches "
+    "begins starts ends meeting talks protest protests day".split()
+)
+
+
+def _scout_keywords(title: str) -> list:
+    """Distinctive words of a scout story title, in title order."""
+    out = []
+    for w in re.findall(r"[A-Za-z][A-Za-z'&-]{3,}", title or ""):
+        lw = w.lower()
+        if lw not in _DEV_STOPWORDS and lw not in _SCOUT_GENERIC and lw not in out:
+            out.append(lw)
+    return out
+
+
+def _same_scout_story(a: list, b: list) -> bool:
+    """Two scout keyword sets describe one event when they share 2+ words
+    ("pradhan resigns" vs "education minister pradhan resigns after exam")."""
+    return len(set(a) & set(b)) >= 2
+
+
 async def _detect_developing_stories() -> None:
     """Cluster recent articles by shared significant terms, score by
     velocity/size/source diversity, then ask the LLM to judge STRICTLY
@@ -726,6 +754,9 @@ async def _scout_developing_candidates(api_articles: list) -> None:
         data = json.loads(s[st:en])
         now = datetime.now(timezone.utc)
         flagged = 0
+        live_scouts = await db.developing_stories.find(
+            {"kind": "scout", "is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1}
+        ).to_list(500)
         for f in data.get("flagged", [])[:5]:  # bound noise/cost per cycle
             idx = f.get("index")
             if not isinstance(idx, int) or idx < 0 or idx >= len(batch):
@@ -733,8 +764,22 @@ async def _scout_developing_candidates(api_articles: list) -> None:
             art = batch[idx]
             title = (str(f.get("title") or art.get("title", ""))).strip()[:80]
             theme = (str(f.get("theme") or "news")).strip().lower()[:20]
+            keywords = _scout_keywords(title)
+            # The scout re-flags a live event every run under a new wording
+            # ("Pradhan resigns" / "Education minister steps down"...): join the
+            # story already open for it instead of opening another one.
+            same = next((s for s in live_scouts if _same_scout_story(keywords, s.get("keywords") or [])), None)
+            if same:
+                await db.developing_stories.update_one(
+                    {"story_id": same["story_id"]},
+                    {"$set": {"last_updated": now.isoformat(),
+                              "expires_at": (now + timedelta(hours=6)).isoformat()},
+                     "$addToSet": {"article_ids": art["article_id"]}},
+                )
+                flagged += 1
+                continue
             story_id = "scout-" + re.sub(r"[^a-z0-9]+", "-", title.lower())[:40]
-            keywords = [w for w in re.sub(r"[^a-z0-9 ]", "", title.lower()).split() if len(w) > 3]
+            live_scouts.append({"story_id": story_id, "keywords": keywords})
             await db.developing_stories.update_one(
                 {"story_id": story_id},
                 {
@@ -967,6 +1012,7 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
     await _sync_scheduled_events()
     await _sync_wave_topics()
     await _sync_calendar_events()
+    await _cleanup_scout_stories_v2()
 
     # ── 6. Tag new articles to watched/scheduled/wave developing stories ────
     if api_articles:
@@ -995,11 +1041,13 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
             # keywords (country/leader/capital names like "islamabad" or
             # "tehran") that, on their own, will eventually collide with an
             # unrelated story — so treat them like "auto" and require 2 hits.
-            if kind in ("auto", "desk") and len(keywords) < 2:
+            if kind in ("auto", "desk", "scout") and len(keywords) < 2:
                 continue
             # "desk" keywords are written by Claude too, so they get the same
-            # 2-hit bar as "auto" (/plan-eng-review 2026-09-28).
-            min_matches = 2 if kind in ("auto", "wave", "desk") else 1
+            # 2-hit bar as "auto" (/plan-eng-review 2026-09-28). "scout" keywords
+            # come from a 7-word LLM title, so one shared word is not the same
+            # event either (2026-10-03).
+            min_matches = 2 if kind in ("auto", "wave", "desk", "scout") else 1
             matched_ids = []
             for article in api_articles:
                 haystack = (
@@ -1086,6 +1134,73 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
 
     # ── 9. Expire scout stories past their rolling TTL ───────────────────────
     await _expire_scout_stories()
+
+    # ── 10. The Developing label follows live-story membership ──────────────
+    await _reconcile_developing_labels()
+
+
+async def _cleanup_scout_stories_v2() -> None:
+    """One-time repair of scout stories built under the old keyword rule
+    (every title word, one hit): those tagged anything mentioning India and
+    kept themselves alive. Retires scouts older than 12h (scouts are a
+    few-hours idea), re-keys the rest, keeps only articles that still match
+    twice, and folds re-worded duplicates into one story. Boosted stories are
+    the owner's call and are left alone."""
+    if await db.app_meta.find_one({"_id": "scout_cleanup_v2"}):
+        return
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(hours=12)).isoformat()
+    scouts = await db.developing_stories.find(
+        {"kind": "scout", "is_active": True, "desk_boosted_at": {"$exists": False}}, {"_id": 0}
+    ).sort("detected_at", 1).to_list(1000)
+    kept, retired, merged = [], 0, 0
+    for s in scouts:
+        sid = s["story_id"]
+        keywords = _scout_keywords(s.get("title", ""))
+        if (s.get("detected_at") or "") < cutoff or len(keywords) < 2:
+            await db.developing_stories.update_one({"story_id": sid}, {"$set": {"is_active": False}})
+            retired += 1
+            continue
+        ids = s.get("article_ids") or []
+        arts = await db.articles.find({"article_id": {"$in": ids}},
+                                      {"_id": 0, "article_id": 1, "title": 1, "description": 1}).to_list(len(ids) or 1)
+        valid = [a["article_id"] for a in arts
+                 if sum(1 for kw in keywords if _kw_pattern(kw).search(
+                     (a.get("title", "") + " " + a.get("description", "")).lower())) >= 2]
+        # the article the scout flagged is the story's origin even if reworded
+        if ids and ids[0] not in valid:
+            valid.insert(0, ids[0])
+        host = next((k for k in kept if _same_scout_story(keywords, k["keywords"])), None)
+        if host:
+            await db.developing_stories.update_one(
+                {"story_id": host["story_id"]}, {"$addToSet": {"article_ids": {"$each": valid}}})
+            await db.developing_stories.update_one(
+                {"story_id": sid}, {"$set": {"is_active": False, "merged_into": host["story_id"]}})
+            merged += 1
+            continue
+        await db.developing_stories.update_one({"story_id": sid},
+                                               {"$set": {"keywords": keywords, "article_ids": valid}})
+        kept.append({"story_id": sid, "keywords": keywords})
+    await db.app_meta.update_one({"_id": "scout_cleanup_v2"},
+                                 {"$set": {"at": now.isoformat(), "retired": retired, "merged": merged,
+                                           "kept": len(kept)}}, upsert=True)
+    logger.info(f"Scout cleanup v2: retired {retired}, merged {merged}, kept {len(kept)}")
+
+
+async def _reconcile_developing_labels() -> None:
+    """is_developing means "part of a live developing story". Clear it on API
+    articles that no active story holds (a story closed, or the tag came from
+    the old loose scout rule). Desk articles and boosted ones keep theirs:
+    those labels are the owner's."""
+    active = await db.developing_stories.find({"is_active": True}, {"_id": 0, "article_ids": 1}).to_list(2000)
+    live_ids = list({aid for s in active for aid in (s.get("article_ids") or [])})
+    res = await db.articles.update_many(
+        {"is_developing": True, "origin": {"$ne": "desk"}, "boosted": {"$ne": True},
+         "article_id": {"$nin": live_ids}},
+        {"$set": {"is_developing": False}},
+    )
+    if res.modified_count:
+        logger.info(f"Developing labels: cleared {res.modified_count} article(s) outside live stories")
 
 
 async def _absorb_into_desk(new_articles: list) -> None:

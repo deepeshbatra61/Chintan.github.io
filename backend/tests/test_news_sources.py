@@ -214,10 +214,13 @@ async def test_cycle_upsert_keeps_labels_and_tagger_marks_developing(db, monkeyp
     aid = N.article_id_for("https://www.thehindu.com/a")
     stored = await db.articles.find_one({"article_id": aid})
     assert stored["provider"] == "gnews" and stored["is_developing"] is True and stored["is_breaking"] is False
-    # a refetch must not reset the tagger's label
-    await db.developing_stories.update_one({"story_id": "parl"}, {"$set": {"is_active": False}})
+    # a refetch must not reset the tagger's label while the story is live
     await server._run_ingest_cycle_body(run_newsapi=False, summarize_limit=10)
     assert (await db.articles.find_one({"article_id": aid}))["is_developing"] is True
+    # ...and the label goes when the story closes
+    await db.developing_stories.update_one({"story_id": "parl"}, {"$set": {"is_active": False}})
+    await server._run_ingest_cycle_body(run_newsapi=False, summarize_limit=10)
+    assert (await db.articles.find_one({"article_id": aid}))["is_developing"] is False
     assert (await db.app_meta.find_one({"_id": "ingest_state"}))["last_run"]
 
 
