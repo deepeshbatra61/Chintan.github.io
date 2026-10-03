@@ -42,7 +42,7 @@ GOOD_RESEARCH = {
 
 
 class Harness:
-    def __init__(self):
+    def __init__(self, **router_kwargs):
         self.db = mongomock_motor.AsyncMongoMockClient()["t"]
         self.clock_offset = timedelta(0)
         self.emails = []
@@ -62,6 +62,7 @@ class Harness:
             suggest_category=lambda t: "Politics", default_image="https://img.example/x.jpg",
             logger=__import__("logging").getLogger("t"),
             events_block=lambda aid: self._events("block", aid), events_touch=lambda aid: self._events("touch", aid),
+            **router_kwargs,
         ), prefix="/api")
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
         self.token = self.csrf = None

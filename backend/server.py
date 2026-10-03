@@ -6894,6 +6894,7 @@ api_router.include_router(desk_routes.build_desk_router(
     fold_recent=_fold_recent_into_desk,
     events_block=lambda article_id: events_service.block_member(db, article_id, datetime.now(timezone.utc)),
     events_touch=_events_touch,
+    events=events_service,
 ))
 
 api_router.include_router(events_routes.build_events_router(

@@ -350,6 +350,128 @@ async def block_member(db, article_id: str, now: datetime, mode: str = None) -> 
     return eid
 
 
+# ── Desk Newsroom (design 7B): see what's forming, steer it by hand ─────────
+#    Every action ends in recompute_event, the single writer (OV7).
+
+async def _event_brief(db, ev: dict, now: datetime) -> dict:
+    lead = await db.articles.find_one({"article_id": ev.get("lead_article_id")}, {"_id": 0, "title": 1}) or {}
+    hour_ago = _iso(now - timedelta(hours=1))
+    recent = await db.articles.count_documents({"event_id": ev["event_id"], "published_at": {"$gte": hour_ago}})
+    return {"event_id": ev["event_id"], "title": lead.get("title") or "(no lead)", "status": ev.get("status"),
+            "size": ev.get("size", 0), "outlets_count": ev.get("outlets_count", 0),
+            "coverage_mix": ev.get("coverage_mix") or {}, "category": ev.get("category_v2") or ev.get("category"),
+            "last_member_at": ev.get("last_member_at"), "new_last_hour": recent,
+            "promoted": bool((ev.get("desk") or {}).get("promoted")),
+            "hidden": bool((ev.get("desk") or {}).get("hidden"))}
+
+
+async def newsroom(db, now: Optional[datetime] = None) -> dict:
+    """Building now / Developing / Settling, plus the switch + alarm strip."""
+    now = now or datetime.now(timezone.utc)
+    since = _iso(now - timedelta(hours=E.JOIN_WINDOW_H))
+    sections = {"building": [], "developing": [], "settling": []}
+    async for ev in db.events.find({"last_member_at": {"$gte": since}, "size": {"$gte": 2},
+                                    "status": {"$ne": "closed"}}, {"_id": 0}):
+        key = {"developing": "developing", "settled": "settling"}.get(ev.get("status"), "building")
+        sections[key].append(await _event_brief(db, ev, now))
+    sections["building"].sort(key=lambda e: (e["new_last_hour"], e["outlets_count"]), reverse=True)
+    for k in ("developing", "settling"):
+        sections[k].sort(key=lambda e: e.get("last_member_at") or "", reverse=True)
+    state = await db.app_meta.find_one({"_id": "events_state"}, {"_id": 0}) or {}
+    return {"mode": current_mode(), "alarm": bool(state.get("alarm")), "developing_cap": E.DEVELOPING_CAP,
+            "developing_open": len(sections["developing"]), "building": sections["building"][:40],
+            "developing": sections["developing"], "settling": sections["settling"][:40]}
+
+
+async def event_detail(db, event_id: str) -> Optional[dict]:
+    ev = await db.events.find_one({"event_id": event_id}, {"_id": 0, "centroid": 0, "founding": 0, "members": 0})
+    if not ev:
+        return None
+    members = await db.articles.find(
+        {"event_id": event_id},
+        {"_id": 0, "article_id": 1, "title": 1, "publisher_name": 1, "publisher_group": 1, "published_at": 1,
+         "syndicated_of": 1, "origin": 1, "url": 1}).sort("published_at", -1).to_list(E.MAX_MEMBERS * 2)
+    return {**ev, "members": members}
+
+
+async def set_desk_flag(db, event_id: str, flag: str, value: bool, now: datetime) -> bool:
+    if flag not in ("promoted", "hidden"):
+        raise ValueError(flag)
+    res = await db.events.update_one({"event_id": event_id}, {"$set": {f"desk.{flag}": value}})
+    if not res.matched_count:
+        return False
+    await recompute_event(db, event_id, now, mode=current_mode())
+    return True
+
+
+async def merge_events(db, source_id: str, target_id: str, now: datetime) -> bool:
+    """Everything in source joins target; source closes and points at target
+    (follows move with it, OV7)."""
+    if source_id == target_id:
+        return False
+    src = await db.events.find_one({"event_id": source_id})
+    dst = await db.events.find_one({"event_id": target_id})
+    if not src or not dst:
+        return False
+    await db.articles.update_many({"event_id": source_id}, {"$set": {"event_id": target_id}})
+    centroid = E.merge_centroid(dst.get("centroid") or {}, dst.get("size", 0), src.get("centroid") or {})
+    await db.events.update_one({"event_id": target_id}, {
+        "$set": {"centroid": centroid, "size": dst.get("size", 0) + src.get("size", 0),
+                 "first_member_at": min(dst.get("first_member_at") or "", src.get("first_member_at") or "") or
+                 dst.get("first_member_at"),
+                 "members": ((dst.get("members") or []) + (src.get("members") or []))[-E.MAX_MEMBERS:]}})
+    await db.events.update_one({"event_id": source_id}, {"$set": {"status": "closed", "desk.merged_into": target_id,
+                                                                  "article_ids": [], "updated_at": _iso(now)}})
+    await _move_follows(db, source_id, target_id)
+    await recompute_event(db, target_id, now, mode=current_mode())
+    return True
+
+
+async def split_event(db, event_id: str, article_ids: list, now: datetime) -> Optional[str]:
+    """The ticked members break out into a new event; they are blocked from
+    the old one so the engine never folds them back."""
+    ev = await db.events.find_one({"event_id": event_id})
+    if not ev or not article_ids:
+        return None
+    docs = await db.articles.find({"event_id": event_id, "article_id": {"$in": article_ids}},
+                                  {"_id": 0, "article_id": 1, "title": 1, "content": 1, "publisher": 1,
+                                   "published_at": 1, "ev_terms": 1}).sort("published_at", 1).to_list(len(article_ids))
+    if not docs or len(docs) == ev.get("size", 0):
+        return None                    # splitting off everything is not a split
+    ids = [d["article_id"] for d in docs]
+    new_id = f"ev-split-{ids[0]}"
+    df = _cache["df"] or E.DocFreq()
+    vecs = [E.vectorize(Counter(d.get("ev_terms") or {}), df) for d in docs]
+    centroid = {}
+    for i, v in enumerate(vecs):
+        centroid = E.merge_centroid(centroid, i, v)
+    await db.events.update_one({"event_id": new_id}, {"$set": {
+        "event_id": new_id, "status": "forming", "created_at": _iso(now), "centroid": centroid,
+        "founding": vecs[:E.FOUNDING], "size": len(ids), "first_member_at": docs[0]["published_at"],
+        "last_member_at": docs[-1]["published_at"], "split_from": event_id,
+        "members": [{"article_id": d["article_id"], "title": d.get("title", ""), "content": (d.get("content") or "")[:300],
+                     "publisher": d.get("publisher"), "published_at": d["published_at"]} for d in docs]}}, upsert=True)
+    await db.articles.update_many({"article_id": {"$in": ids}}, {"$set": {"event_id": new_id}})
+    await db.events.update_one({"event_id": event_id}, {
+        "$addToSet": {"desk.blocked_members": {"$each": ids}},
+        "$pull": {"members": {"article_id": {"$in": ids}}},
+        "$inc": {"size": -len(ids)}})
+    mode = current_mode()
+    await recompute_event(db, event_id, now, mode=mode)
+    await recompute_event(db, new_id, now, mode=mode)
+    return new_id
+
+
+async def _move_follows(db, source_id: str, target_id: str) -> None:
+    async for f in db.follows.find({"story_id": source_id}, {"_id": 0, "user_id": 1}):
+        if not await db.follows.find_one({"user_id": f["user_id"], "story_id": target_id}):
+            await db.follows.update_one({"user_id": f["user_id"], "story_id": source_id},
+                                        {"$set": {"story_id": target_id}})
+        else:
+            await db.follows.delete_one({"user_id": f["user_id"], "story_id": source_id})
+    await db.story_seen.delete_many({"story_id": source_id})
+
+
 # ── read side: the Developing list and story page project events at read time
 #    (eng review 1B: no copies in developing_stories, so nothing can drift) ────
 

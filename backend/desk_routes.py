@@ -23,6 +23,12 @@ Login is the only route behind _gate alone.
     POST /desk/stories/{id}/end | /extend
     POST /desk/articles/{id}/unpublish
     POST /desk/articles/{id}/restore/{absorbed_id}   undo one absorbed article
+    GET  /desk/newsroom         News v2 events: building / developing / settling
+    GET  /desk/events/{id}      one event with its members
+    POST /desk/events/{id}/promote | /hide        {on: bool}
+    POST /desk/events/{id}/merge                  {into: event_id}
+    POST /desk/events/{id}/split                  {article_ids: [...]}
+    POST /desk/events/{id}/remove/{article_id}    take one article out for good
 """
 
 from __future__ import annotations
@@ -75,6 +81,18 @@ class DraftEdit(BaseModel):
     long_running: Optional[bool] = None
     national: Optional[bool] = None      # push: Breaking goes to every reader
     sensitive: Optional[bool] = None     # push: sober copy, no photo, no wit
+
+
+class FlagBody(BaseModel):
+    on: bool
+
+
+class MergeBody(BaseModel):
+    into: str = Field(max_length=120)
+
+
+class SplitBody(BaseModel):
+    article_ids: List[str] = Field(min_length=1, max_length=40)
 
 
 class BoostBody(BaseModel):
@@ -130,6 +148,7 @@ def build_desk_router(
     fold_recent: Optional[Callable[[], Awaitable[int]]] = None,  # fold recent API coverage into Desk stories
     events_block: Optional[Callable[[str], Awaitable]] = None,   # News v2: Undo = leave the event for good
     events_touch: Optional[Callable[[str], Awaitable]] = None,   # News v2: recompute the article's event
+    events=None,                                 # News v2: events_service module (Newsroom)
     push_test_email: Callable[[], str] = lambda: "",
 ) -> APIRouter:
     router = APIRouter(prefix="/desk")
@@ -606,6 +625,62 @@ def build_desk_router(
             await events_block(absorbed_id)
         await _audit(ctx, "absorb_undo", article_id=article_id, absorbed_id=absorbed_id)
         return {"ok": True}
+
+    # ── Newsroom (News v2 events; design 7B) ─────────────────────────────────
+    if events is not None:
+        def _eid(event_id: str) -> str:
+            if not event_id.startswith("ev-") or len(event_id) > 120:
+                raise HTTPException(status_code=404, detail="Event not found.")
+            return event_id
+
+        @router.get("/newsroom")
+        async def newsroom(ctx: dict = Depends(_session)):
+            return await events.newsroom(db, desk.utcnow())
+
+        @router.get("/events/{event_id}")
+        async def event_detail(event_id: str, ctx: dict = Depends(_session)):
+            ev = await events.event_detail(db, _eid(event_id))
+            if not ev:
+                raise HTTPException(status_code=404, detail="Event not found.")
+            return ev
+
+        @router.post("/events/{event_id}/promote")
+        async def promote_event(event_id: str, body: FlagBody, ctx: dict = Depends(_session)):
+            if not await events.set_desk_flag(db, _eid(event_id), "promoted", body.on, desk.utcnow()):
+                raise HTTPException(status_code=404, detail="Event not found.")
+            await _audit(ctx, "event_promote", event_id=event_id, on=body.on)
+            return {"ok": True}
+
+        @router.post("/events/{event_id}/hide")
+        async def hide_event(event_id: str, body: FlagBody, ctx: dict = Depends(_session)):
+            if not await events.set_desk_flag(db, _eid(event_id), "hidden", body.on, desk.utcnow()):
+                raise HTTPException(status_code=404, detail="Event not found.")
+            await _audit(ctx, "event_hide", event_id=event_id, on=body.on)
+            return {"ok": True}
+
+        @router.post("/events/{event_id}/merge")
+        async def merge_event(event_id: str, body: MergeBody, ctx: dict = Depends(_session)):
+            if not await events.merge_events(db, _eid(event_id), _eid(body.into), desk.utcnow()):
+                raise HTTPException(status_code=409, detail="Couldn't merge: one of the events is gone or they're the same.")
+            await _audit(ctx, "event_merge", event_id=event_id, into=body.into)
+            return {"ok": True, "event_id": body.into}
+
+        @router.post("/events/{event_id}/split")
+        async def split_event(event_id: str, body: SplitBody, ctx: dict = Depends(_session)):
+            new_id = await events.split_event(db, _eid(event_id), body.article_ids, desk.utcnow())
+            if not new_id:
+                raise HTTPException(status_code=409, detail="Pick some, but not all, of this event's articles.")
+            await _audit(ctx, "event_split", event_id=event_id, article_ids=body.article_ids, new_event=new_id)
+            return {"ok": True, "event_id": new_id}
+
+        @router.post("/events/{event_id}/remove/{article_id}")
+        async def remove_member(event_id: str, article_id: str, ctx: dict = Depends(_session)):
+            a = await db.articles.find_one({"article_id": article_id, "event_id": _eid(event_id)}, {"_id": 0, "article_id": 1})
+            if not a:
+                raise HTTPException(status_code=404, detail="That article isn't in this event.")
+            await events.block_member(db, article_id, desk.utcnow())
+            await _audit(ctx, "event_remove", event_id=event_id, article_id=article_id)
+            return {"ok": True}
 
     # ── push (Desk Push panel, go-live switch, test push, Breaking) ──────────
     if push is not None:
