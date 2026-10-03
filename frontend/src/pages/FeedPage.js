@@ -163,6 +163,11 @@ const FeedPage = () => {
   const [page, setPage] = useState(() => cached?.page ?? 1);
   const [hasMore, setHasMore] = useState(() => cached?.hasMore ?? true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // The page load that last failed ({ pageNum, append }), or null. While set,
+  // infinite scroll is paused -- otherwise a dead connection makes the
+  // sentinel fire page after page -- and the retry control re-requests
+  // exactly this page.
+  const [loadError, setLoadError] = useState(null);
   const [actionSheetArticle, setActionSheetArticle] = useState(null);
   const sentinelRef = useRef(null);
   const mainRef = useRef(null);
@@ -276,8 +281,12 @@ const FeedPage = () => {
       const more = data.length === PAGE_LIMIT;
       setHasMore(more);
       setFeedCache({ hasMore: more });
+      setLoadError(null);
+      return true;
     } catch (error) {
       console.error("Error fetching articles:", error);
+      setLoadError({ pageNum, append });
+      return false;
     }
   }, []);
 
@@ -335,6 +344,7 @@ const FeedPage = () => {
     triggerHaptic(ImpactStyle.Light);
     setPage(1);
     setHasMore(true);
+    setLoadError(null);
     await Promise.all([
       fetchArticles(activeCategory, 1, false),
       fetchDevelopingStories(),
@@ -404,6 +414,7 @@ const FeedPage = () => {
     setActiveCategory(cat);
     setPage(1);
     setHasMore(true);
+    setLoadError(null);
     fetchArticles(cat, 1, false);
   };
 
@@ -412,18 +423,30 @@ const FeedPage = () => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !loadError) {
           const nextPage = page + 1;
-          setPage(nextPage);
           setLoadingMore(true);
-          fetchArticles(activeCategory, nextPage, true).finally(() => setLoadingMore(false));
+          // Only advance the page counter once the page actually arrived, so a
+          // failure leaves us pointed at the last page we really have.
+          fetchArticles(activeCategory, nextPage, true)
+            .then((ok) => { if (ok) setPage(nextPage); })
+            .finally(() => setLoadingMore(false));
         }
       },
       { rootMargin: "200px" }
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, page, activeCategory, fetchArticles]);
+  }, [hasMore, loadingMore, loading, loadError, page, activeCategory, fetchArticles]);
+
+  const retryFailedLoad = () => {
+    if (!loadError || loadingMore) return;
+    const { pageNum, append } = loadError;
+    setLoadingMore(true);
+    fetchArticles(activeCategory, pageNum, append)
+      .then((ok) => { if (ok) setPage(pageNum); })
+      .finally(() => setLoadingMore(false));
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -802,7 +825,7 @@ const FeedPage = () => {
             </AnimatePresence>
           </div>
 
-          {articles.length === 0 && (
+          {articles.length === 0 && !loadError && (
             <div className="text-center py-20">
               <p className="text-gray-500">No articles found</p>
             </div>
@@ -814,6 +837,20 @@ const FeedPage = () => {
           {loadingMore && (
             <div className="flex justify-center py-6">
               <SuryaLogo className="w-8 h-8 animate-spin-slow" />
+            </div>
+          )}
+
+          {loadError && !loadingMore && (
+            <div className={`flex justify-center ${articles.length === 0 ? "py-20" : "py-6"}`}>
+              <button
+                type="button"
+                onClick={retryFailedLoad}
+                className="text-sm text-gray-500 hover:text-fg transition-colors"
+                data-testid="feed-load-retry"
+              >
+                {articles.length === 0 ? "Couldn't load stories." : "Couldn't load more."}{" "}
+                <span className="underline underline-offset-2">Try again</span>
+              </button>
             </div>
           )}
         </div>
