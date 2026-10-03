@@ -25,7 +25,7 @@ from typing import Awaitable, Callable, Optional
 import events_service as S
 
 logger = logging.getLogger(__name__)
-LIVE_FIELDS = ("event_hidden", "outlets_count", "coverage_mix", "event_status")
+LIVE_FIELDS = ("event_hidden", "outlets_count", "coverage_mix", "event_status", "outlet_strip")
 
 
 async def applied_mode(db) -> str:

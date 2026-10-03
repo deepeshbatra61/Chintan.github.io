@@ -125,3 +125,21 @@ async def test_account_purge_erases_follows_and_seen(monkeypatch):
     assert await db.follows.count_documents({"user_id": "u"}) == 0
     assert await db.story_seen.count_documents({}) == 0
     assert await db.follows.count_documents({"user_id": "other"}) == 1
+
+
+async def test_coverage_lists_each_voice_once_grouped(h):
+    await h.db.articles.insert_many([
+        {"article_id": "c1", "event_id": "ev-c", "title": "Wire story", "publisher": "aninews.in",
+         "publisher_name": "ANI", "publisher_group": "wire", "published_at": iso(-3)},
+        {"article_id": "c2", "event_id": "ev-c", "title": "Wire story", "publisher": "tribuneindia.com",
+         "publisher_name": "The Tribune", "publisher_group": "regional", "published_at": iso(-2), "syndicated_of": "c1"},
+        {"article_id": "c3", "event_id": "ev-c", "title": "Own angle", "publisher": "thehindu.com",
+         "publisher_name": "The Hindu", "publisher_group": "national", "published_at": iso(-1)},
+    ])
+    await h.db.events.insert_one({"event_id": "ev-c", "status": "developing", "lead_article_id": "c1"})
+    body = (await h.client.get("/events/ev-c/coverage")).json()          # public, no session
+    assert body["outlets_count"] == 2 and body["developing"] is True
+    assert [g["group"] for g in body["groups"]] == ["national", "wire"]
+    assert body["groups"][1]["outlets"][0]["outlet"] == "ANI"
+    assert (await h.client.get("/events/ev-hidden/coverage")).status_code == 404
+    assert (await h.client.get("/events/nope/coverage")).status_code == 404

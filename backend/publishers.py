@@ -258,3 +258,9 @@ def coverage_mix(publishers) -> dict:
         seen.add(p.key)
         mix[p.group] = mix.get(p.group, 0) + 1
     return mix
+
+
+def initials_of(key: str, name: str) -> str:
+    """Strip initials for a stored publisher key (registry first, else derived)."""
+    row = _REGISTRY.get(key or "")
+    return row[1] if row else initials_for(name or key or "?")

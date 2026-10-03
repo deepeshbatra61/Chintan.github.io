@@ -5,6 +5,8 @@
     GET    /follows                 the sidebar's Following list (newest activity first)
     POST   /stories/{story_id}/seen record "looked at it now"; returns the previous
                                     seen_at so the app can draw "SINCE YOU LOOKED"
+    GET    /events/{event_id}/coverage  every outlet covering an event, grouped by
+                                    type (public: it's the same news the feed shows)
 
 Identity comes ONLY from the session (get_user), as in push_routes: a request
 body can never name an account. Story ids are either an event ("ev-…") or a
@@ -105,6 +107,37 @@ def build_events_router(*, db_getter: Callable[[], object],
                         "last_updated": story["last_updated"], "new_count": new})
         out.sort(key=lambda x: x.get("last_updated") or "", reverse=True)
         return {"follows": out, "new_total": sum(x["new_count"] for x in out)}
+
+    @router.get("/events/{event_id}/coverage")
+    async def coverage(event_id: str):
+        db = db_getter()
+        if not event_id.startswith("ev-") or len(event_id) > STORY_ID_MAX:
+            raise HTTPException(status_code=404, detail="Story not found")
+        ev = await db.events.find_one({"event_id": event_id}, {"_id": 0, "status": 1, "desk": 1,
+                                                               "lead_article_id": 1, "outlets_count": 1})
+        if not ev or (ev.get("desk") or {}).get("hidden"):
+            raise HTTPException(status_code=404, detail="Story not found")
+        groups: dict = {}
+        seen_voice = set()
+        async for a in db.articles.find(
+                {"event_id": event_id, "desk_hidden": {"$ne": True}},
+                {"_id": 0, "article_id": 1, "title": 1, "publisher": 1, "publisher_name": 1,
+                 "publisher_group": 1, "published_at": 1, "syndicated_of": 1, "origin": 1}).sort("published_at", 1):
+            if a.get("syndicated_of"):
+                continue                           # a wire copy is the same voice: list it once
+            key = a.get("publisher") or a["article_id"]
+            if key in seen_voice:
+                continue
+            seen_voice.add(key)
+            g = "national" if a.get("origin") == "desk" else (a.get("publisher_group") or "other")
+            groups.setdefault(g, []).append({
+                "article_id": a["article_id"], "title": a.get("title", ""),
+                "outlet": "Chintan Desk" if a.get("origin") == "desk" else (a.get("publisher_name") or key),
+                "published_at": a.get("published_at")})
+        order = ["national", "regional", "wire", "international", "other"]
+        return {"event_id": event_id, "developing": ev.get("status") == "developing",
+                "outlets_count": sum(len(v) for v in groups.values()),
+                "groups": [{"group": g, "outlets": groups[g]} for g in order if g in groups]}
 
     @router.post("/stories/{story_id}/seen")
     async def mark_seen(story_id: str, request: Request):

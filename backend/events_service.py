@@ -291,7 +291,8 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
         {"event_id": event_id, "desk_hidden": {"$ne": True}},
         {"_id": 0, "article_id": 1, "publisher": 1, "publisher_group": 1, "published_at": 1, "origin": 1,
          "syndicated_of": 1, "syndicated_publisher": 1, "category": 1, "subcategory": 1,
-         "category_v2": 1, "subcategory_v2": 1, "state": 1, "rank_at": 1, "desk_story_id": 1},
+         "category_v2": 1, "subcategory_v2": 1, "state": 1, "rank_at": 1, "desk_story_id": 1,
+         "publisher_name": 1},
     ).to_list(E.MAX_MEMBERS * 2)
     members = [m for m in (_member_from_doc(d) for d in docs) if m["published_at"] and m.get("publisher")]
     desk = ev.get("desk") or {}
@@ -322,7 +323,14 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
         subcategory_v2 = lead_doc.get("subcategory_v2") or lead_doc.get("subcategory")
     category, subcategory = C.legacy_category(category_v2, subcategory_v2)
     state = _vote([m.get("state") for m in members], lead_doc.get("state"))
+    # Up to 3 outlets for the card's coverage strip: the lead's first, tinted
+    # by outlet TYPE, never a logo (design review 5A).
+    name_of = {m["publisher"]: m.get("publisher_name") or m["publisher"] for m in members}
+    order = [lead_doc["publisher"]] + [v for v in voices if v != lead_doc["publisher"]]
+    strip = [{"i": P.initials_of(v, name_of.get(v, v)), "g": group_of.get(v, "wire"),
+              "n": name_of.get(v, v)} for v in order[:3]]
     fields = {
+        "outlet_strip": strip,
         "status": status, "lead_article_id": lead, "lead_publisher": lead_doc["publisher"],
         "lead_pinned_until": pinned, "outlets": voices, "outlets_count": len(voices),
         "coverage_mix": dict(mix), "category": category, "subcategory": subcategory,
@@ -345,7 +353,7 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
                                           {"$set": {"event_hidden": True, **vote}})
         await db.articles.update_one({"article_id": lead}, {
             "$set": {"event_hidden": hidden, "outlets_count": len(voices), "coverage_mix": dict(mix),
-                     "event_status": status, **vote}})
+                     "outlet_strip": strip, "event_status": status, **vote}})
         if lead_doc.get("origin") == "desk":
             await _fold_into_desk(db, lead_doc, others, now)
     return fields
