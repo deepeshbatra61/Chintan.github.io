@@ -118,3 +118,24 @@ async def test_single_outlet_repeats_are_not_building(h):
                                   "article_ids": [], "last_member_at": iso(0.1), "first_member_at": iso(1)})
     body = (await h.client.get("/api/desk/newsroom", headers=h.headers())).json()
     assert "ev-pr" not in [e["event_id"] for e in body["building"]]
+
+
+async def test_golden_pairs_label_and_score(h):
+    await h.login()
+    # a near-miss: ev-q's lead looks like ev-p (same centroid)
+    body = (await h.client.get("/api/desk/golden/pairs", headers=h.headers())).json()
+    kinds = {p["kind"] for p in body["pairs"]}
+    assert kinds == {"grouped", "near_miss"}
+    grouped = next(p for p in body["pairs"] if p["kind"] == "grouped")
+    assert grouped["engine_same"] is True and grouped["a"]["title"]
+    r = await h.client.post("/api/desk/golden/labels", headers=h.headers(), json={
+        "pair_id": grouped["pair_id"], "a": grouped["a"]["article_id"], "b": grouped["b"]["article_id"],
+        "same": False, "engine_same": True})
+    s = r.json()
+    assert s["labelled"] == 1 and s["merge_precision"] == 0.0 and s["gate"]["precision"] == 0.95
+    # labelled pairs aren't offered again; a forged pair id is refused
+    again = (await h.client.get("/api/desk/golden/pairs", headers=h.headers())).json()["pairs"]
+    assert grouped["pair_id"] not in {p["pair_id"] for p in again}
+    bad = await h.client.post("/api/desk/golden/labels", headers=h.headers(), json={
+        "pair_id": "0" * 16, "a": "p1", "b": "p2", "same": True, "engine_same": True})
+    assert bad.status_code == 400

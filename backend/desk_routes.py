@@ -29,6 +29,8 @@ Login is the only route behind _gate alone.
     POST /desk/events/{id}/merge                  {into: event_id}
     POST /desk/events/{id}/split                  {article_ids: [...]}
     POST /desk/events/{id}/remove/{article_id}    take one article out for good
+    GET  /desk/golden/pairs     same story or not? pairs for the owner's spot-check
+    POST /desk/golden/labels    {pair_id, a, b, same, engine_same} → running score
 """
 
 from __future__ import annotations
@@ -81,6 +83,14 @@ class DraftEdit(BaseModel):
     long_running: Optional[bool] = None
     national: Optional[bool] = None      # push: Breaking goes to every reader
     sensitive: Optional[bool] = None     # push: sober copy, no photo, no wit
+
+
+class GoldenLabel(BaseModel):
+    pair_id: str = Field(max_length=32)
+    a: str = Field(max_length=120)
+    b: str = Field(max_length=120)
+    same: bool
+    engine_same: bool
 
 
 class FlagBody(BaseModel):
@@ -672,6 +682,19 @@ def build_desk_router(
                 raise HTTPException(status_code=409, detail="Pick some, but not all, of this event's articles.")
             await _audit(ctx, "event_split", event_id=event_id, article_ids=body.article_ids, new_event=new_id)
             return {"ok": True, "event_id": new_id}
+
+        @router.get("/golden/pairs")
+        async def golden_pairs(ctx: dict = Depends(_session)):
+            return {"pairs": await events.golden_pairs(db, desk.utcnow()), "summary": await events.golden_summary(db)}
+
+        @router.post("/golden/labels")
+        async def golden_label(body: GoldenLabel, ctx: dict = Depends(_session)):
+            try:
+                await events.golden_label(db, body.pair_id, body.a, body.b, body.same, body.engine_same,
+                                          by=ctx.get("email", ""), now=desk.utcnow())
+            except ValueError:
+                raise HTTPException(status_code=400, detail="That pair doesn't match.")
+            return await events.golden_summary(db)
 
         @router.post("/events/{event_id}/remove/{article_id}")
         async def remove_member(event_id: str, article_id: str, ctx: dict = Depends(_session)):

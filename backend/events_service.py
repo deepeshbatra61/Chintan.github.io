@@ -20,8 +20,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
+import random
 import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -513,6 +515,85 @@ async def _move_follows(db, source_id: str, target_id: str) -> None:
         else:
             await db.follows.delete_one({"user_id": f["user_id"], "story_id": source_id})
     await db.story_seen.delete_many({"story_id": source_id})
+
+
+# ── golden set (eng review 3A / OV5): the owner checks the engine's calls ────
+#    Pairs are of two kinds, so both errors are measured:
+#      grouped    : two articles the engine put in ONE event   (over-merge?)
+#      near_miss  : leads of two DIFFERENT events that look alike (under-merge?)
+
+
+def _pair_id(a: str, b: str) -> str:
+    x, y = sorted((a, b))
+    return hashlib.sha1(f"{x}|{y}".encode()).hexdigest()[:16]
+
+
+async def golden_pairs(db, now: Optional[datetime] = None, n: int = 40, seed: Optional[int] = None) -> list:
+    now = now or datetime.now(timezone.utc)
+    rng = random.Random(seed)
+    since = _iso(now - timedelta(hours=E.JOIN_WINDOW_H * 2))
+    done = {d["pair_id"] async for d in db.golden_labels.find({}, {"_id": 0, "pair_id": 1})}
+    evs = [e async for e in db.events.find({"last_member_at": {"$gte": since}, "size": {"$gte": 1}},
+                                           {"_id": 0, "event_id": 1, "article_ids": 1, "centroid": 1,
+                                            "lead_article_id": 1, "first_member_at": 1})]
+    grouped, near = [], []
+    for ev in evs:
+        ids = ev.get("article_ids") or []
+        if len(ids) >= 2:
+            a, b = rng.sample(ids, 2)
+            grouped.append((a, b, "grouped"))
+    by_time = sorted((e for e in evs if e.get("centroid") and e.get("lead_article_id")),
+                     key=lambda e: e.get("first_member_at") or "")
+    scored = []
+    for i, x in enumerate(by_time):
+        for y in by_time[i + 1:i + 60]:          # neighbours in time only: cheap and relevant
+            sim = E.cosine(x["centroid"], y["centroid"])
+            if sim >= 0.15:
+                scored.append((sim, x["lead_article_id"], y["lead_article_id"]))
+    scored.sort(reverse=True)
+    near = [(a, b, "near_miss") for _, a, b in scored[: n * 2]]
+    rng.shuffle(grouped)
+    want_grouped = n * 3 // 5
+    picked = [p for p in grouped if _pair_id(p[0], p[1]) not in done][:want_grouped]
+    picked += [p for p in near if _pair_id(p[0], p[1]) not in done][: n - len(picked)]
+    rng.shuffle(picked)
+    ids = list({i for a, b, _ in picked for i in (a, b)})
+    arts = {d["article_id"]: d async for d in db.articles.find(
+        {"article_id": {"$in": ids}},
+        {"_id": 0, "article_id": 1, "title": 1, "description": 1, "publisher_name": 1, "source": 1,
+         "published_at": 1, "event_id": 1})}
+    out = []
+    for a, b, kind in picked:
+        if a in arts and b in arts:
+            out.append({"pair_id": _pair_id(a, b), "kind": kind,
+                        "engine_same": arts[a].get("event_id") == arts[b].get("event_id"),
+                        "a": {k: arts[a].get(k) for k in ("article_id", "title", "description", "publisher_name", "published_at")},
+                        "b": {k: arts[b].get(k) for k in ("article_id", "title", "description", "publisher_name", "published_at")}})
+    return out
+
+
+async def golden_label(db, pair_id: str, a_id: str, b_id: str, same: bool, engine_same: bool, by: str,
+                       now: Optional[datetime] = None) -> None:
+    if _pair_id(a_id, b_id) != pair_id:
+        raise ValueError("pair_id does not match the articles")
+    await db.golden_labels.update_one({"pair_id": pair_id}, {"$set": {
+        "pair_id": pair_id, "a": a_id, "b": b_id, "owner_same": bool(same), "engine_same": bool(engine_same),
+        "by": by, "at": _iso(now or datetime.now(timezone.utc))}}, upsert=True)
+
+
+async def golden_summary(db) -> dict:
+    """How often the engine agrees with the owner, and merge precision
+    (of pairs the engine grouped, how many the owner calls the same story)."""
+    rows = [r async for r in db.golden_labels.find({}, {"_id": 0})]
+    agree = sum(1 for r in rows if r["owner_same"] == r["engine_same"])
+    grouped = [r for r in rows if r["engine_same"]]
+    same_owner = [r for r in rows if r["owner_same"]]
+    precision = sum(1 for r in grouped if r["owner_same"]) / len(grouped) if grouped else None
+    recall = sum(1 for r in same_owner if r["engine_same"]) / len(same_owner) if same_owner else None
+    return {"labelled": len(rows), "agree": agree,
+            "merge_precision": round(precision, 3) if precision is not None else None,
+            "merge_recall": round(recall, 3) if recall is not None else None,
+            "gate": {"precision": 0.95, "recall": 0.80}}
 
 
 # ── read side: the Developing list and story page project events at read time
