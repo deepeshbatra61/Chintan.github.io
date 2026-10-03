@@ -32,6 +32,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 from urllib.parse import urlparse
 
+import textutil
+
 HEAT_NORMAL, HEAT_NOTABLE, HEAT_BIG, HEAT_BREAKING = 1, 2, 3, 4
 HEAT_LABELS = {1: "Normal", 2: "Notable", 3: "Big", 4: "Breaking"}
 
@@ -63,12 +65,7 @@ REASON_MIN = 10
 IMAGE_URL_MAX = 600
 KEYWORDS_MIN_DEVELOPING = 3
 
-_STOP = frozenset("""
-a an the and or of in on at to for from by with about into over after before
-is are was were be been has have had will would can could should may might
-this that these those it its as not no new says said live update updates
-today latest news report reports amid vs than more most
-""".split())
+_STOP = textutil.STOP_TOPIC
 
 
 def utcnow() -> datetime:
@@ -133,13 +130,7 @@ def topic_terms(topic: str) -> list[str]:
     return out
 
 
-def _kw_pattern(kw: str):
-    """Word-boundary match for single words, escaped substring for phrases.
-    Mirrors categories._kw_pattern (kept local so this module stays
-    dependency-free)."""
-    if " " in kw:
-        return re.compile(re.escape(kw), re.IGNORECASE)
-    return re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
+_kw_pattern = textutil.kw_pattern
 
 
 def keyword_hits(keywords: Iterable[str], text: str) -> int:
@@ -149,8 +140,7 @@ def keyword_hits(keywords: Iterable[str], text: str) -> int:
 _MONTHS = {"january", "february", "march", "april", "may", "june", "july", "august", "september",
            "october", "november", "december", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep",
            "sept", "oct", "nov", "dec"}
-_PHRASE_STOP = {"the", "and", "for", "with", "from", "into", "over", "after", "amid", "about", "says",
-                "said", "new", "its", "his", "her", "their", "this", "that", "was", "are", "has", "had"}
+_PHRASE_STOP = textutil.STOP_PHRASE
 
 
 def _phrase_tokens(kw: str) -> list[str]:

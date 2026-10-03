@@ -5,7 +5,7 @@ The keyword scorer here is the source of truth for every article's category;
 see detect_category() for how ties and zero-signal articles are resolved.
 """
 
-import re
+from textutil import kw_pattern as _kw_pattern  # shared matcher (textutil.py)
 
 _CATEGORY_KEYWORDS = {
     "Politics": [
@@ -145,15 +145,6 @@ _SUBCATEGORY_KEYWORDS = {
         "Southeast Asia": ["pakistan", "bangladesh", "sri lanka", "nepal", "myanmar"],
     },
 }
-
-
-def _kw_pattern(kw: str):
-    """Word-boundary regex for single words; plain (escaped) regex for phrases.
-    Word boundaries stop short keywords like 'ev' or 'app' from matching inside
-    unrelated words (the old 'ai in text' bug matched said/again/main/campaign)."""
-    if " " in kw:
-        return re.compile(re.escape(kw), re.IGNORECASE)
-    return re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
 
 
 _CATEGORY_PATTERNS = {

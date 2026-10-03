@@ -63,6 +63,7 @@ import news_sources   # GNews/NewsAPI rules: filters, mapping, delay, budget (pu
 import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
+import textutil      # shared tokenising / stopwords — see backend/textutil.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
 import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
@@ -506,61 +507,22 @@ async def _generate_deep_dive(article: dict, angle: str) -> dict | None:
     return None
 
 
-_DEV_STOPWORDS = set(
-    "the and for with that this from into over after before amid says said report reports "
-    "will have has had not new latest their they what when where which more most about india "
-    "indian government minister national country people first year years today week month "
-    # Common English verbs/function words — this list was reactively built one
-    # incident at a time (see 'take' below), which is exactly backwards. A
-    # single ordinary verb slipping through here becomes a clustering key
-    # that merges completely unrelated headlines just because they share it
-    # (e.g. "Zepto IPO... may TAKE 40-45%" and an unrelated NZ politics
-    # headline that happened to also contain "take off"). Cover the common
-    # verbs/function words up front instead of patching one word at a time.
-    "take takes taken taking make makes made making get gets got getting give "
-    "gives given giving keep keeps kept keeping come comes came coming want "
-    "wants wanted go goes went going look looks looked show shows showed "
-    "shown tell tells told find finds found could would should still also "
-    "just near likely expected reveals reveal visit visits dig digs off out "
-    "back down up near seen amid within without amidst upon than then some "
-    "such being been were does both each only every much many other another "
-    "here there now while during since across against between among per set "
-    "sets put puts turn turns move moves moved hold holds held bring brings "
-    "brought call calls called leave leaves left let lets stay stays stayed "
-    "way ways case cases part parts point points thing things time times".split()
-)
+# Stopword lists and headline tokenising live in textutil.py (one home for every
+# "same story?" matcher); see the module docstring for why.
+_DEV_STOPWORDS = textutil.STOP_HEADLINE
+_SCOUT_GENERIC = textutil.SCOUT_GENERIC
 
 
 def _significant_terms(title: str) -> set:
     """Content-bearing lowercased words from a headline (drop stopwords / short words)."""
-    terms = set()
-    for w in re.findall(r"[A-Za-z][A-Za-z'&-]{3,}", title or ""):
-        lw = w.lower()
-        if lw not in _DEV_STOPWORDS:
-            terms.add(lw)
-    return terms
-
-
-# Words a scout headline uses for HOW it happened, not WHAT happened. "India vs
-# Zimbabwe 3rd T20I live" must not tag every live match, and "india" (already in
-# _DEV_STOPWORDS) must never be a story keyword: scout titles used every word over
-# 3 letters, one hit tagged an article and extended the story's life, so ~60
-# stories keyed on "india" tagged 254 of 275 fresh GNews stories (2026-10-03).
-_SCOUT_GENERIC = frozenset(
-    "live ongoing underway result results match matches series final finals semi "
-    "versus against wins win won beats beat defeats routs crushes sweeps reaches "
-    "begins starts ends meeting talks protest protests day".split()
-)
+    return set(textutil.headline_terms(title))
 
 
 def _scout_keywords(title: str) -> list:
-    """Distinctive words of a scout story title, in title order."""
-    out = []
-    for w in re.findall(r"[A-Za-z][A-Za-z'&-]{3,}", title or ""):
-        lw = w.lower()
-        if lw not in _DEV_STOPWORDS and lw not in _SCOUT_GENERIC and lw not in out:
-            out.append(lw)
-    return out
+    """Distinctive words of a scout story title, in title order. Drops "india",
+    "live", "vs", "wins"... (2026-10-03 flood: ~60 scout stories keyed on "india"
+    tagged 254 of 275 fresh GNews stories)."""
+    return textutil.headline_terms(title, extra_stop=textutil.SCOUT_GENERIC)
 
 
 def _same_scout_story(a: list, b: list) -> bool:
