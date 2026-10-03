@@ -65,6 +65,7 @@ import insights  # pure reading-observation logic, no I/O — see backend/insigh
 import research  # verified web research (native web_search + citation check) — see backend/research.py
 import categories    # taxonomy v2 + interest mapping — see backend/categories.py
 import textutil      # shared tokenising / stopwords — see backend/textutil.py
+import events_routes   # follow / since-you-looked endpoints — see backend/events_routes.py
 import events_service  # News v2 event clustering (Mongo side) — see backend/events_service.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
@@ -1550,6 +1551,9 @@ async def lifespan(app: FastAPI):
     await db.events.create_index("event_id", unique=True)
     await db.events.create_index([("status", 1), ("last_member_at", -1)])
     await db.events.create_index("first_member_at")
+    await db.follows.create_index([("user_id", 1), ("story_id", 1)], unique=True)
+    await db.follows.create_index("story_id")
+    await db.story_seen.create_index([("user_id", 1), ("story_id", 1)], unique=True)
     # Desk
     await db.desk_admins.create_index("email", unique=True)
     await db.desk_sessions.create_index("token_hash", unique=True)
@@ -3374,6 +3378,9 @@ async def _purge_user(user_id: str) -> None:
     await db.push_briefs.delete_many({"user_id": user_id})
     await db.push_prep.delete_many({"user_id": user_id})
     await db.push_claims.delete_many({"user_id": user_id})
+    # News v2: followed stories and "since you last looked" times.
+    await db.follows.delete_many({"user_id": user_id})
+    await db.story_seen.delete_many({"user_id": user_id})
 
 
 @api_router.post("/account/delete")
@@ -6867,6 +6874,9 @@ api_router.include_router(desk_routes.build_desk_router(
     push_test_email=lambda: PUSH_TEST_USER_EMAIL,
     fold_recent=_fold_recent_into_desk,
 ))
+
+api_router.include_router(events_routes.build_events_router(
+    db_getter=lambda: db, get_user=get_current_user))
 
 app.include_router(api_router)
 
