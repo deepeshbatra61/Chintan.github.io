@@ -59,6 +59,7 @@ ALLOWED_ORIGINS = list({
 
 import brief     # pure brief-assembly logic, no I/O — see backend/brief.py
 import brief_service  # brief build/cache/pin with I/O, shared by the brief page and push
+import news_sources   # GNews/NewsAPI rules: filters, mapping, delay, budget (pure)
 import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
@@ -85,6 +86,11 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
+# NewsAPI's free tier is 24h late and not licensed for a live app: kept only as a
+# switch-off fallback. NEWSAPI_ENABLED=false stops it without removing the key.
+NEWSAPI_ENABLED = os.environ.get("NEWSAPI_ENABLED", "true").lower() != "false"
+# GNews Essential: real time, licensed for production, 1,000 requests/day.
+GNEWS_KEY = os.environ.get("GNEWS_KEY", "").strip()
 _anthropic_client: Optional[anthropic.AsyncAnthropic] = None
 
 # Hard daily ceiling on research.py's web_search calls (D4) — shared across
@@ -150,6 +156,15 @@ try:
 except ValueError:
     NEWSAPI_DELAY_H = 24.0
 DEFAULT_ARTICLE_IMAGE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800"
+GNEWS_DAILY_CAP = _int_env("GNEWS_DAILY_CAP", news_sources.GNEWS_DAILY_CAP_DEFAULT)
+
+
+def _gnews_live() -> bool:
+    return bool(GNEWS_KEY)
+
+
+def _newsapi_live() -> bool:
+    return bool(NEWSAPI_KEY) and NEWSAPI_ENABLED
 
 # AI model used for summaries + on-demand features (Ask AI, Other Side, Think
 # Deeper, polls). Default haiku — cheap and safe if AI_MODEL is unset in prod.
@@ -751,27 +766,78 @@ async def _expire_scout_stories() -> None:
     )
 
 
-async def _run_ingest_cycle() -> None:
+async def _run_ingest_cycle(run_newsapi: bool = True, summarize_limit: Optional[int] = None) -> None:
     """Acquire the distributed ingestion lock (Redis only), run one pass, and
     always release the lock when done — so a same-day restart isn't blocked
     for the full 4h TTL just because an earlier process already ran once."""
     if not _redis:
-        await _run_ingest_cycle_body()
+        await _run_ingest_cycle_body(run_newsapi, summarize_limit)
         return
     acquired = await _redis.set("ingestion:lock", "1", nx=True, ex=4 * 60 * 60)
     if not acquired:
         logger.info("Ingest cycle: lock held by another instance, skipping")
         return
     try:
-        await _run_ingest_cycle_body()
+        await _run_ingest_cycle_body(run_newsapi, summarize_limit)
     finally:
         await _redis.delete("ingestion:lock")
 
 
-async def _run_ingest_cycle_body() -> None:
-    """Single fetch+categorise+summarise pass. Returns early on credit exhaustion."""
+async def _ran_recently(minutes: int) -> bool:
+    """A restart shortly after a run shouldn't spend another round of requests."""
+    doc = await db.app_meta.find_one({"_id": "ingest_state"}) or {}
+    try:
+        last = datetime.fromisoformat(doc.get("last_run") or "")
+    except ValueError:
+        return False
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - last < timedelta(minutes=minutes)
+
+
+async def _redate_newsapi_for_gnews() -> None:
+    """One-time, when GNews first goes live: NewsAPI items stored with rank_at =
+    published_at + 24h would otherwise pose as fresh next to real-time GNews
+    stories. Re-date them to their real publish time, and clear age-based
+    Breaking/Developing labels on API articles (labels now come from the Desk
+    and the developing-story tagger)."""
+    if not _gnews_live():
+        return
+    try:
+        if await db.app_meta.find_one({"_id": "gnews_redate_v1"}):
+            return
+        since = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        n = 0
+        async for a in db.articles.find(
+                {"origin": {"$ne": "desk"}, "provider": {"$ne": "gnews"}, "published_at": {"$gte": since}},
+                {"_id": 0, "article_id": 1, "published_at": 1}):
+            await db.articles.update_one({"article_id": a["article_id"]},
+                                         {"$set": {"rank_at": a["published_at"], "is_breaking": False}})
+            n += 1
+        await db.articles.update_many({"origin": {"$ne": "desk"}, "is_breaking": True},
+                                      {"$set": {"is_breaking": False}})
+        await db.app_meta.update_one({"_id": "gnews_redate_v1"},
+                                     {"$set": {"done_at": datetime.now(timezone.utc).isoformat(), "n": n}},
+                                     upsert=True)
+        logger.info(f"GNews switch-over: re-dated {n} NewsAPI articles to their real publish time")
+    except Exception:
+        logger.error(f"GNews re-date failed: {traceback.format_exc()}")
+
+
+async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Optional[int] = None) -> None:
+    """Single fetch+categorise+summarise pass. Returns early on credit exhaustion.
+    GNews runs every cycle when configured; NewsAPI only when run_newsapi (the
+    hourly cycle) and enabled."""
+    summarize_limit = INGEST_SUMMARIZE_LIMIT if summarize_limit is None else summarize_limit
     # ── 1. Fetch & upsert articles ───────────────────────────────────────────
-    api_articles = await fetch_from_newsapi()
+    api_articles = []
+    if _gnews_live():
+        api_articles += await fetch_from_gnews()
+    if run_newsapi and _newsapi_live():
+        have = {a["article_id"] for a in api_articles}
+        api_articles += [a for a in await fetch_from_newsapi() if a["article_id"] not in have]
+    await db.app_meta.update_one({"_id": "ingest_state"},
+                                 {"$set": {"last_run": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     if api_articles:
         new_count = 0
         updated_count = 0
@@ -792,8 +858,8 @@ async def _run_ingest_cycle_body() -> None:
                         "image_url": article["image_url"],
                         "published_at": article["published_at"],
                         "rank_at": article["rank_at"],
-                        "is_developing": article["is_developing"],
-                        "is_breaking": article["is_breaking"],
+                        # is_developing / is_breaking are NOT refreshed here: the
+                        # tagger and the Desk own them; a refetch must not reset them.
                     }},
                 )
                 updated_count += 1
@@ -803,7 +869,7 @@ async def _run_ingest_cycle_body() -> None:
         )
         await _absorb_into_desk(new_articles)
     else:
-        logger.warning("Background ingestor: fetch_from_newsapi returned 0 articles")
+        logger.warning("Background ingestor: news sources returned 0 articles")
 
     # ── 2. Poll generation removed — handled on-demand only ─────────────────
 
@@ -857,7 +923,7 @@ async def _run_ingest_cycle_body() -> None:
         to_summarize = await db.articles.find(
             {"claude_summarized": {"$ne": True}, "claude_skip": {"$ne": True}},
             {"_id": 0, "article_id": 1, "title": 1, "content": 1, "description": 1},
-        ).limit(INGEST_SUMMARIZE_LIMIT).to_list(INGEST_SUMMARIZE_LIMIT)
+        ).limit(summarize_limit).to_list(summarize_limit)
 
         for art in to_summarize:
             try:
@@ -906,7 +972,7 @@ async def _run_ingest_cycle_body() -> None:
     if api_articles:
         watched = await db.developing_stories.find(
             {"is_active": True}, {"_id": 0, "story_id": 1, "keywords": 1, "kind": 1}
-        ).to_list(100)
+        ).to_list(1000)
         now_iso = datetime.now(timezone.utc).isoformat()
         for topic in watched:
             keywords = topic.get("keywords", [])
@@ -954,6 +1020,9 @@ async def _run_ingest_cycle_body() -> None:
                 if hits >= min_matches:
                     matched_ids.append(article["article_id"])
             if matched_ids:
+                # "Developing" means part of a live developing story (not merely recent).
+                await db.articles.update_many({"article_id": {"$in": matched_ids}, "origin": {"$ne": "desk"}},
+                                              {"$set": {"is_developing": True}})
                 update = {
                     "$addToSet": {"article_ids": {"$each": matched_ids}},
                     "$set": {"last_updated": now_iso},
@@ -1164,15 +1233,25 @@ async def _run_cleanup_cycle() -> None:
 
 
 async def _background_news_ingestor() -> None:
-    """Hourly ingest schedule (IST-aware); daily cleanup at 3 AM IST runs
-    alongside that hour's ingest rather than replacing it."""
+    """Ingest schedule (IST-aware): every 20 min when GNews is configured
+    (NewsAPI, if still enabled, only on the hour), hourly otherwise. Daily
+    cleanup at 3 AM IST runs alongside that hour's ingest. The AI-summary cap is
+    per HOUR (INGEST_SUMMARIZE_LIMIT), split across the cycles in an hour."""
     IST = pytz.timezone("Asia/Kolkata")
     CLEANUP_HOUR = 3
+    interval = news_sources.INTERVAL_MIN if _gnews_live() else 60
+    per_cycle = news_sources.summarize_quota(INGEST_SUMMARIZE_LIMIT, interval)
 
-    # Run one ingest immediately on startup to populate fresh content
+    await _redate_newsapi_for_gnews()
+
+    # One ingest on startup to populate fresh content — unless a run happened
+    # moments ago (a deploy storm shouldn't burn the day's request budget).
     try:
-        logger.info("Ingestor: running initial ingest cycle on startup")
-        await _run_ingest_cycle()
+        if await _ran_recently(news_sources.STARTUP_MIN_GAP_MIN):
+            logger.info("Ingestor: last run was moments ago — skipping the startup cycle")
+        else:
+            logger.info("Ingestor: running initial ingest cycle on startup")
+            await _run_ingest_cycle(run_newsapi=True, summarize_limit=per_cycle)
     except Exception as exc:
         logger.error(f"Ingestor startup cycle error: {exc}")
 
@@ -1185,23 +1264,25 @@ async def _background_news_ingestor() -> None:
     while True:
         try:
             now = datetime.now(IST)
-            next_run = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            base = now.replace(second=0, microsecond=0)
+            next_run = base + timedelta(minutes=interval - (base.minute % interval))
             sleep_seconds = (next_run - now).total_seconds()
 
-            logger.info(f"Ingestor: next run at {next_run.strftime('%H:%M')} IST in {sleep_seconds/3600:.1f}h")
+            logger.info(f"Ingestor: next run at {next_run.strftime('%H:%M')} IST in {sleep_seconds/60:.0f} min")
             await asyncio.sleep(sleep_seconds)
 
             now_run = datetime.now(IST)
-            if now_run.hour == CLEANUP_HOUR:
+            on_the_hour = now_run.minute < interval
+            if on_the_hour and now_run.hour == CLEANUP_HOUR:
                 await _run_cleanup_cycle()
-            await _run_ingest_cycle()
+            await _run_ingest_cycle(run_newsapi=on_the_hour, summarize_limit=per_cycle)
 
         except asyncio.CancelledError:
             logger.info("Background news ingestor cancelled")
             raise
         except Exception as exc:
             logger.error(f"Background news ingestor error: {exc}")
-            await asyncio.sleep(3600)  # 1h back-off on unexpected error
+            await asyncio.sleep(interval * 60)  # back off one cycle on unexpected error
 
 
 _CATEGORY_MIGRATION_VERSION = 6  # bumped: fixed World-as-default-fallback bug + added weather/business keywords
@@ -4440,6 +4521,9 @@ async def fetch_from_newsapi() -> list:
     if not NEWSAPI_KEY:
         logger.warning("NEWSAPI_KEY not set — skipping NewsAPI fetch")
         return []
+    if not NEWSAPI_ENABLED:
+        logger.info("NewsAPI: disabled (NEWSAPI_ENABLED=false)")
+        return []
 
     logger.info("NewsAPI: key present, starting fetch")
     seen: dict = {}  # url → raw NewsAPI article, for deduplication
@@ -4529,10 +4613,10 @@ async def fetch_from_newsapi() -> list:
             logger.debug(f"NewsAPI: dropped blacklisted domain {_domain}: {title[:60]}")
             continue
 
-        # Relevance filter: drop articles unrelated to India
-        _haystack = (title + " " + description).lower()
-        if not any(kw in _haystack for kw in _INDIA_RELEVANCE_KEYWORDS):
-            logger.debug(f"NewsAPI: dropped off-topic article: {title[:80]}")
+        # Same gate as GNews: blocklist, trusted publishers, India relevance.
+        ok, _why = news_sources.admit(url, title, description, None, _INDIA_RELEVANCE_KEYWORDS)
+        if not ok:
+            logger.debug(f"NewsAPI: dropped ({_why}): {title[:80]}")
             continue
 
         article_id = "article_" + hashlib.md5(url.encode()).hexdigest()[:12]
@@ -4577,9 +4661,13 @@ async def fetch_from_newsapi() -> list:
             "author": a.get("author"),
             "published_at": published_at,
             "image_url": image_url,
-            "rank_at": desk.rank_at(published_at, NEWSAPI_DELAY_H) or published_at,
-            "is_developing": is_recent,
-            "is_breaking": is_breaking,
+            "rank_at": desk.rank_at(published_at, news_sources.provider_delay_h(
+                "newsapi", _gnews_live(), NEWSAPI_DELAY_H)) or published_at,
+            # Labels come from the Desk / developing-story tagger, never from age
+            # (with real-time sources, age would mark everything Breaking).
+            "is_developing": False,
+            "is_breaking": False,
+            "provider": "newsapi",
             "likes": 0,
             "dislikes": 0,
             "view_count": 0,
@@ -4588,6 +4676,103 @@ async def fetch_from_newsapi() -> list:
         })
 
     logger.info(f"NewsAPI: fetched {len(results)} articles")
+    return results
+
+
+async def _gnews_take_request() -> bool:
+    """Count one GNews request against today's (UTC) budget; False when spent."""
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.app_meta.update_one({"_id": f"gnews_usage:{day}"}, {"$inc": {"n": 1}}, upsert=True)
+    doc = await db.app_meta.find_one({"_id": f"gnews_usage:{day}"}) or {}
+    return doc.get("n", 0) <= GNEWS_DAILY_CAP
+
+
+async def fetch_from_gnews(client=None) -> list:
+    """GNews Essential: every category + an 'India' search for India/English,
+    only stories since the last successful run, a second page when a run is
+    busy. Budget-guarded (GNEWS_DAILY_CAP of 1,000/day)."""
+    if not GNEWS_KEY:
+        return []
+    now = datetime.now(timezone.utc)
+    meta = await db.app_meta.find_one({"_id": "gnews_state"}) or {}
+    last_ok = meta.get("last_success")
+    if isinstance(last_ok, str):
+        try:
+            last_ok = datetime.fromisoformat(last_ok)
+        except ValueError:
+            last_ok = None
+    since = news_sources.iso_z(news_sources.gnews_since(last_ok, now))
+    seen: dict = {}            # url -> (raw article, gnews category)
+    ok_calls = 0
+    stop = False
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=20.0)
+    try:
+        plan = [("top-headlines", {"category": c}) for c in news_sources.GNEWS_CATEGORIES]
+        plan += [("search", {"q": q, "sortby": "publishedAt"}) for q in news_sources.GNEWS_SEARCHES]
+        for endpoint, extra in plan:
+            if stop:
+                break
+            for page in (1, 2):
+                if not await _gnews_take_request():
+                    logger.warning("GNews: daily request budget reached — skipping the rest of this run")
+                    stop = True
+                    break
+                params = {"lang": "en", "country": "in", "max": news_sources.GNEWS_MAX, "from": since,
+                          "page": page, "apikey": GNEWS_KEY, **extra}
+                try:
+                    resp = await client.get(f"https://gnews.io/api/v4/{endpoint}", params=params)
+                except Exception as e:
+                    logger.error(f"GNews {endpoint} {extra}: {e}")
+                    break
+                if resp.status_code in (401, 403):
+                    logger.error(f"GNews rejected the key ({resp.status_code}): {resp.text[:200]}")
+                    stop = True
+                    break
+                if resp.status_code == 429:
+                    logger.warning("GNews: rate/quota limited (429) — stopping this run")
+                    stop = True
+                    break
+                if resp.status_code != 200:
+                    logger.warning(f"GNews {endpoint} {extra} p{page}: {resp.status_code} {resp.text[:200]}")
+                    break
+                ok_calls += 1
+                arts = (resp.json() or {}).get("articles") or []
+                cat = extra.get("category")
+                for a in arts:
+                    u = a.get("url") or ""
+                    if u and u not in seen:
+                        seen[u] = (a, cat)
+                if len(arts) < news_sources.GNEWS_MAX:
+                    break                       # no second page needed
+    finally:
+        if own:
+            await client.aclose()
+
+    results, dropped = [], {}
+    gnews_live = True
+    for url, (a, cat) in seen.items():
+        title = clean_newsapi_text((a.get("title") or "").strip())
+        description = clean_newsapi_text((a.get("description") or "").strip())
+        raw_content = clean_newsapi_text((a.get("content") or description).strip())
+        if not title:
+            continue
+        ok, why = news_sources.admit(url, title, description, cat, _INDIA_RELEVANCE_KEYWORDS)
+        if not ok:
+            dropped[why] = dropped.get(why, 0) + 1
+            continue
+        published_at = a.get("publishedAt") or now.isoformat()
+        rank_at = desk.rank_at(published_at, news_sources.provider_delay_h("gnews", gnews_live, NEWSAPI_DELAY_H))
+        results.append(news_sources.build_article(
+            url=url, title=title, description=description, raw_content=raw_content,
+            source_name=((a.get("source") or {}).get("name") or ""), published_at=published_at,
+            image_url=a.get("image"), author=None, provider="gnews", rank_at=rank_at or published_at,
+            detect_category=detect_category, default_image=DEFAULT_ARTICLE_IMAGE))
+    if ok_calls:
+        await db.app_meta.update_one({"_id": "gnews_state"},
+                                     {"$set": {"last_success": now.isoformat(), "last_count": len(results)}},
+                                     upsert=True)
+    logger.info(f"GNews: {ok_calls} requests, {len(seen)} fetched, {len(results)} kept, dropped {dropped}")
     return results
 
 # ===================== ARTICLES ROUTES =====================
@@ -5949,6 +6134,23 @@ async def admin_purge_blacklisted_domains(admin: dict = Depends(require_admin)):
         deleted = 0
 
     return {"deleted": deleted, "domains": domain_counts}
+
+@api_router.get("/admin/test-gnews")
+async def admin_test_gnews(admin: dict = Depends(require_admin)):
+    """Run one GNews fetch now (about 10 requests) and report what it kept."""
+    if not GNEWS_KEY:
+        return {"error": "GNEWS_KEY is not set in environment variables", "articles": []}
+    arts = await fetch_from_gnews()
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    usage = (await db.app_meta.find_one({"_id": f"gnews_usage:{day}"}) or {}).get("n", 0)
+    by_source: Dict[str, int] = {}
+    for a in arts:
+        by_source[a["source"]] = by_source.get(a["source"], 0) + 1
+    return {"kept": len(arts), "requests_today": usage, "daily_cap": GNEWS_DAILY_CAP,
+            "by_source": dict(sorted(by_source.items(), key=lambda kv: -kv[1])),
+            "sample": [{k: a[k] for k in ("title", "source", "category", "published_at", "image_url")}
+                       for a in arts[:10]]}
+
 
 @api_router.get("/admin/test-newsapi")
 async def admin_test_newsapi(admin: dict = Depends(require_admin)):
