@@ -66,6 +66,7 @@ import research  # verified web research (native web_search + citation check) �
 import categories    # taxonomy v2 + interest mapping — see backend/categories.py
 import textutil      # shared tokenising / stopwords — see backend/textutil.py
 import events_routes   # follow / since-you-looked endpoints — see backend/events_routes.py
+import events_flip     # EVENTS_MODE switch (go_live / go_back) — see backend/events_flip.py
 import events_service  # News v2 event clustering (Mongo side) — see backend/events_service.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
@@ -877,7 +878,8 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
             f"Background ingestor: {new_count} new, {updated_count} updated "
             f"(total fetched: {len(api_articles)})"
         )
-        await _absorb_into_desk(new_articles)
+        if events_service.current_mode() != "live":     # live: events fold Desk coverage (1A)
+            await _absorb_into_desk(new_articles)
     else:
         logger.warning("Background ingestor: news sources returned 0 articles")
 
@@ -1107,6 +1109,7 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
     #       Shadow: groups articles into events for the Desk + /api/health/news
     #       without touching the feed. Its own failure must never cost a cycle.
     try:
+        await events_flip.sync_mode(db, legacy_fold=_legacy_fold_recent)   # apply an EVENTS_MODE change
         await events_service.run_cycle(db)
     except Exception as e:  # noqa: BLE001 -- isolate the new subsystem from ingest
         logger.exception(f"Events cycle failed: {e}")
@@ -1230,7 +1233,15 @@ async def _absorb_into_desk(new_articles: list) -> None:
 
 
 async def _fold_recent_into_desk() -> int:
-    """Fold the last 3 days of API coverage into Desk stories (run at publish)."""
+    """Fold the last 3 days of API coverage into Desk stories (run at publish).
+    With events live the next events cycle does this instead (eng review 1A)."""
+    if events_service.current_mode() == "live":
+        return 0
+    return await _legacy_fold_recent()
+
+
+async def _legacy_fold_recent() -> int:
+    """The keyword fold itself; also how events_flip.go_back restores Desk folds."""
     since = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
     recent = await db.articles.find(
         {"published_at": {"$gte": since}, "origin": {"$ne": "desk"}, "merged_into": {"$exists": False}},
@@ -6857,6 +6868,14 @@ def _desk_email(to: str, subject: str, text: str):
     return _send_email(to, subject, html, text)
 
 
+async def _events_touch(article_id: str) -> None:
+    """A Desk action changed this article (unpublish): recompute its event."""
+    a = await db.articles.find_one({"article_id": article_id}, {"_id": 0, "event_id": 1})
+    if a and a.get("event_id"):
+        await events_service.recompute_event(db, a["event_id"], datetime.now(timezone.utc),
+                                             mode=events_service.current_mode())
+
+
 api_router.include_router(desk_routes.build_desk_router(
     db=db,
     auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
@@ -6873,6 +6892,8 @@ api_router.include_router(desk_routes.build_desk_router(
     push=push_svc,
     push_test_email=lambda: PUSH_TEST_USER_EMAIL,
     fold_recent=_fold_recent_into_desk,
+    events_block=lambda article_id: events_service.block_member(db, article_id, datetime.now(timezone.utc)),
+    events_touch=_events_touch,
 ))
 
 api_router.include_router(events_routes.build_events_router(

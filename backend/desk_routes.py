@@ -128,6 +128,8 @@ def build_desk_router(
     logger,
     push=None,                                   # push_service.PushService (optional)
     fold_recent: Optional[Callable[[], Awaitable[int]]] = None,  # fold recent API coverage into Desk stories
+    events_block: Optional[Callable[[str], Awaitable]] = None,   # News v2: Undo = leave the event for good
+    events_touch: Optional[Callable[[str], Awaitable]] = None,   # News v2: recompute the article's event
     push_test_email: Callable[[], str] = lambda: "",
 ) -> APIRouter:
     router = APIRouter(prefix="/desk")
@@ -584,7 +586,9 @@ def build_desk_router(
             raise HTTPException(status_code=404, detail="Article not found.")
         await db.articles.update_one({"article_id": article_id}, {"$set": {"desk_hidden": True}})
         # Anything it absorbed goes back to the feed: it was only hidden because this was there.
-        await db.articles.update_many({"merged_into": article_id}, {"$unset": {"merged_into": ""}})
+        await db.articles.update_many({"merged_into": article_id}, {"$unset": {"merged_into": "", "merged_by": ""}})
+        if events_touch:
+            await events_touch(article_id)
         if a.get("desk_story_id"):
             await db.developing_stories.update_one({"story_id": a["desk_story_id"]}, {"$set": {
                 "is_active": False, "ended_reason": "unpublished"}})
@@ -594,9 +598,12 @@ def build_desk_router(
     @router.post("/articles/{article_id}/restore/{absorbed_id}")
     async def restore_absorbed(article_id: str, absorbed_id: str, ctx: dict = Depends(_session)):
         res = await db.articles.update_one({"article_id": absorbed_id, "merged_into": article_id},
-                                           {"$unset": {"merged_into": ""}, "$set": {"absorb_exempt": True}})
+                                           {"$unset": {"merged_into": "", "merged_by": ""},
+                                            "$set": {"absorb_exempt": True}})
         if getattr(res, "matched_count", 1) == 0:
             raise HTTPException(status_code=404, detail="Nothing to restore.")
+        if events_block:      # sticky: the events engine must not fold it back in
+            await events_block(absorbed_id)
         await _audit(ctx, "absorb_undo", article_id=article_id, absorbed_id=absorbed_id)
         return {"ok": True}
 

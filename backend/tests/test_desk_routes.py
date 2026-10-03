@@ -51,6 +51,7 @@ class Harness:
         self.research_calls = 0
         self.research_gate = None
         self.research_args = []
+        self.events_calls = []   # News v2 hooks: ("block"|"touch", article_id)
         self.pages = {}          # url -> meta dict the fake fetcher returns
         self.auth = A.DeskAuth(self.db, KEY, now=self.now)
         app = FastAPI()
@@ -60,9 +61,13 @@ class Harness:
             registrable_domain=research._registrable_domain,
             suggest_category=lambda t: "Politics", default_image="https://img.example/x.jpg",
             logger=__import__("logging").getLogger("t"),
+            events_block=lambda aid: self._events("block", aid), events_touch=lambda aid: self._events("touch", aid),
         ), prefix="/api")
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
         self.token = self.csrf = None
+
+    async def _events(self, kind, aid):
+        self.events_calls.append((kind, aid))
 
     def now(self):
         return datetime.now(timezone.utc) + self.clock_offset
@@ -401,6 +406,7 @@ async def test_unpublish_hides_and_releases_absorbed(h):
     await h.client.post(f"/api/desk/articles/{aid}/unpublish", headers=h.headers())
     assert (await h.db.articles.find_one({"article_id": aid}))["desk_hidden"]
     assert "merged_into" not in await h.db.articles.find_one({"article_id": "api1"})
+    assert ("touch", aid) in h.events_calls          # events recompute the story's event
 
 
 async def test_restore_absorbed_article(h):
@@ -409,6 +415,7 @@ async def test_restore_absorbed_article(h):
     r = await h.client.post("/api/desk/articles/desk_x/restore/api1", headers=h.headers())
     doc = await h.db.articles.find_one({"article_id": "api1"})
     assert r.status_code == 200 and "merged_into" not in doc and doc["absorb_exempt"]
+    assert h.events_calls == [("block", "api1")]     # sticky: events never fold it back in
 
 
 async def test_boost_existing_article(h):

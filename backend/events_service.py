@@ -116,7 +116,7 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
 
     since = _iso(now - timedelta(hours=WINDOW_H))
     raw = await db.articles.find(
-        {"event_id": {"$exists": False}, "published_at": {"$gte": since}, "merged_into": {"$exists": False}},
+        {"event_id": {"$exists": False}, "published_at": {"$gte": since}, "desk_hidden": {"$ne": True}},
         {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1, "published_at": 1,
          "source": 1, "url": 1, "origin": 1, "gnews_category": 1, "category": 1, "subcategory": 1},
     ).sort("published_at", 1).limit(batch_limit).to_list(batch_limit)
@@ -246,10 +246,11 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
     if not ev:
         return None
     docs = await db.articles.find(
-        {"event_id": event_id},
+        # An unpublished Desk article is no longer part of anything (desk_routes.unpublish).
+        {"event_id": event_id, "desk_hidden": {"$ne": True}},
         {"_id": 0, "article_id": 1, "publisher": 1, "publisher_group": 1, "published_at": 1, "origin": 1,
          "syndicated_of": 1, "syndicated_publisher": 1, "category": 1, "subcategory": 1,
-         "category_v2": 1, "subcategory_v2": 1, "state": 1},
+         "category_v2": 1, "subcategory_v2": 1, "state": 1, "rank_at": 1, "desk_story_id": 1},
     ).to_list(E.MAX_MEMBERS * 2)
     members = [m for m in (_member_from_doc(d) for d in docs) if m["published_at"] and m.get("publisher")]
     desk = ev.get("desk") or {}
@@ -275,6 +276,9 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
     subcategory_v2 = _vote([m.get("subcategory_v2") for m in members
                             if (m.get("category_v2") or m.get("category")) == category_v2],
                            lead_doc.get("subcategory_v2"))
+    if lead_doc.get("origin") == "desk":     # the Desk chose its category; members follow it
+        category_v2 = lead_doc.get("category_v2") or lead_doc.get("category") or category_v2
+        subcategory_v2 = lead_doc.get("subcategory_v2") or lead_doc.get("subcategory")
     category, subcategory = C.legacy_category(category_v2, subcategory_v2)
     state = _vote([m.get("state") for m in members], lead_doc.get("state"))
     fields = {
@@ -301,7 +305,49 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
         await db.articles.update_one({"article_id": lead}, {
             "$set": {"event_hidden": hidden, "outlets_count": len(voices), "coverage_mix": dict(mix),
                      "event_status": status, **vote}})
+        if lead_doc.get("origin") == "desk":
+            await _fold_into_desk(db, lead_doc, others, now)
     return fields
+
+
+async def _fold_into_desk(db, host: dict, others: list, now: datetime) -> None:
+    """1A: a Desk story's event members ARE its absorbed coverage. Written as
+    merged_into (merged_by "events") so the Desk's absorbed list and Undo work
+    unchanged; members that left the event (Undo, split) are released. The
+    host's rank moves up with the newest member (FlyDubai, 2026-10-01) and a
+    developing Desk story gets the members in its timeline."""
+    lead = host["article_id"]
+    await db.articles.update_many(
+        {"merged_into": lead, "merged_by": "events", "article_id": {"$nin": others}},
+        {"$unset": {"merged_into": "", "merged_by": ""}})
+    if not others:
+        return
+    await db.articles.update_many(
+        {"article_id": {"$in": others}, "merged_into": {"$exists": False}, "absorb_exempt": {"$ne": True}},
+        {"$set": {"merged_into": lead, "merged_by": "events"}})
+    newest = await db.articles.find({"article_id": {"$in": others}}, {"_id": 0, "rank_at": 1})         .sort("rank_at", -1).limit(1).to_list(1)
+    if newest and newest[0].get("rank_at"):
+        await db.articles.update_one({"article_id": lead}, {"$max": {"rank_at": newest[0]["rank_at"]}})
+    if host.get("desk_story_id"):
+        await db.developing_stories.update_one(
+            {"story_id": host["desk_story_id"]},
+            {"$addToSet": {"article_ids": {"$each": others}}, "$set": {"last_updated": _iso(now)}})
+
+
+async def block_member(db, article_id: str, now: datetime, mode: str = None) -> Optional[str]:
+    """Desk Undo / remove: the article leaves its event for good (sticky
+    blocked_member) and is re-clustered next cycle anywhere else. Returns the
+    event it left."""
+    a = await db.articles.find_one({"article_id": article_id}, {"_id": 0, "event_id": 1})
+    eid = (a or {}).get("event_id")
+    if not eid:
+        return None
+    await db.events.update_one({"event_id": eid}, {"$addToSet": {"desk.blocked_members": article_id},
+                                                   "$pull": {"members": {"article_id": article_id}}})
+    await db.articles.update_one({"article_id": article_id},
+                                 {"$unset": {"event_id": "", "event_hidden": "", "merged_by": ""}})
+    await recompute_event(db, eid, now, mode=mode or current_mode())
+    return eid
 
 
 # ── read side: the Developing list and story page project events at read time
