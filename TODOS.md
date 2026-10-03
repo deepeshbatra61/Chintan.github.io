@@ -280,3 +280,27 @@ Build on `events.article_ids`, the publisher registry (`publishers.py`) and `_ll
 **Effort:** M → with CC: S. **Priority:** P2.
 
 **Depends on / blocked by:** News v2 events live in production with the golden-set gate met.
+
+---
+
+## 12. Delete the legacy "same story" paths after events go live
+
+**What:** Remove `_absorb_into_desk`, `_fold_recent_into_desk`, `desk.story_keyword_hits`,
+`_scout_developing_candidates` and `_detect_developing_stories`, along with their tests and
+the `EVENTS_MODE=off` branch that keeps them running.
+
+**Why:** The News v2 eng review (OV4, 2026-10-03) keeps these paths behind the flag for
+one release so a rollback is instant. Left in place for good, they become a second,
+untested "same story" engine. That is the bug class behind 4 keyword-matching incidents:
+"take", "loc/pok", the "india" scout flood, and the Desk phrases.
+
+**Pros:** Developing and Desk folding have one source of truth, and server.py shrinks.
+
+**Cons:** After this, rolling back events means a code revert, not a flag change.
+
+**Context:** The spec is in
+`~/.gstack/projects/deepeshbatra61-Chintan.github.io/designs/news-v2-20261003/PLAN.md`
+(task T17). `events_flip.go_back` and the legacy branch are removed together.
+**Effort:** S. **Priority:** P2.
+
+**Depends on / blocked by:** `EVENTS_MODE=live` running cleanly through one full release.
