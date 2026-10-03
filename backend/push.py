@@ -58,8 +58,8 @@ BREAKING_PER_DAY = 1
 BREAKING_PER_WEEK = 2
 DEFAULT_TZ = "Asia/Kolkata"
 
-PREF_KEYS = ("sunrise", "noon", "dusk", "breaking")
-DEFAULT_PREFS = {"sunrise": True, "noon": False, "dusk": True, "breaking": True}
+PREF_KEYS = ("sunrise", "noon", "dusk", "breaking", "follow")
+DEFAULT_PREFS = {"sunrise": True, "noon": False, "dusk": True, "breaking": True, "follow": True}
 
 
 def zone(name: Optional[str]) -> ZoneInfo:
@@ -191,6 +191,40 @@ def breaking_hold(now_utc: datetime, tz_name: Optional[str], last_sent: Optional
     if not gap_ok(last_sent, now_utc):
         return "gap"
     return None
+
+
+# Follow a story (News v2, D8): a ping only when it really moves.
+FOLLOW_PER_STORY_DAY = 3
+FOLLOW_PER_READER_DAY = 6
+FOLLOW_STORY_GAP = timedelta(hours=2)
+
+
+def follow_hold(now_utc: datetime, tz_name: Optional[str], last_sent: Optional[datetime],
+                story_sent: Sequence[datetime], follow_sent: Sequence[datetime]) -> Optional[str]:
+    """Why a follow update must be held, or None to send.
+    Reasons: quiet | gap (any push in the last 90 min) | story_gap (<2h since
+    this story's last ping) | story_day (3 today) | reader_day (6 today)."""
+    local = local_now(now_utc, tz_name)
+    if in_quiet_hours(local):
+        return "quiet"
+    if not gap_ok(last_sent, now_utc):
+        return "gap"
+    if story_sent and now_utc - max(story_sent) < FOLLOW_STORY_GAP:
+        return "story_gap"
+    today = local.date()
+    if sum(1 for t in story_sent if local_now(t, tz_name).date() == today) >= FOLLOW_PER_STORY_DAY:
+        return "story_day"
+    if sum(1 for t in follow_sent if local_now(t, tz_name).date() == today) >= FOLLOW_PER_READER_DAY:
+        return "reader_day"
+    return None
+
+
+def follow_copy(story_title: str, headline: str, outlet: str) -> Tuple[str, str]:
+    """Factual and sober (design D8): the story as the title, the new
+    development as the body, credited to the outlet that reported it."""
+    title = clip_words(strip_emoji(story_title), TITLE_MAX + 18)
+    body = clip_words(strip_emoji(headline).replace("!", "."), BODY_MAX - len(outlet) - 3)
+    return title, f"{body} ({outlet})" if outlet else body
 
 
 # ── copy ─────────────────────────────────────────────────────────────────────

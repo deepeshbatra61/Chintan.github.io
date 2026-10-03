@@ -29,6 +29,7 @@ from typing import Optional
 
 import categories as C
 import events as E
+import textutil
 import publishers as P
 
 logger = logging.getLogger(__name__)
@@ -104,9 +105,21 @@ async def _load_candidates(db, now: datetime) -> list:
     return out
 
 
+FOLLOW_NEW_HEADLINE = 0.6      # word overlap below this = a new development, not a copy (D8)
+
+
+def _overlap(a: str, b: str) -> float:
+    wa = {w for w, _ in textutil.tokens(a, stop=frozenset())}
+    wb = {w for w, _ in textutil.tokens(b, stop=frozenset())}
+    return len(wa & wb) / len(wa | wb) if wa and wb else 0.0
+
+
 async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = None,
-                    batch_limit: int = BATCH_LIMIT) -> dict:
-    """One events pass. Returns the metrics it stored (also for tests)."""
+                    batch_limit: int = BATCH_LIMIT, notify=None) -> dict:
+    """One events pass. Returns the metrics it stored (also for tests).
+    notify(story_id=, story_title=, headline=, outlet=) is awaited once per
+    developing event that gained a new independent outlet with a new headline
+    (follow pushes; push_service.send_follow_update)."""
     mode = mode or current_mode()
     if mode == "off":
         return {"mode": "off"}
@@ -140,7 +153,21 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
                          "published_at": pub_at, "publisher": p.key})
 
     candidates = await _load_candidates(db, now)
+    before = {c["event_id"]: ({m.get("syndicated_publisher") or m["publisher"] for m in c["members"]},
+                              [m.get("title", "") for m in c["members"]]) for c in candidates}
     assignments, touched = await asyncio.to_thread(E.plan_batch, prepared, candidates, df)
+    developments: dict = {}       # event_id -> the newest genuinely new report this cycle
+    for asg in assignments:
+        prior = before.get(asg["event_id"])
+        if not prior or asg["syndicated_of"]:
+            continue
+        art = next(x for x in prepared if x["article_id"] == asg["article_id"])
+        voices, titles = prior
+        if art["publisher"] in voices or any(_overlap(art["title"], t) >= FOLLOW_NEW_HEADLINE for t in titles):
+            continue
+        cur = developments.get(asg["event_id"])
+        if not cur or art["published_at"] > cur["published_at"]:
+            developments[asg["event_id"]] = {**art, "outlet": pubs[art["article_id"]].name}
 
     for asg in assignments:
         p = pubs[asg["article_id"]]
@@ -172,6 +199,18 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
                                                              {"_id": 0, "event_id": 1})]
     for eid in set(touched) | set(developing):
         await recompute_event(db, eid, now, mode=mode, overrepresented=overrep, scout_ids=scout_ids)
+
+    if notify:
+        for eid, art in developments.items():
+            ev = await db.events.find_one({"event_id": eid}, {"_id": 0, "status": 1, "lead_article_id": 1})
+            if not ev or ev.get("status") != "developing" or not await db.follows.find_one({"story_id": eid}):
+                continue
+            lead = await db.articles.find_one({"article_id": ev.get("lead_article_id")}, {"_id": 0, "title": 1}) or {}
+            try:
+                await notify(story_id=eid, story_title=lead.get("title") or art["title"],
+                             headline=art["title"], outlet=art["outlet"])
+            except Exception as e:  # noqa: BLE001 -- a push failure must not cost the cycle
+                logger.warning(f"Follow push for {eid} failed: {e}")
 
     closed = await db.events.update_many(
         {"status": {"$ne": "closed"}, "last_member_at": {"$lt": _iso(now - timedelta(hours=E.CLOSE_AFTER_H))}},

@@ -602,6 +602,40 @@ class PushService:
             failed += not ok
         return {"ok": True, "sent": sent, "failed": failed, "held": plan["held"], "title": title, "body": body}
 
+    # ── Follow a story (News v2, D8) ─────────────────────────────────────────
+    async def send_follow_update(self, *, story_id: str, story_title: str, headline: str, outlet: str) -> dict:
+        """Ping the readers following story_id about one new development.
+        Held per reader for quiet hours, the 90-min gap, 2h per story, 3 per
+        story and 6 follow pings per day; the 'follow' pref can turn it off."""
+        held = {"quiet": 0, "gap": 0, "story_gap": 0, "story_day": 0, "reader_day": 0, "off": 0}
+        if not await self.is_live():
+            return {"ok": False, "sent": 0, "held": held, "error": "Push is switched off."}
+        now = self.now()
+        title, body = P.follow_copy(story_title, headline, outlet)
+        since = now - timedelta(days=1)
+        sent = 0
+        async for f in self.db.follows.find({"story_id": story_id}, {"_id": 0, "user_id": 1}):
+            uid = f["user_id"]
+            if not (await self.get_prefs(uid)).get("follow", True):
+                held["off"] += 1
+                continue
+            devices = await self.db.push_devices.find({"user_id": uid}).sort("last_seen", -1).to_list(MAX_DEVICES_PER_USER)
+            if not devices:
+                continue
+            logs = await self.db.push_log.find({"user_id": uid, "kind": "follow", "status": "sent",
+                                                "sent_at": {"$gte": since}}).to_list(50)
+            why = P.follow_hold(now, devices[0].get("tz"), await self._last_sent(user_id=uid),
+                                [_utc(l["sent_at"]) for l in logs if l.get("story_id") == story_id],
+                                [_utc(l["sent_at"]) for l in logs])
+            if why:
+                held[why] += 1
+                continue
+            if await self._deliver(devices=devices, user_id=uid, kind="follow", slot_key=None, title=title,
+                                   body=body, image=None, subtitle=None, route=f"/developing/{story_id}",
+                                   ttl=3 * 3600, extra={"story_id": story_id, "template_id": None, "source": "follow"}):
+                sent += 1
+        return {"ok": True, "sent": sent, "held": held, "title": title, "body": body}
+
     # ── test push ────────────────────────────────────────────────────────────
     async def test_push(self, email: str) -> dict:
         """Owner QA: works while the Desk switch is OFF (that's its purpose);

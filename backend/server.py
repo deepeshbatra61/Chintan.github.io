@@ -1110,7 +1110,7 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
     #       without touching the feed. Its own failure must never cost a cycle.
     try:
         await events_flip.sync_mode(db, legacy_fold=_legacy_fold_recent)   # apply an EVENTS_MODE change
-        await events_service.run_cycle(db)
+        await events_service.run_cycle(db, notify=_follow_notify)
     except Exception as e:  # noqa: BLE001 -- isolate the new subsystem from ingest
         logger.exception(f"Events cycle failed: {e}")
 
@@ -6859,6 +6859,12 @@ push_svc = push_service.PushService(
     llm_daily_cap=PUSH_LLM_DAILY_CAP,
     logger=logger,
 )
+async def _follow_notify(**kw):
+    """News v2 follow pings (D8): only 1.13 readers can follow, so this never
+    reaches a 1.12 app."""
+    return await push_svc.send_follow_update(**kw)
+
+
 api_router.include_router(push_routes.build_push_router(
     service=push_svc, get_user=get_current_user, client_ip=_push_client_ip))
 
