@@ -335,9 +335,21 @@ const NativeAuthHandler = () => {
   const { login, setShowWelcome, setWelcomeDest } = useAuth();
   const navigate = useNavigate();
 
+  // The listeners register ONCE and read the latest login/navigate through a
+  // ref. They used to re-register on every AuthProvider render (login is a
+  // new function each time) and clean up with removeAllListeners(), which in
+  // between could drop an incoming shared link, and also wiped other App
+  // listeners such as PushController's resume listener.
+  const latest = useRef({});
+  latest.current = { login, navigate, setShowWelcome, setWelcomeDest };
+
   useEffect(() => {
     console.log("NativeAuthHandler mounted, is native: " + window.Capacitor?.isNativePlatform());
     if (!window.Capacitor?.isNativePlatform()) return;
+    const login = (...a) => latest.current.login(...a);
+    const navigate = (...a) => latest.current.navigate(...a);
+    const setShowWelcome = (...a) => latest.current.setShowWelcome(...a);
+    const setWelcomeDest = (...a) => latest.current.setWelcomeDest(...a);
 
     const handleUrl = async ({ url }) => {
       console.log("appUrlOpen fired with url: " + url);
@@ -433,10 +445,12 @@ const NativeAuthHandler = () => {
       }
     };
 
-    CapApp.addListener("appUrlOpen", handleUrl);
-    CapApp.addListener("browserFinished", handleBrowserFinished);
-    return () => { CapApp.removeAllListeners(); };
-  }, [login, navigate, setShowWelcome, setWelcomeDest]);
+    const handles = [
+      CapApp.addListener("appUrlOpen", handleUrl),
+      CapApp.addListener("browserFinished", handleBrowserFinished),
+    ];
+    return () => { handles.forEach((h) => Promise.resolve(h).then((x) => x?.remove()).catch(() => {})); };
+  }, []);
 
   return null;
 };

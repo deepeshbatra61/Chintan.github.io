@@ -18,6 +18,7 @@ import SignInPrompt from "../components/SignInPrompt";
 import AppearanceControl from "../components/AppearanceControl";
 import SidebarFollowing from "../components/SidebarFollowing";
 import { CoverageStrip, CoverageSheet } from "../components/Coverage";
+import Age from "../components/Age";
 import { SubPills, StateSheet } from "../components/SubFilters";
 import { TOP_CHIPS, parseFilter, filterKey, filterParams, homeStateOf, rememberGuestState, STATES, ASKED_KEY } from "../lib/taxonomy";
 import {
@@ -263,10 +264,17 @@ const FeedPage = () => {
     closeActionSheet();
   };
 
+  // Every full (page 1) load bumps this; a response from an older load is
+  // dropped. Tapping Health then Startups quickly used to let the slower
+  // Health reply land last and paint Health cards under Startups.
+  const loadSeq = useRef(0);
+
   const fetchArticles = useCallback(async (category = null, pageNum = 1, append = false) => {
+    const seq = append ? loadSeq.current : ++loadSeq.current;
     try {
       const params = filterParams(category, new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT }));
       const response = await axios.get(`${API}/articles?${params}`, { withCredentials: true });
+      if (seq !== loadSeq.current) return false;
       const data = response.data;
       if (append) {
         setArticles(prev => {
@@ -291,6 +299,7 @@ const FeedPage = () => {
       setLoadError(null);
       return true;
     } catch (error) {
+      if (seq !== loadSeq.current) return false;
       console.error("Error fetching articles:", error);
       setLoadError({ pageNum, append });
       return false;
@@ -364,11 +373,15 @@ const FeedPage = () => {
   // Tapping "Feed" in the bottom nav while already on the feed page has
   // nowhere to navigate to, so it refreshes instead -- BottomNav dispatches
   // this event since it has no direct reference to this page's fetch logic.
+  // It also takes the reader back to the top, however far down they were.
   useEffect(() => {
-    const handler = () => doRefresh();
+    const handler = () => {
+      mainRef.current?.scrollTo({ top: 0, behavior: R ? "auto" : "smooth" });
+      doRefresh();
+    };
     window.addEventListener("chintan:feed-refresh", handler);
     return () => window.removeEventListener("chintan:feed-refresh", handler);
-  }, [doRefresh]);
+  }, [doRefresh, R]);
 
   const handlePullStart = (e) => {
     if (!refreshing && mainRef.current && mainRef.current.scrollTop <= 0) {
@@ -878,6 +891,7 @@ const FeedPage = () => {
                           <Eye className="w-3 h-3" />
                           {article.view_count || 0}
                         </span>
+                        <Age iso={article.published_at} />
                       </div>
                     </div>
                   </div>

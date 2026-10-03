@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Send, Sparkles, User, Loader2 } from "lucide-react";
 import { useAuth, SuryaLogo } from "../App";
 import { ScrollArea } from "../components/ui/scroll-area";
+import CopyButton from "../components/CopyButton";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -217,14 +218,21 @@ const AskAIPage = () => {
                       </div>
                     )}
                     
-                    <div className={`max-w-[80%] ${
-                      message.role === "user" 
-                        ? "bg-red-600 text-white rounded-2xl rounded-br-md" 
-                        : "bg-fg/5 text-gray-300 rounded-2xl rounded-bl-md"
-                    } px-4 py-3`}>
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                        {message.content}
-                      </p>
+                    <div className="max-w-[80%]">
+                      <div className={`${
+                        message.role === "user"
+                          ? "bg-red-600 text-white rounded-2xl rounded-br-md"
+                          : "bg-fg/5 text-gray-300 rounded-2xl rounded-bl-md"
+                      } px-4 py-3`}>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
+                          {message.content}
+                        </p>
+                      </div>
+                      {message.role === "assistant" && message.content && (
+                        <div style={{ marginTop: 2, paddingLeft: 4 }}>
+                          <CopyButton text={message.content} />
+                        </div>
+                      )}
                     </div>
 
                     {message.role === "user" && (

@@ -88,14 +88,14 @@ describe("SubPills", () => {
     expect(onChange).toHaveBeenCalledWith("Sports");
   });
 
-  test("States: your state first with change, then trending, then More states", async () => {
+  test("States: your state first, then trending, then More states (the only way to change)", async () => {
     const onPick = jest.fn();
     render(<SubPills filter="States/Maharashtra" onChange={jest.fn()} homeState="Maharashtra" onPickState={onPick} />);
     expect(await screen.findByTestId("state-Kerala")).toBeInTheDocument();
     expect(screen.getByTestId("state-home")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByText("· change"));
+    expect(screen.queryByText("· change")).toBeNull();
     fireEvent.click(screen.getByTestId("state-more"));
-    expect(onPick).toHaveBeenCalledTimes(2);
+    expect(onPick).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -196,5 +196,61 @@ describe("taxonomy", () => {
     expect(STATES).toHaveLength(34);
     expect(Object.keys(SUBCATEGORIES)).toHaveLength(8);
     expect(homeStateOf({ interests_v2: ["Cricket", "Kerala"] })).toBe("Kerala");
+  });
+});
+
+// ── card age ───────────────────────────────────────────────────────────────
+describe("compactAge", () => {
+  const { compactAge } = require("../lib/time");
+  const now = Date.parse("2026-10-04T12:00:00Z");
+  test("exact minutes, then hours, then days", () => {
+    expect(compactAge("2026-10-04T11:59:40Z", now)).toBe("now");
+    expect(compactAge("2026-10-04T11:47:00Z", now)).toBe("13m");
+    expect(compactAge("2026-10-04T07:00:00Z", now)).toBe("5h");
+    expect(compactAge("2026-10-02T13:00:00Z", now)).toBe("47h");
+    expect(compactAge("2026-10-01T12:00:00Z", now)).toBe("3d");
+    expect(compactAge(null, now)).toBe("");
+    expect(compactAge("garbage", now)).toBe("");
+  });
+});
+
+// ── poll ───────────────────────────────────────────────────────────────────
+describe("PollOptions", () => {
+  const PollOptions = require("../components/PollOptions").default;
+  const props = { options: ["Yes", "No"], votes: { Yes: 3, No: 1 } };
+
+  test("not voted: choices only, tap votes", () => {
+    const onVote = jest.fn();
+    render(<PollOptions {...props} myVote={null} justVoted={false} onVote={onVote} />);
+    expect(screen.queryByText("75%")).toBeNull();
+    fireEvent.click(screen.getByTestId("poll-option-Yes"));
+    expect(onVote).toHaveBeenCalledWith("Yes");
+  });
+
+  test("reopened after voting: shows results, your pick, and can't vote again", () => {
+    const onVote = jest.fn();
+    render(<PollOptions {...props} myVote="No" justVoted={false} onVote={onVote} />);
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    expect(screen.getByTestId("poll-option-No")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("poll-option-Yes")).toBeDisabled();
+    expect(screen.getByTestId("poll-voted-note")).toHaveTextContent("You voted · 4 votes");
+  });
+
+  test("just voted: says the vote counted", () => {
+    render(<PollOptions {...props} myVote="Yes" justVoted onVote={jest.fn()} />);
+    expect(screen.getByTestId("poll-voted-note")).toHaveTextContent("Vote counted");
+  });
+});
+
+// ── copy answer ────────────────────────────────────────────────────────────
+describe("CopyButton", () => {
+  const CopyButton = require("../components/CopyButton").default;
+  test("copies the answer and says so", async () => {
+    const writeText = jest.fn(() => Promise.resolve());
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<CopyButton text="An answer" />);
+    fireEvent.click(screen.getByTestId("copy-answer"));
+    await waitFor(() => expect(screen.getByText("Copied")).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith("An answer");
   });
 });

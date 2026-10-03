@@ -601,7 +601,42 @@ async def golden_summary(db) -> dict:
     return {"labelled": len(rows), "agree": agree,
             "merge_precision": round(precision, 3) if precision is not None else None,
             "merge_recall": round(recall, 3) if recall is not None else None,
-            "gate": {"precision": 0.95, "recall": 0.80}}
+            "gate": {"precision": 0.95, "recall": 0.80},
+            "sweep": await golden_sweep(db, rows)}
+
+
+SWEEP_THRESHOLDS = (0.25, 0.28, 0.30, 0.32, 0.35, 0.38, 0.40, 0.45)
+
+
+def sweep_rows(pairs: list, thresholds=SWEEP_THRESHOLDS) -> list:
+    """pairs: [(cosine, owner_same)]. For each threshold, the precision and
+    recall of "same story iff cosine >= t" against the owner's labels."""
+    out = []
+    for t in thresholds:
+        tp = sum(1 for c, same in pairs if c >= t and same)
+        fp = sum(1 for c, same in pairs if c >= t and not same)
+        fn = sum(1 for c, same in pairs if c < t and same)
+        out.append({"t": t,
+                    "precision": round(tp / (tp + fp), 3) if tp + fp else None,
+                    "recall": round(tp / (tp + fn), 3) if tp + fn else None})
+    return out
+
+
+async def golden_sweep(db, rows: list, now: Optional[datetime] = None) -> dict:
+    """What-if for tuning T_JOIN from the owner's own labels: the pairwise
+    similarity of each labelled pair (same vectors the engine uses), scored at
+    several thresholds. Pairwise is a proxy for the engine's centroid join, so
+    it guides the pick; the live score above stays the gate."""
+    if not rows:
+        return {"rows": [], "current": E.T_JOIN, "pairs": 0}
+    df = await _ensure_cache(db, now or datetime.now(timezone.utc))
+    ids = list({i for r in rows for i in (r["a"], r["b"])})
+    terms = {d["article_id"]: d.get("ev_terms") or {} async for d in db.articles.find(
+        {"article_id": {"$in": ids}}, {"_id": 0, "article_id": 1, "ev_terms": 1})}
+    vec = {i: E.vectorize(Counter(t), df) for i, t in terms.items() if t}
+    pairs = [(E.cosine(vec[r["a"]], vec[r["b"]]), bool(r["owner_same"]))
+             for r in rows if r["a"] in vec and r["b"] in vec]
+    return {"rows": sweep_rows(pairs), "current": E.T_JOIN, "pairs": len(pairs)}
 
 
 # ── read side: the Developing list and story page project events at read time

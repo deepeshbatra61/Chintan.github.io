@@ -18,6 +18,7 @@ import { useAuth, SuryaLogo } from "../App";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
 import SignInPrompt from "../components/SignInPrompt";
+import PollOptions from "../components/PollOptions";
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
@@ -214,7 +215,10 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [userReaction, setUserReaction] = useState({ liked: false, disliked: false });
   const [poll, setPoll] = useState(null);
   const [pollLoading, setPollLoading] = useState(false);
-  const [userVoted, setUserVoted] = useState(false);
+  // The reader's option (from the server on reopen, or just now), and whether
+  // it was cast this visit (plays the vote animation once).
+  const [myVote, setMyVote] = useState(null);
+  const [justVoted, setJustVoted] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentReactions, setCommentReactions] = useState({}); // { [commentId]: 'agree'|'disagree'|null }
   const [showComments, setShowComments] = useState(false);
@@ -224,7 +228,6 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   const [signInPromptOpen, setSignInPromptOpen] = useState(false);
   const promptSignIn = () => setSignInPromptOpen(true);
   const [showPoll, setShowPoll] = useState(false);
-  const [selectedOption, setSelectedOption] = useState(null);
   const [commentSubmitState, setCommentSubmitState] = useState('idle'); // 'idle'|'loading'|'success'
   const [showOtherSide, setShowOtherSide] = useState(false);
   const [otherSideAnalysis, setOtherSideAnalysis] = useState(null);
@@ -274,7 +277,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     // Poll
     setPollLoading(true);
     axios.get(`${API}/polls/${articleId}`, { withCredentials: true })
-      .then(r => { if (r.data) setPoll(r.data); })
+      .then(r => { if (r.data) { setPoll(r.data); setMyVote(r.data.user_vote || null); } })
       .catch(e => {
         if (e.response?.status !== 404) console.error("Poll fetch:", e);
       })
@@ -341,21 +344,35 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
   };
 
   const handleVote = async (option) => {
-    if (userVoted || !poll) return;
+    if (myVote || !poll) return;
     if (!currentUser) return promptSignIn();
-    setSelectedOption(option);
+    // Optimistic: results and the animation start on the tap, not after the
+    // round trip; the server's counts replace ours when they arrive.
+    const before = poll;
+    setPoll({ ...poll, votes: { ...(poll.votes || {}), [option]: ((poll.votes || {})[option] || 0) + 1 } });
+    setMyVote(option);
+    setJustVoted(true);
     if (window.Capacitor?.isNativePlatform()) {
-      try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+      try { await Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
     } else {
       triggerHaptic('success');
     }
     try {
       const r = await axios.post(`${API}/polls/${poll.poll_id}/vote`, { option }, { withCredentials: true });
       setPoll(r.data);
-      setUserVoted(true);
     } catch (error) {
-      if (error.response?.data?.detail === "Already voted") setUserVoted(true);
-      else setSelectedOption(null);
+      if (error.response?.data?.detail === "Already voted") {
+        // Voted before (another device): show the real result and their pick.
+        setJustVoted(false);
+        axios.get(`${API}/polls/${articleId}`, { withCredentials: true })
+          .then(r => { if (r.data) { setPoll(r.data); setMyVote(r.data.user_vote || option); } })
+          .catch(() => setPoll(before));
+      } else {
+        setPoll(before);
+        setMyVote(null);
+        setJustVoted(false);
+        toast.error("Couldn’t count your vote. Try again.");
+      }
     }
   };
 
@@ -433,17 +450,6 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
     } catch (error) {
       toast.error(error?.response?.data?.detail || "Couldn't block this user");
     }
-  };
-
-  const getTotalVotes = () => {
-    if (!poll?.votes) return 0;
-    return Object.values(poll.votes).reduce((a, b) => a + b, 0);
-  };
-
-  const getVotePercentage = (option) => {
-    const total = getTotalVotes();
-    if (total === 0) return 0;
-    return Math.round((poll.votes[option] || 0) / total * 100);
   };
 
   const formatOtherSide = (text) => {
@@ -871,29 +877,8 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
           ) : poll ? (
             <div className="space-y-4">
               <p className="text-fg font-medium">{poll.question}</p>
-              <div className="space-y-2">
-                {poll.options.map(option => {
-                  const percentage = getVotePercentage(option);
-                  return (
-                    <button
-                      key={option}
-                      onClick={() => handleVote(option)}
-                      disabled={userVoted}
-                      className={`poll-option w-full text-left ${userVoted ? "cursor-default" : "hover:border-red-500"} ${selectedOption === option ? 'poll-option-pop' : ''}`}
-                      style={selectedOption === option ? { borderColor: '#DC2626', background: 'rgba(220,38,38,0.15)' } : {}}
-                      data-testid={`poll-option-${option}`}
-                    >
-                      {userVoted && <div className="poll-bar" style={{ width: `${percentage}%` }} />}
-                      <div className="relative flex items-center justify-between">
-                        <span className="text-gray-300">{option}</span>
-                        {userVoted && <span className="text-gray-500 font-mono text-sm">{percentage}%</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              {!userVoted && <p className="text-gray-500 text-xs text-center">Tap an option to vote</p>}
-              <p className="text-gray-500 text-sm text-center">{getTotalVotes()} votes</p>
+              <PollOptions options={poll.options} votes={poll.votes} myVote={myVote}
+                justVoted={justVoted} onVote={handleVote} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-10 gap-3">

@@ -69,3 +69,13 @@ def test_foreign_coal_policy_stays_world():
         "China has kept its promise to stop funding overseas coal, but loopholes are helping",
         "Xi Jinping told the United Nations China would stop building coal plants abroad.",
     ) == "World"
+
+
+def test_pre_113_account_state_pick_keeps_interests():
+    """A pre-1.13 account has only legacy interests. The server derives
+    interests_v2 for the app; the app's state pick sends that list plus the
+    state, and the legacy list saved from it must be the reader's old one."""
+    legacy = ["Sports", "Technology", "Business"]
+    v2 = categories.interests_to_v2(legacy)
+    saved = categories.interests_to_legacy(v2 + ["Kerala"])
+    assert set(saved) == set(legacy)

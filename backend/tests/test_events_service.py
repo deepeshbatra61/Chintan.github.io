@@ -196,3 +196,12 @@ async def test_assignment_adds_taxonomy_v2_and_state(db):
     assert h1["category"] == "Science"                    # shadow never rewrites the legacy field
     g1 = await db.articles.find_one({"article_id": "g1"})
     assert (g1["category_v2"], g1["subcategory_v2"]) == ("Sports", "Hockey")
+
+
+def test_sweep_rows_scores_each_threshold():
+    pairs = [(0.50, True), (0.36, True), (0.33, False), (0.20, True), (0.10, False)]
+    rows = {r["t"]: r for r in S.sweep_rows(pairs, thresholds=(0.30, 0.35, 0.40))}
+    assert rows[0.40] == {"t": 0.40, "precision": 1.0, "recall": 0.333}
+    assert rows[0.35] == {"t": 0.35, "precision": 1.0, "recall": 0.667}
+    assert rows[0.30] == {"t": 0.30, "precision": 0.667, "recall": 0.667}
+    assert S.sweep_rows([], thresholds=(0.3,)) == [{"t": 0.3, "precision": None, "recall": None}]

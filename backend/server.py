@@ -2350,6 +2350,12 @@ async def get_current_user(request: Request) -> Optional[dict]:
         {"user_id": session["user_id"]},
         {"_id": 0, "password_hash": 0, "password_salt": 0}
     )
+    # Accounts from before 1.13 have no interests_v2. The 1.13 app builds its
+    # interest saves on that list (picking a state sends v2 + the state), so
+    # without this a pre-1.13 reader's first state pick saved ONLY the state,
+    # wiped their interests, and dropped them onto the fixed guest ordering.
+    if user and user.get("interests_v2") is None:
+        user["interests_v2"] = categories.interests_to_v2(user.get("interests") or [])
     return user
 
 async def require_auth(request: Request) -> dict:
@@ -5614,13 +5620,26 @@ Return only 2 questions, one per line, no numbering or bullet points."""
 
 # ===================== POLLS ROUTES =====================
 
+async def _with_user_vote(poll: Optional[dict], request: Optional[Request]) -> Optional[dict]:
+    """Adds user_vote (the option, or None) for a signed-in reader, so the app
+    shows "you voted" on a poll it reopens instead of offering the vote again."""
+    if not poll or request is None:
+        return poll
+    viewer = await get_current_user(request)
+    if viewer:
+        v = await db.poll_votes.find_one(
+            {"poll_id": poll.get("poll_id"), "user_id": viewer["user_id"]}, {"_id": 0, "option": 1})
+        poll["user_vote"] = v["option"] if v else None
+    return poll
+
+
 @api_router.get("/polls/{article_id}")
-async def get_poll(article_id: str):
+async def get_poll(article_id: str, request: Request):
     """Get poll for article, generating one on-demand if it doesn't exist yet."""
     # Check DB first
     poll = await db.polls.find_one({"article_id": article_id}, {"_id": 0})
     if poll:
-        return poll
+        return await _with_user_vote(poll, request)
 
     # Check sample polls
     for sample_poll in SAMPLE_POLLS:
@@ -5647,7 +5666,7 @@ async def get_poll(article_id: str):
         raise HTTPException(status_code=404, detail="Poll generation failed")
 
     poll = await db.polls.find_one({"article_id": article_id}, {"_id": 0})
-    return poll
+    return await _with_user_vote(poll, request)
 
 @api_router.post("/polls/{poll_id}/vote")
 async def vote_poll(poll_id: str, vote: PollVote, user: dict = Depends(require_auth)):
@@ -5695,6 +5714,8 @@ async def vote_poll(poll_id: str, vote: PollVote, user: dict = Depends(require_a
     
     # Get updated poll
     updated_poll = await db.polls.find_one({"poll_id": poll_id}, {"_id": 0})
+    if updated_poll:
+        updated_poll["user_vote"] = vote.option
     return updated_poll
 
 # ===================== COMMENTS ROUTES =====================

@@ -304,3 +304,42 @@ untested "same story" engine. That is the bug class behind 4 keyword-matching in
 **Effort:** S. **Priority:** P2.
 
 **Depends on / blocked by:** `EVENTS_MODE=live` running cleanly through one full release.
+
+---
+
+## 13. Keep the Developing list to stories that are really moving (no hard cap)
+
+**What:** Replace "everything that ever qualified" with rules that let a story into
+Developing only while it is actually moving, and move it out on its own when it stops.
+No fixed maximum; the list grows on a heavy news day and shrinks on a quiet one.
+
+**Why:** The owner counted 33 topics in Developing on 2026-10-04. That is too many to
+scan, so the list stops meaning "this is moving right now". The owner does not want a
+hard cap (a big day really can have many live stories), so the fix has to be logic,
+not a number.
+
+**Pros:** Developing means something again. The banner and sidebar stay readable, and
+follow pushes fire only for stories that are alive.
+
+**Cons:** Too strict and real stories vanish. Needs replay on a few days of
+production data before it ships, and a Desk view of what dropped out and why.
+
+**Context:** Candidate rules, to tune together:
+1. **Momentum to enter:** at least 2 independent outlets (syndicated copies count once)
+   within 6h, and at least one new independent report in the last 3h to stay listed.
+2. **Relative bar on busy days:** rank by independent updates in the last 6h and list
+   stories above a share of the day's busiest (for example 25% of the top story's
+   momentum), so the bar rises with volume instead of a fixed count.
+3. **Faster settling:** quiet for 4–6h (not 8h) means "settled". Settled stories leave
+   the banner but stay reachable from the story page and from Following.
+4. **Fold near-duplicates:** two developing events whose centroids are very similar
+   (≥0.55) and that started within 12h of each other show as one (Desk can split).
+5. **Show the top few, tuck the rest:** the feed banner already shows 4. The Developing
+   page lists "Moving now" first and puts the rest under a collapsed "Also developing".
+Today the legacy engine (`_detect_developing_stories` in `backend/server.py`) makes the
+33. News v2 events (`events.py` `next_status`, `events_service.developing_list_items`,
+`DEVELOPING_CAP = 15`) are in shadow. Build this on events, and turn the cap into
+rules 1–5. Owner request 2026-10-04. **Effort:** M. **Priority:** P1.
+
+**Depends on / blocked by:** EVENTS_MODE=live (golden-set gate met). If that slips past
+launch, apply rules 1 and 3 to the legacy engine as a stopgap.

@@ -49,12 +49,10 @@ export function SubPills({ filter, onChange, homeState, onPickState }) {
     return (
       <div className="overflow-x-auto hide-scrollbar" style={{ margin: "-10px 0 8px" }}>
         <div role="list" aria-label="States" style={{ display: "flex", gap: 6 }}>
+          {/* Changing state is "More states ›" at the end of the row. */}
           {homeState && (
-            <span role="listitem" style={{ display: "flex" }}>
+            <span role="listitem">
               <Pill label={homeState} active={f.state === homeState} onClick={() => onChange(filterKey("States", homeState))} testid="state-home" />
-              <button type="button" onClick={onPickState} style={{ background: "none", border: "none", cursor: "pointer", minHeight: 44, padding: "0 6px", color: "var(--c-muted)", fontSize: 11.5 }}>
-                · change
-              </button>
             </span>
           )}
           {trending.map((s) => (
