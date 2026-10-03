@@ -27,6 +27,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import categories as C
 import events as E
 import publishers as P
 
@@ -117,9 +118,9 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
     raw = await db.articles.find(
         {"event_id": {"$exists": False}, "published_at": {"$gte": since}, "merged_into": {"$exists": False}},
         {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1, "published_at": 1,
-         "source": 1, "url": 1, "origin": 1},
+         "source": 1, "url": 1, "origin": 1, "gnews_category": 1, "category": 1, "subcategory": 1},
     ).sort("published_at", 1).limit(batch_limit).to_list(batch_limit)
-    prepared, pubs = [], {}
+    prepared, pubs, taxo = [], {}, {}
     for a in raw:
         pub_at = _dt(a.get("published_at"))
         if not pub_at or not a.get("title"):
@@ -128,6 +129,12 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
         if a.get("origin") == "desk":
             p = P.Publisher("chintan.news", "Chintan Desk", "CD", "national", "national")
         pubs[a["article_id"]] = p
+        body = f"{a.get('description') or ''} {(a.get('content') or '')[:600]}"
+        if a.get("origin") == "desk":         # the Desk chose its category; keep it
+            cat2, sub2 = a.get("category") or "Politics", a.get("subcategory")
+        else:
+            cat2, sub2 = C.classify(a.get("title", ""), body, a.get("gnews_category"))
+        taxo[a["article_id"]] = (cat2, sub2, C.detect_state(a.get("title", ""), body, p.state))
         prepared.append({"article_id": a["article_id"], "title": a.get("title", ""),
                          "description": a.get("description", ""), "content": a.get("content", ""),
                          "published_at": pub_at, "publisher": p.key})
@@ -144,6 +151,8 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
             "publisher": p.key, "publisher_name": p.name, "publisher_type": p.type,
             "publisher_group": p.group, "publisher_state": p.state,
             "syndicated_of": asg["syndicated_of"], "syndicated_publisher": asg["syndicated_publisher"],
+            "category_v2": taxo[asg["article_id"]][0], "subcategory_v2": taxo[asg["article_id"]][1],
+            "state": taxo[asg["article_id"]][2],
         }})
 
     for eid, ev in touched.items():
@@ -168,6 +177,7 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
         {"status": {"$ne": "closed"}, "last_member_at": {"$lt": _iso(now - timedelta(hours=E.CLOSE_AFTER_H))}},
         {"$set": {"status": "closed", "updated_at": _iso(now)}})
 
+    await backfill_taxonomy(db, now)
     metrics = await _metrics(db, now, mode)
     metrics.update(cluster_ms=round((time.perf_counter() - t0) * 1000), assigned=len(assignments),
                    new_events=sum(1 for e in touched.values() if e.get("is_new")), closed=closed.modified_count)
@@ -177,6 +187,25 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
     logger.info(f"Events ({mode}): {metrics['assigned']} assigned, {metrics['new_events']} new, "
                 f"{metrics['developing_open']} developing, {metrics['cluster_ms']}ms")
     return metrics
+
+
+async def backfill_taxonomy(db, now: datetime, limit: int = 300) -> int:
+    """Give older articles (the feed shows 7 days; events only covers 72h) their
+    v2 category and state, a few hundred per cycle, so 1.13's Health / sub /
+    States filters see the whole window."""
+    since = _iso(now - timedelta(days=7))
+    n = 0
+    async for a in db.articles.find(
+            {"category_v2": {"$exists": False}, "published_at": {"$gte": since}, "origin": {"$ne": "desk"}},
+            {"_id": 0, "article_id": 1, "title": 1, "description": 1, "content": 1, "url": 1, "source": 1,
+             "gnews_category": 1}).limit(limit):
+        body = f"{a.get('description') or ''} {(a.get('content') or '')[:600]}"
+        cat2, sub2 = C.classify(a.get("title", ""), body, a.get("gnews_category"))
+        st = C.detect_state(a.get("title", ""), body, P.canonical(a.get("source") or "", a.get("url") or "").state)
+        await db.articles.update_one({"article_id": a["article_id"]},
+                                     {"$set": {"category_v2": cat2, "subcategory_v2": sub2, "state": st}})
+        n += 1
+    return n
 
 
 async def _overrepresented(db, now: datetime) -> frozenset:
@@ -219,7 +248,8 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
     docs = await db.articles.find(
         {"event_id": event_id},
         {"_id": 0, "article_id": 1, "publisher": 1, "publisher_group": 1, "published_at": 1, "origin": 1,
-         "syndicated_of": 1, "syndicated_publisher": 1, "category": 1, "subcategory": 1},
+         "syndicated_of": 1, "syndicated_publisher": 1, "category": 1, "subcategory": 1,
+         "category_v2": 1, "subcategory_v2": 1, "state": 1},
     ).to_list(E.MAX_MEMBERS * 2)
     members = [m for m in (_member_from_doc(d) for d in docs) if m["published_at"] and m.get("publisher")]
     desk = ev.get("desk") or {}
@@ -240,13 +270,18 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
                        pinned_until=_dt(ev.get("lead_pinned_until")), overrepresented=overrepresented)
     lead_doc = next((m for m in members if m["article_id"] == lead), members[0])
     pinned = ev.get("lead_pinned_until") if lead == ev.get("lead_article_id") else _iso(E.lead_pin_until(now))
-    category = _vote([m.get("category") for m in members], lead_doc.get("category"))
-    subcategory = _vote([m.get("subcategory") for m in members if m.get("category") == category],
-                        lead_doc.get("subcategory"))
+    category_v2 = _vote([m.get("category_v2") or m.get("category") for m in members],
+                        lead_doc.get("category_v2") or lead_doc.get("category"))
+    subcategory_v2 = _vote([m.get("subcategory_v2") for m in members
+                            if (m.get("category_v2") or m.get("category")) == category_v2],
+                           lead_doc.get("subcategory_v2"))
+    category, subcategory = C.legacy_category(category_v2, subcategory_v2)
+    state = _vote([m.get("state") for m in members], lead_doc.get("state"))
     fields = {
         "status": status, "lead_article_id": lead, "lead_publisher": lead_doc["publisher"],
         "lead_pinned_until": pinned, "outlets": voices, "outlets_count": len(voices),
         "coverage_mix": dict(mix), "category": category, "subcategory": subcategory,
+        "category_v2": category_v2, "subcategory_v2": subcategory_v2, "state": state,
         "article_ids": sorted(m["article_id"] for m in members), "size": len(members),
         "scout_flag": scout_flag, "updated_at": _iso(now),
     }
@@ -255,16 +290,17 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
     await db.events.update_one({"event_id": event_id}, {"$set": fields})
 
     if mode == "live":
+        vote = {"category": category, "subcategory": subcategory, "category_v2": category_v2,
+                "subcategory_v2": subcategory_v2, "state": state}
         ids = [m["article_id"] for m in members]
         others = [i for i in ids if i != lead]
         hidden = bool(desk.get("hidden"))
         if others:
             await db.articles.update_many({"article_id": {"$in": others}},
-                                          {"$set": {"event_hidden": True, "category": category,
-                                                    "subcategory": subcategory}})
+                                          {"$set": {"event_hidden": True, **vote}})
         await db.articles.update_one({"article_id": lead}, {
             "$set": {"event_hidden": hidden, "outlets_count": len(voices), "coverage_mix": dict(mix),
-                     "event_status": status, "category": category, "subcategory": subcategory}})
+                     "event_status": status, **vote}})
     return fields
 
 

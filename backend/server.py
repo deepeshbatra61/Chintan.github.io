@@ -63,6 +63,7 @@ import news_sources   # GNews/NewsAPI rules: filters, mapping, delay, budget (pu
 import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
+import categories    # taxonomy v2 + interest mapping — see backend/categories.py
 import textutil      # shared tokenising / stopwords — see backend/textutil.py
 import events_service  # News v2 event clustering (Mongo side) — see backend/events_service.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
@@ -3454,16 +3455,37 @@ async def refresh_session(request: Request, response: Response):
 
 # ===================== USER ROUTES =====================
 
+def _is_v2_client(request: Optional[Request]) -> bool:
+    """App 1.13+ sends X-Chintan-Client: <version>; 1.12 sends nothing and must
+    keep getting legacy categories and interest names (eng review OV3)."""
+    raw = (request.headers.get("X-Chintan-Client") if request else None) or ""
+    try:
+        major, minor = (int(x) for x in raw.strip().split(".")[:2])
+    except ValueError:
+        return False
+    return (major, minor) >= (1, 13)
+
+
 @api_router.put("/users/interests")
-async def update_interests(interests_update: InterestsUpdate, user: dict = Depends(require_auth)):
-    """Update user interests"""
-    # Check if this is the first time completing onboarding
-    was_onboarding_completed = user.get("onboarding_completed", False)
-    
+async def update_interests(interests_update: InterestsUpdate, request: Request, user: dict = Depends(require_auth)):
+    """Update user interests. Two fields kept in step (eng review OV3): a 1.13
+    save writes interests_v2 and derives the legacy list; a 1.12 save writes
+    the legacy list and merges it into interests_v2 without losing v2-only
+    picks (states, Hockey, ...) it can't display."""
+    if _is_v2_client(request):
+        v2 = list(dict.fromkeys(interests_update.interests))
+        legacy = categories.interests_to_legacy(v2)
+    else:
+        legacy = interests_update.interests
+        current_v2 = user.get("interests_v2")
+        if current_v2 is None:
+            current_v2 = categories.interests_to_v2(user.get("interests") or [])
+        v2 = categories.merge_legacy_save(legacy, current_v2)
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {
-            "interests": interests_update.interests,
+            "interests": legacy,
+            "interests_v2": v2,
             "onboarding_completed": True
         }}
     )
@@ -3638,8 +3660,12 @@ async def get_weekly_report(user: dict = Depends(require_auth)):
     }
 
 @api_router.get("/interests/categories")
-async def get_interest_categories():
-    """Get all interest categories with subcategories"""
+async def get_interest_categories(request: Request):
+    """Interest categories with their sub-categories. 1.13 gets taxonomy v2
+    plus the States lens; 1.12 (no X-Chintan-Client header) gets the legacy
+    map it was built against."""
+    if _is_v2_client(request):
+        return {**categories.SUBCATEGORIES_V2, "States": list(categories.STATES)}
     return INTEREST_CATEGORIES
 
 # ===================== NEWS API CONFIG =====================
@@ -4891,11 +4917,13 @@ async def fetch_from_gnews(client=None) -> list:
             continue
         published_at = a.get("publishedAt") or now.isoformat()
         rank_at = desk.rank_at(published_at, news_sources.provider_delay_h("gnews", gnews_live, NEWSAPI_DELAY_H))
-        results.append(news_sources.build_article(
+        built = news_sources.build_article(
             url=url, title=title, description=description, raw_content=raw_content,
             source_name=((a.get("source") or {}).get("name") or ""), published_at=published_at,
             image_url=a.get("image"), author=None, provider="gnews", rank_at=rank_at or published_at,
-            detect_category=detect_category, default_image=DEFAULT_ARTICLE_IMAGE))
+            detect_category=detect_category, default_image=DEFAULT_ARTICLE_IMAGE)
+        built["gnews_category"] = cat        # taxonomy v2 prior (categories.classify)
+        results.append(built)
     await _record_gnews_yield(now, results, query_of, q_requests, q_returned)
     if ok_calls:
         await db.app_meta.update_one({"_id": "gnews_state"},
@@ -4917,18 +4945,23 @@ async def get_articles(
     limit: int = 20,
     page: int = 1,
     request: Request = None,
+    state: Optional[str] = None,
     refresh: bool = False
 ):
     """Get articles from DB with personalised scoring."""
 
     skip = (page - 1) * limit
 
-    # Explicit query-param filters (always applied at DB level)
+    # Explicit query-param filters (always applied at DB level). 1.13 filters on
+    # taxonomy v2 and the States lens; 1.12 keeps the legacy fields.
     query: dict = {}
+    v2 = _is_v2_client(request)
     if category:
-        query["category"] = category
+        query["category_v2" if v2 else "category"] = category
     if subcategory:
-        query["subcategory"] = subcategory
+        query["subcategory_v2" if v2 else "subcategory"] = subcategory
+    if state and v2:
+        query["state"] = state
     if developing is not None:
         query["is_developing"] = developing
 

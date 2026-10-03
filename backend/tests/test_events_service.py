@@ -182,3 +182,17 @@ async def test_ingest_cycle_survives_events_failure(monkeypatch):
     monkeypatch.setattr(server.events_service, "run_cycle", boom)
     await server._run_ingest_cycle_body(run_newsapi=False, summarize_limit=0)   # must not raise
     assert await d.app_meta.find_one({"_id": "ingest_state"})
+
+
+async def test_assignment_adds_taxonomy_v2_and_state(db):
+    await db.articles.insert_many([
+        art("h1", "Dengue cases surge in Mumbai hospitals", 0, "https://www.lokmattimes.com/x", category="Science"),
+        {**art("g1", "Hockey: India beat Malaysia in Asian Games final", 0.2, "https://www.thehindu.com/y",
+               category="Sports"), "gnews_category": "sports"},
+    ])
+    await S.run_cycle(db, now=NOW + timedelta(hours=1), mode="shadow")
+    h1 = await db.articles.find_one({"article_id": "h1"})
+    assert (h1["category_v2"], h1["state"]) == ("Health", "Maharashtra")
+    assert h1["category"] == "Science"                    # shadow never rewrites the legacy field
+    g1 = await db.articles.find_one({"article_id": "g1"})
+    assert (g1["category_v2"], g1["subcategory_v2"]) == ("Sports", "Hockey")
