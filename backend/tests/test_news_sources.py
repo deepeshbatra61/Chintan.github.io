@@ -180,7 +180,9 @@ async def test_rejected_key_stops_the_run_and_keeps_last_success(db):
     fake = FakeGNews({("top-headlines", "general", 1): Resp(401, None, "invalid key")})
     assert await server.fetch_from_gnews(client=fake) == []
     assert len(fake.calls) == 1
-    assert await db.app_meta.find_one({"_id": "gnews_state"}) is None
+    state = await db.app_meta.find_one({"_id": "gnews_state"})
+    assert not state.get("last_success") and state["last_error"].startswith("401")
+    assert "test-key" not in state["last_error"]
 
 
 async def test_no_key_no_requests(db, monkeypatch):
