@@ -268,6 +268,64 @@ async def recompute_event(db, event_id: str, now: datetime, *, mode: str = "shad
     return fields
 
 
+# ── read side: the Developing list and story page project events at read time
+#    (eng review 1B: no copies in developing_stories, so nothing can drift) ────
+
+def event_as_story(ev: dict, title: str) -> dict:
+    """An event in the developing_stories document shape, so the existing
+    detail endpoint (timeline, momentum, "Where it stands") serves it as is.
+    1.12 apps render kind "event" through their default branch."""
+    return {
+        "story_id": ev["event_id"], "title": title, "kind": "event",
+        "theme": (ev.get("category") or "news").lower(),
+        "article_ids": ev.get("article_ids") or [], "last_updated": ev.get("last_member_at"),
+        "state_summary": ev.get("state_summary"), "state_summary_count": ev.get("state_summary_count"),
+        "outlets_count": ev.get("outlets_count"), "coverage_mix": ev.get("coverage_mix"),
+        "status": ev.get("status"),
+    }
+
+
+async def story_for(db, story_id: str) -> Optional[dict]:
+    if not story_id.startswith("ev-"):
+        return None
+    ev = await db.events.find_one({"event_id": story_id}, {"_id": 0})
+    if not ev or (ev.get("desk") or {}).get("hidden"):
+        return None
+    lead = await db.articles.find_one({"article_id": ev.get("lead_article_id")}, {"_id": 0, "title": 1}) or {}
+    return event_as_story(ev, lead.get("title") or "Developing story")
+
+
+async def developing_list_items(db, now: Optional[datetime] = None) -> list:
+    """Developing events for /developing-stories, capped (D7) at the
+    DEVELOPING_CAP most active by independent updates in the last 6h."""
+    now = now or datetime.now(timezone.utc)
+    evs = [e async for e in db.events.find({"status": "developing", "desk.hidden": {"$ne": True}}, {"_id": 0})]
+    ranked = []
+    for ev in evs:
+        docs = await db.articles.find({"event_id": ev["event_id"]},
+                                      {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1,
+                                       "source": 1, "publisher": 1, "syndicated_publisher": 1}).to_list(E.MAX_MEMBERS * 2)
+        members = [m for m in (_member_from_doc(d) for d in docs) if m["published_at"] and m.get("publisher")]
+        if not members:
+            continue
+        ranked.append((E.updates_last_hours(members, now), ev, members))
+    ranked.sort(key=lambda r: (r[0], r[1].get("last_member_at") or ""), reverse=True)
+    items = []
+    for _, ev, members in ranked[:E.DEVELOPING_CAP]:
+        latest = max(members, key=lambda m: m["published_at"])
+        lead = next((m for m in members if m["article_id"] == ev.get("lead_article_id")), latest)
+        items.append({
+            "story_id": ev["event_id"], "title": lead.get("title", ""), "kind": "event",
+            "theme": (ev.get("category") or "news").lower(), "article_count": len(members),
+            "last_updated": _iso(latest["published_at"]),
+            "latest_article": {"article_id": latest["article_id"], "title": latest.get("title"),
+                               "image_url": latest.get("image_url"), "published_at": _iso(latest["published_at"]),
+                               "source": latest.get("source")},
+            "outlets_count": ev.get("outlets_count"), "coverage_mix": ev.get("coverage_mix"), "heat": None,
+        })
+    return items
+
+
 async def _metrics(db, now: datetime, mode: str) -> dict:
     since = _iso(now - timedelta(hours=24))
     fresh = await db.articles.count_documents({"published_at": {"$gte": since}, "event_id": {"$exists": True}})

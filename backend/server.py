@@ -6367,6 +6367,11 @@ async def get_developing_stories_list(feed_bar: bool = False):
     stories = await db.developing_stories.find(
         {"is_active": True}, {"_id": 0}
     ).sort("last_updated", -1).to_list(1000)
+    # News v2 live: developing EVENTS replace the keyword-matched scout/auto
+    # kinds; containers (scheduled, calendar, wave, desk) stay as they are.
+    events_live = events_service.current_mode() == "live"
+    if events_live:
+        stories = [st for st in stories if st.get("kind", "auto") not in ("scout", "auto")]
 
     now = datetime.now(timezone.utc)
 
@@ -6470,6 +6475,8 @@ async def get_developing_stories_list(feed_bar: bool = False):
     # reflect real content activity. Re-sorting here guarantees a genuinely
     # fresh story always outranks a dormant one regardless of kind.
     # Desk stories marked Big/Breaking lead the strip; everything else by recency.
+    if events_live:
+        result += await events_service.developing_list_items(db, now)
     result.sort(key=lambda r: ((r.get("heat") or 0) >= desk.HEAT_BIG, r.get("last_updated") or ""), reverse=True)
     return result
 
@@ -6480,6 +6487,9 @@ async def get_developing_story_detail(story_id: str):
     # banner (once that was fixed) and then get "Story not found" on tapping it.
     """Return full topic detail with all matched articles sorted newest-first."""
     story = await db.developing_stories.find_one({"story_id": story_id}, {"_id": 0})
+    if not story:
+        # News v2: an event ("ev-…") served in the same shape (eng review 1B)
+        story = await events_service.story_for(db, story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
 
@@ -6563,10 +6573,16 @@ async def get_developing_story_detail(story_id: str):
                 user_content=f"Story: {story.get('title', '')}\nLatest headlines (newest first):\n- {titles}\n\nWrite the one-sentence current status:",
                 max_tokens=90,
             )).strip().strip('"')
-            await db.developing_stories.update_one(
-                {"story_id": story_id},
-                {"$set": {"state_summary": summary, "state_summary_count": count}},
-            )
+            if story.get("kind") == "event":
+                await db.events.update_one(
+                    {"event_id": story_id},
+                    {"$set": {"state_summary": summary, "state_summary_count": count}},
+                )
+            else:
+                await db.developing_stories.update_one(
+                    {"story_id": story_id},
+                    {"$set": {"state_summary": summary, "state_summary_count": count}},
+                )
         except Exception as e:
             logger.warning(f"State summary failed for {story_id}: {e}")
 
@@ -6575,6 +6591,8 @@ async def get_developing_story_detail(story_id: str):
         "title": story["title"],
         "theme": story.get("theme", "news"),
         "kind": story.get("kind", "auto"),
+        **({"outlets_count": story.get("outlets_count"), "coverage_mix": story.get("coverage_mix")}
+           if story.get("kind") == "event" else {}),
         "articles": articles,
         "article_count": count,
         # Newest article, not the sync-touched doc field. The detail header
