@@ -343,3 +343,73 @@ rules 1–5. Owner request 2026-10-04. **Effort:** M. **Priority:** P1.
 
 **Depends on / blocked by:** EVENTS_MODE=live (golden-set gate met). If that slips past
 launch, apply rules 1 and 3 to the legacy engine as a stopgap.
+
+---
+
+## 14. "Developing" means new facts, not the same story from more outlets
+
+**What:** A story becomes Developing, and a timeline entry counts as an update, only when
+a report adds something new to the previous one. Several outlets carrying the same report
+are coverage of one moment, not a developing story.
+
+**Why:** The owner's example (2026-10-04): "Ukraine accepts India's proposal for a
+ceasefire" carried by 2 or 3 outlets is ONE report and should not be Developing. A
+follow-up that moves the story, such as an MEA statement, Russia's response, or the
+ceasefire starting or breaking, is an update and should make it Developing. Today the rules
+count independent outlets (News v2 D7: 2+ outlets, ≥2h apart, within 6h), so the
+same quote from several sources qualifies.
+
+**Pros:** Developing and its timeline show how a story moved, not the same headline
+repeated. This also shrinks the list on its own (works with #13), and follow pushes fire
+only on real updates.
+
+**Cons:** "Is there anything new here?" is a judgement. It needs either an AI call per
+candidate update (cost: bound it to events that are already candidates, and cache per
+article) or a novelty measure on text (new named entities, a new speaker or body, new
+numbers or dates compared with the event so far), plus a golden set of "update or
+repeat?" pairs from the owner, like the same-story check.
+
+**Context:** Proposed shape:
+1. Within an event, group members that report the same facts as one **report** (high
+   similarity to an earlier member, no new entities, speakers or numbers). Show it as one
+   timeline entry: "Reported by The Hindu, NDTV, Reuters".
+2. A member with new facts starts a new **update** (new speaker or body such as the MEA,
+   new numbers, a new action verb or outcome). An optional cheap AI check settles
+   borderline cases, with "update"/"repeat" and a one-line "what changed".
+3. Developing needs **at least 2 updates** (not 2 outlets) within the window, the newest
+   in the last few hours. Momentum (`updates_last_hours`) counts updates, not members.
+4. The timeline shows "what changed" for each update. That also feeds "Where it stands"
+   and the follow push copy ("MEA responds: …").
+5. Add a Desk check for "update or repeat?" pairs with a go-live bar, as in #12's golden set.
+Code: `events.py` (`next_status`, `independent_outlets`, `updates_last_hours`),
+`events_service.recompute_event`, story timeline in `DevelopingStoryDetail.js`.
+Owner request 2026-10-04. **Effort:** M–L. **Priority:** P1 (do with #13).
+
+**Depends on / blocked by:** News v2 events (shadow today). The engine can build and replay
+this in shadow before EVENTS_MODE=live.
+
+---
+
+## 15. Make "Since you looked" impossible to miss
+
+**What:** The "SINCE YOU LOOKED · 9:40 AM" divider on a developing story is a 10px
+grey mono label between two faint hairlines. The owner was looking for it and still
+struggled to spot it (2026-10-04).
+
+**Why:** Its whole job is to say "start reading here". If it can't be seen, the feature
+doesn't exist for readers.
+
+**Pros:** Small change, big gain for anyone following a story.
+
+**Cons:** It must stand out without shouting. It sits inside a calm timeline that already
+uses red for the Developing rail.
+
+**Context:** `frontend/src/pages/DevelopingStoryDetail.js` (`since-divider`). Direction:
+an accent-red rule that crosses the timeline rail, with a filled pill label in red tint
+reading "New since you looked · 9:40 AM" and the count ("3 new"). New entries above
+it get a small red "NEW" dot on the rail. When the page opens, scroll to the divider
+(dividerRef already exists) and give the pill one soft fade-in. Respect reduced motion.
+Run `/impeccable` or `/design-review` to pick between 2–3 variants. **Effort:** S.
+**Priority:** P1 (next app build).
+
+**Depends on / blocked by:** Nothing.
