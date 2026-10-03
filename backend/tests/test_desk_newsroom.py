@@ -43,6 +43,7 @@ async def h(monkeypatch):
                                      a("q1", "ev-q", 3, "livemint.com"), a("q2", "ev-q", 0.2, "moneycontrol.com")])
     for eid, ids, status in (("ev-p", ["p1", "p2", "p3"], "developing"), ("ev-q", ["q1", "q2"], "forming")):
         await x.db.events.insert_one({"event_id": eid, "status": status, "size": len(ids), "article_ids": ids,
+                                      "outlets_count": len(ids),
                                       "lead_article_id": ids[0], "first_member_at": iso(4), "last_member_at": iso(0.2),
                                       "centroid": {"pradhan": 1.0}, "founding": [{"pradhan": 1.0}], "members": []})
     yield x
@@ -109,3 +110,11 @@ async def test_remove_member(h):
     assert "event_id" not in await h.db.articles.find_one({"article_id": "p2"})
     assert "p2" in (await h.db.events.find_one({"event_id": "ev-p"}))["desk"]["blocked_members"]
     assert (await h.client.post("/api/desk/events/ev-p/remove/zzz", headers=h.headers())).status_code == 404
+
+
+async def test_single_outlet_repeats_are_not_building(h):
+    await h.login()
+    await h.db.events.insert_one({"event_id": "ev-pr", "status": "forming", "size": 4, "outlets_count": 1,
+                                  "article_ids": [], "last_member_at": iso(0.1), "first_member_at": iso(1)})
+    body = (await h.client.get("/api/desk/newsroom", headers=h.headers())).json()
+    assert "ev-pr" not in [e["event_id"] for e in body["building"]]

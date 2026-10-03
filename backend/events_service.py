@@ -373,8 +373,12 @@ async def newsroom(db, now: Optional[datetime] = None) -> dict:
     async for ev in db.events.find({"last_member_at": {"$gte": since}, "size": {"$gte": 2},
                                     "status": {"$ne": "closed"}}, {"_id": 0}):
         key = {"developing": "developing", "settled": "settling"}.get(ev.get("status"), "building")
+        # One outlet posting repeatedly isn't a story forming (seen on real data:
+        # a PR site's four near-identical pieces led "Building now").
+        if key == "building" and ev.get("outlets_count", 0) < 2:
+            continue
         sections[key].append(await _event_brief(db, ev, now))
-    sections["building"].sort(key=lambda e: (e["new_last_hour"], e["outlets_count"]), reverse=True)
+    sections["building"].sort(key=lambda e: (e["outlets_count"], e["new_last_hour"]), reverse=True)
     for k in ("developing", "settling"):
         sections[k].sort(key=lambda e: e.get("last_member_at") or "", reverse=True)
     state = await db.app_meta.find_one({"_id": "events_state"}, {"_id": 0}) or {}
