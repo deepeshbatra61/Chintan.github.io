@@ -10,7 +10,7 @@
             // reader never sees a dark frame (and vice versa). Mirrors
             // resolve() in src/lib/theme.js; keep the two in step.
             (function () {
-                var pref = "dark";
+                var pref = "system";   // untouched = follow the phone (1.13 Appearance switch)
                 try {
                     var v = localStorage.getItem("chintan.theme");
                     if (v === "system" || v === "light" || v === "dark") pref = v;

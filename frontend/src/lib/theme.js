@@ -1,4 +1,6 @@
-// Appearance: System / Light / Dark, default Dark.
+// Appearance (1.13): one Light/Dark switch. A reader who never flipped it
+// follows the phone ("system", the default); the first flip stores light or
+// dark for good. 1.12 offered System / Light / Dark; stored values carry over.
 //
 // The preference lives in localStorage so the inline script in
 // public/index.html can apply it before React's first paint (no flash of the
@@ -27,9 +29,9 @@ const lightQuery = typeof window !== 'undefined' && window.matchMedia
 function readPref() {
   try {
     const v = localStorage.getItem(THEME_KEY);
-    return THEME_PREFS.includes(v) ? v : 'dark';
+    return THEME_PREFS.includes(v) ? v : 'system';
   } catch {
-    return 'dark';
+    return 'system';
   }
 }
 

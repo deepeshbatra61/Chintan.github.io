@@ -1,11 +1,32 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { ArrowLeft, Flame, Clock, ExternalLink } from "lucide-react";
 import { Browser } from "@capacitor/browser";
-import { SuryaLogo } from "../App";
+import { SuryaLogo, useAuth } from "../App";
+import FollowBar from "../components/FollowBar";
+import SignInPrompt from "../components/SignInPrompt";
+import { CoverageSheet, mixSentence } from "../components/Coverage";
 import { calendarIcon, formatCalendarDate } from "../lib/calendar";
+import { formatRelativeTime, clockTime, sinceLooked } from "../lib/time";
+
+// "Since you looked" for guests lives on the device; signed-in readers keep it
+// on the server (POST /stories/{id}/seen returns the previous time).
+const SEEN_KEY = "chintan.storySeen";
+function guestSeen(storyId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SEEN_KEY) || "{}");
+    const prev = all[storyId] || null;
+    all[storyId] = new Date().toISOString();
+    const keys = Object.keys(all);
+    if (keys.length > 200) delete all[keys[0]];          // keep it small
+    localStorage.setItem(SEEN_KEY, JSON.stringify(all));
+    return prev;
+  } catch {
+    return null;
+  }
+}
 
 // Same pattern as ArticlePage's openSource: in-app browser on native, new
 // tab on web. Calendar citations are the one place this page links out.
@@ -23,18 +44,6 @@ const hostOf = (url) => {
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
-
-function formatRelativeTime(isoString) {
-  if (!isoString) return "";
-  const diff = (Date.now() - new Date(isoString).getTime()) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  // Real developing-story updates are typically 1-2 days old, so switching to
-  // "1d ago" right at 24h flattened almost everything to the same label.
-  // Stay in hours out to 72h for real precision, then fall back to days.
-  if (diff < 86400 * 3) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 const trendLabel = (m) => {
   if (m?.state) {
@@ -57,6 +66,39 @@ const DevelopingStoryDetail = () => {
   const navigate = useNavigate();
   const [story, setStory] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const [prevSeen, setPrevSeen] = useState(undefined);   // undefined = not read yet
+  const [signIn, setSignIn] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
+  const [barH, setBarH] = useState(84);
+  const dividerRef = useRef(null);
+  const scrolled = useRef(false);
+
+  // Read (and move on) "since you looked" once per visit, not on each refresh.
+  useEffect(() => {
+    let alive = true;
+    setPrevSeen(undefined);
+    scrolled.current = false;
+    if (user) {
+      axios.post(`${API}/stories/${encodeURIComponent(storyId)}/seen`, {}, { withCredentials: true })
+        .then((r) => { if (alive) setPrevSeen(r.data.previous_seen_at || null); })
+        .catch(() => { if (alive) setPrevSeen(null); });
+    } else {
+      setPrevSeen(guestSeen(storyId));
+    }
+    return () => { alive = false; };
+  }, [storyId, user]);
+
+  // Opened from a follow ping (or any return visit with news): bring the
+  // "since you looked" line into view once, if it's below the fold.
+  useEffect(() => {
+    const el = dividerRef.current;
+    if (scrolled.current || !el) return;
+    scrolled.current = true;
+    if (el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  });
 
   const fetchStory = useCallback(async () => {
     try {
@@ -175,6 +217,7 @@ const DevelopingStoryDetail = () => {
   }
 
   const articles = story.articles || [];
+  const { isNew, newCount, showDivider } = sinceLooked(articles, prevSeen);
   const momentum = story.momentum || {};
   const buckets = momentum.buckets || [];
   const maxBucket = Math.max(1, ...buckets);
@@ -207,11 +250,12 @@ const DevelopingStoryDetail = () => {
       </header>
 
       {/* Content */}
-      <main style={{ position: "relative", zIndex: 1, padding: "18px 22px 40px", maxWidth: "640px", margin: "0 auto" }}>
+      <main style={{ position: "relative", zIndex: 1, padding: `18px 22px ${40 + barH}px`, maxWidth: "640px", margin: "0 auto" }}>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 600, fontSize: "25px", lineHeight: 1.2, color: "var(--c-ink)", margin: "0 0 8px" }}>{story.title}</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "var(--c-faint)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "var(--c-faint)" }}>
             <span>{story.article_count || articles.length} update{(story.article_count || articles.length) === 1 ? "" : "s"}</span>
+            {story.outlets_count > 1 && <><span>·</span><span>{story.outlets_count} outlets</span></>}
             <span>·</span>
             <span>updated {formatRelativeTime(story.last_updated)}</span>
           </div>
@@ -243,6 +287,14 @@ const DevelopingStoryDetail = () => {
               </div>
               <span style={{ fontSize: "11px", color: "var(--c-muted)", fontFamily: "'Manrope', sans-serif" }}>{trendLabel(momentum)}</span>
             </div>
+            {story.kind === "event" && story.outlets_count > 1 && (
+              <button type="button" onClick={() => setCoverageOpen(true)} data-testid="story-coverage"
+                aria-label={`${mixSentence(story.outlets_count, story.coverage_mix)}. Show coverage`}
+                style={{ display: "block", minHeight: 44, marginTop: 6, padding: 0, background: "none", border: "none", cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "var(--c-sub)", textAlign: "left" }}>
+                {mixSentence(story.outlets_count, story.coverage_mix)} ›
+              </button>
+            )}
           </motion.div>
         )}
 
@@ -251,6 +303,15 @@ const DevelopingStoryDetail = () => {
           <div style={{ position: "relative", marginTop: "20px", paddingLeft: "22px" }}>
             <div style={{ position: "absolute", left: "5px", top: "4px", bottom: "10px", width: "1px", background: "rgba(220,38,38,0.25)" }} />
             {articles.map((article, idx) => (
+              <React.Fragment key={article.article_id}>
+              {showDivider && idx === newCount && (
+                <div ref={dividerRef} data-testid="since-divider"
+                  style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 14px -22px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", letterSpacing: "0.1em", color: "var(--c-muted)" }}>
+                  <span style={{ flex: 1, height: 1, background: "rgb(var(--c-fg-rgb) / 0.08)" }} />
+                  SINCE YOU LOOKED · {clockTime(prevSeen)}
+                  <span style={{ flex: 1, height: 1, background: "rgb(var(--c-fg-rgb) / 0.08)" }} />
+                </div>
+              )}
               <motion.div
                 key={article.article_id}
                 initial={{ opacity: 0, x: -10 }}
@@ -262,9 +323,10 @@ const DevelopingStoryDetail = () => {
               >
                 <span style={{ position: "absolute", left: "-21px", top: "4px", width: "11px", height: "11px", borderRadius: "50%", background: idx === 0 ? "#DC2626" : "var(--c-faint2)", border: "2px solid var(--c-bg)" }} className={idx === 0 ? "animate-pulse" : ""} />
                 <div style={{ background: "var(--c-surface)", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)", borderRadius: "14px", padding: "13px 14px" }}>
-                  {idx === 0 && (
+                  {(idx === 0 || isNew(article)) && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.1em", color: "var(--c-accent-ink)", marginBottom: "6px" }}>
-                      <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#DC2626" }} className="animate-pulse" /> LATEST
+                      <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#DC2626" }} className={idx === 0 ? "animate-pulse" : ""} />
+                      {isNew(article) ? "NEW" : "LATEST"}
                     </span>
                   )}
                   <h3 style={{ fontSize: "14px", lineHeight: 1.36, color: "var(--c-ink2)", margin: 0, fontWeight: 500 }}>{article.title}</h3>
@@ -274,6 +336,7 @@ const DevelopingStoryDetail = () => {
                   </div>
                 </div>
               </motion.div>
+              </React.Fragment>
             ))}
           </div>
         ) : (
@@ -288,6 +351,15 @@ const DevelopingStoryDetail = () => {
           <Clock className="w-3 h-3" /> Refreshes every 60 seconds
         </div>
       </main>
+
+      <FollowBar storyId={story.story_id} title={story.title} shareArticleId={articles[0]?.article_id}
+        user={user} onNeedSignIn={() => setSignIn(true)} onHeight={setBarH} />
+      <SignInPrompt open={signIn} onOpenChange={setSignIn} reason="follow" />
+      {coverageOpen && (
+        <CoverageSheet
+          article={{ event_id: story.story_id, title: story.title, outlets_count: story.outlets_count, coverage_mix: story.coverage_mix }}
+          onClose={() => setCoverageOpen(false)} />
+      )}
     </div>
   );
 };

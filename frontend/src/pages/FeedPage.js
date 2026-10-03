@@ -16,6 +16,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/
 import BottomNav from "../components/BottomNav";
 import SignInPrompt from "../components/SignInPrompt";
 import AppearanceControl from "../components/AppearanceControl";
+import SidebarFollowing from "../components/SidebarFollowing";
+import { CoverageStrip, CoverageSheet } from "../components/Coverage";
+import { SubPills, StateSheet } from "../components/SubFilters";
+import { TOP_CHIPS, parseFilter, filterKey, filterParams, homeStateOf, rememberGuestState, STATES, ASKED_KEY } from "../lib/taxonomy";
 import {
   getFeedCache, setFeedCache,
   setLatestSeenArticleId, setNewArticlesAvailable,
@@ -132,7 +136,7 @@ const WaveHeartbeat = ({ intensity, reduced }) => {
 
 const FeedPage = () => {
   const navigate = useNavigate();
-  const { user, logout, isGuest } = useAuth();
+  const { user, logout, isGuest, checkAuth } = useAuth();
   const R = useReducedMotion();
   const [signInPromptOpen, setSignInPromptOpen] = useState(false);
   const [signInPromptReason, setSignInPromptReason] = useState("action");
@@ -169,6 +173,7 @@ const FeedPage = () => {
   // exactly this page.
   const [loadError, setLoadError] = useState(null);
   const [actionSheetArticle, setActionSheetArticle] = useState(null);
+  const [coverageArticle, setCoverageArticle] = useState(null);
   const sentinelRef = useRef(null);
   const mainRef = useRef(null);
   const [pullDistance, setPullDistance] = useState(0);
@@ -178,7 +183,10 @@ const FeedPage = () => {
   const PULL_THRESHOLD = 64;
 
   const PAGE_LIMIT = 20;
-  const categories = ["All", "Politics", "Technology", "Business", "Sports", "Entertainment", "Science", "World"];
+  // News v2 (1.13): 10 chips; Health and the States lens are new. A selection
+  // is one filter key ("Sports/Hockey", "States/Kerala"), see lib/taxonomy.
+  const categories = TOP_CHIPS;
+  const [stateSheet, setStateSheet] = useState(null);   // null | "pick" | "first"
 
   const longPress = useLongPress((article) => {
     triggerHaptic(ImpactStyle.Light);
@@ -257,8 +265,7 @@ const FeedPage = () => {
 
   const fetchArticles = useCallback(async (category = null, pageNum = 1, append = false) => {
     try {
-      const params = new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT });
-      if (category && category !== "All") params.set("category", category);
+      const params = filterParams(category, new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT }));
       const response = await axios.get(`${API}/articles?${params}`, { withCredentials: true });
       const data = response.data;
       if (append) {
@@ -410,7 +417,18 @@ const FeedPage = () => {
   }, [articles]);
 
   const handleCategoryChange = (category) => {
-    const cat = category === "All" ? null : category;
+    let cat = category === "All" ? null : category;
+    if (cat === "States") {
+      // Your state first; the first time with none set, ask (Skip always shown).
+      const home = homeStateOf(user);
+      if (home) {
+        cat = filterKey("States", home);
+      } else {
+        let asked = false;
+        try { asked = localStorage.getItem(ASKED_KEY) === "1"; } catch { /* private mode */ }
+        if (!asked) setStateSheet("first");
+      }
+    }
     setActiveCategory(cat);
     setPage(1);
     setHasMore(true);
@@ -446,6 +464,26 @@ const FeedPage = () => {
     fetchArticles(activeCategory, pageNum, append)
       .then((ok) => { if (ok) setPage(pageNum); })
       .finally(() => setLoadingMore(false));
+  };
+
+  const pickState = async (st) => {
+    try { localStorage.setItem(ASKED_KEY, "1"); } catch { /* private mode */ }
+    setStateSheet(null);
+    if (user) {
+      const keep = (user.interests_v2 || []).filter((x) => !STATES.includes(x));
+      try {
+        await axios.put(`${API}/users/interests`, { interests: [...keep, st] }, { withCredentials: true });
+        await checkAuth();
+      } catch { toast.error("Couldn\u2019t save your state. It\u2019s set for now."); }
+    } else {
+      rememberGuestState(st);
+    }
+    handleCategoryChange(filterKey("States", st));
+  };
+
+  const closeStateSheet = () => {
+    try { localStorage.setItem(ASKED_KEY, "1"); } catch { /* private mode */ }
+    setStateSheet(null);
   };
 
   const handleLogout = async () => {
@@ -571,6 +609,9 @@ const FeedPage = () => {
                       </div>
                     )}
 
+                    <SidebarFollowing open={sidebarOpen} user={user}
+                      onOpenStory={(id) => { navigate(`/developing/${id}`); setSidebarOpen(false); }} />
+
                     <div className="h-px bg-fg/10 my-4" />
                     <button
                       onClick={() => { navigate("/notifications"); setSidebarOpen(false); }}
@@ -580,6 +621,7 @@ const FeedPage = () => {
                       <Bell className="w-[18px] h-[18px]" style={{ color: 'var(--c-faint)', flexShrink: 0 }} />
                       <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: '15px', fontWeight: 500, color: 'var(--c-sub)' }}>Notifications</span>
                     </button>
+                    <AppearanceControl />
                     <button
                       onClick={() => { navigate("/contact"); setSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
@@ -591,11 +633,8 @@ const FeedPage = () => {
                   </div>
                 </div>
 
-                {/* Appearance + sign out — pinned footer, so it never overlaps the list */}
+                {/* Sign out — pinned footer, so it never overlaps the list */}
                 <div style={{ flexShrink: 0, borderTop: '1px solid rgb(var(--c-fg-rgb) / 0.1)', padding: '14px 16px 12px', paddingBottom: 'calc(12px + var(--sab))' }}>
-                  <div style={{ marginBottom: '10px' }}>
-                    <AppearanceControl />
-                  </div>
                   <button
                     onClick={user ? handleLogout : () => navigate("/login")}
                     className="w-full rounded-lg transition-colors hover:bg-red-500/10"
@@ -732,7 +771,7 @@ const FeedPage = () => {
           <div className="mb-6 overflow-x-auto hide-scrollbar">
             <div className="flex gap-2">
               {categories.map((cat) => {
-                const active = (cat === "All" && !activeCategory) || activeCategory === cat;
+                const active = (cat === "All" && !activeCategory) || parseFilter(activeCategory).top === cat;
                 return (
                   <button
                     key={cat}
@@ -754,6 +793,21 @@ const FeedPage = () => {
               })}
             </div>
           </div>
+
+          <SubPills filter={activeCategory} onChange={(key) => handleCategoryChange(key || "All")}
+            homeState={homeStateOf(user)} onPickState={() => setStateSheet("pick")} />
+          {(() => {
+            // A narrow filter with nothing from today shows the week, and says so.
+            const f = parseFilter(activeCategory);
+            const narrow = f.sub || f.state;
+            const newest = articles[0]?.published_at;
+            if (!narrow || !newest || Date.now() - new Date(newest).getTime() < 86400000) return null;
+            return (
+              <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--c-muted)", margin: "-4px 0 14px" }} data-testid="filter-week-note">
+                Nothing new in {f.sub || f.state} today · from this week
+              </p>
+            );
+          })()}
 
           {/* Articles Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -793,11 +847,18 @@ const FeedPage = () => {
                           Developing
                         </span>
                       )}
+                      {article.event_status === "early_report" && !article.is_developing && !article.is_breaking && (
+                        <span className="text-xs bg-black/60 backdrop-blur-sm px-2 py-1 rounded"
+                          style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.12em", fontSize: 10, color: "var(--c-warn-ink)" }}
+                          data-testid="early-report-flag">
+                          EARLY REPORT
+                        </span>
+                      )}
                     </div>
                     
                     <div className="absolute bottom-3 left-3">
                       <span className="category-badge text-xs">
-                        {article.category}
+                        {article.category_v2 || article.category}{(article.subcategory_v2) ? ` · ${article.subcategory_v2}` : ""}
                       </span>
                     </div>
                   </div>
@@ -811,7 +872,7 @@ const FeedPage = () => {
                     </p>
                     
                     <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span className="font-mono">{article.source}</span>
+                      <CoverageStrip article={article} onOpen={setCoverageArticle} />
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1">
                           <Eye className="w-3 h-3" />
@@ -825,11 +886,41 @@ const FeedPage = () => {
             </AnimatePresence>
           </div>
 
-          {articles.length === 0 && !loadError && (
-            <div className="text-center py-20">
-              <p className="text-gray-500">No articles found</p>
-            </div>
-          )}
+          {articles.length === 0 && !loadError && !loading && (() => {
+            const f = parseFilter(activeCategory);
+            const name = f.sub || f.state;
+            if (!name) {
+              return <div className="text-center py-20"><p className="text-gray-500">No articles found</p></div>;
+            }
+            const parent = f.state ? "States" : f.top;
+            const already = (user?.interests_v2 || []).includes(name);
+            return (
+              <div className="text-center py-16 px-6" data-testid="filter-empty">
+                <p style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: 18, color: "var(--c-ink2)", margin: "0 0 14px" }}>
+                  {name} is quiet this week.
+                </p>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => handleCategoryChange(f.state ? "States" : parent)}
+                    style={{ minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid rgb(var(--c-fg-rgb) / 0.12)", background: "none", color: "var(--c-sub)", cursor: "pointer" }}>
+                    {f.state ? "All states" : `All ${parent}`} ›
+                  </button>
+                  {user && !already && (
+                    <button type="button"
+                      onClick={async () => {
+                        try {
+                          await axios.put(`${API}/users/interests`, { interests: [...(user.interests_v2 || []), name] }, { withCredentials: true });
+                          await checkAuth();
+                          toast.success(`We\u2019ll bring you ${name} stories first.`);
+                        } catch { toast.error("Couldn\u2019t save that. Try again."); }
+                      }}
+                      style={{ minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid rgba(220,38,38,0.5)", background: "rgba(220,38,38,0.10)", color: "var(--c-ink)", cursor: "pointer" }}>
+                      Add {name} to your interests
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} className="h-1" />
@@ -856,6 +947,8 @@ const FeedPage = () => {
         </div>
       </main>
 
+      {coverageArticle && <CoverageSheet article={coverageArticle} onClose={() => setCoverageArticle(null)} />}
+      <StateSheet open={!!stateSheet} firstTime={stateSheet === "first"} onPick={pickState} onClose={closeStateSheet} />
       <BottomNav />
 
       {/* Long-press quick actions — headline + photo is enough signal to

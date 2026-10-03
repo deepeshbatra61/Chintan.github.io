@@ -8,9 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 const SignInPrompt = ({ open, onOpenChange, reason = "personalize" }) => {
   const navigate = useNavigate();
 
-  const copy = reason === "action"
-    ? "Sign in to save this, react, or join the conversation."
-    : "Sign in for a feed shaped around what you actually read — not just what's new.";
+  const copy = reason === "follow"
+    ? "Sign in to follow this story and get a ping when it moves."
+    : reason === "action"
+      ? "Sign in to save this, react, or join the conversation."
+      : "Sign in for a feed shaped around what you actually read — not just what's new.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

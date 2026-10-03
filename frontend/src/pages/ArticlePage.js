@@ -545,7 +545,7 @@ const ArticleContent = ({ article: articleProp, navigate, isActive }) => {
             </div>
             <div style={{ padding: '4px 22px 0' }}>
               <div style={{ fontSize: '11px', color: 'var(--c-muted)', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
-                {article.category && <span style={{ color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category}</span>}
+                {article.category && <span style={{ color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px' }}>{article.category_v2 || article.category}</span>}
                 {article.is_breaking && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-danger-ink)' }}>Breaking</span></>}
                 {article.is_developing && !article.is_breaking && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-warn-ink)' }}>Developing</span></>}
                 {(article.source || article.domain || article.publisher) && <><span style={{ color: 'var(--c-dim)' }}>•</span><span style={{ color: 'var(--c-muted)' }}>{article.source || article.domain || article.publisher}</span></>}

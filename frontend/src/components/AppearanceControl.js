@@ -1,72 +1,50 @@
 import React from "react";
-import { Monitor, Sun, Moon } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme, setThemePref } from "../lib/theme";
 
-const OPTIONS = [
-  { value: "system", label: "System", Icon: Monitor },
-  { value: "light", label: "Light", Icon: Sun },
-  { value: "dark", label: "Dark", Icon: Moon },
-];
-
-// Segmented System / Light / Dark switch for the side nav. A radiogroup, not
-// three buttons, so a screen reader announces it as one choice with a
-// selected value.
+// One Light/Dark switch, a sidebar row like Notifications and Contact us: the
+// switch sits in the icon slot, then the label (design review 2026-10-03, the
+// owner dropped the state word). Untouched, the app follows the phone; the
+// first flip pins the reader's choice (lib/theme.js).
 export default function AppearanceControl() {
-  const { pref } = useTheme();
-
-  const onKeyDown = (e) => {
-    const i = OPTIONS.findIndex((o) => o.value === pref);
-    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1
-      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!step) return;
-    e.preventDefault();
-    const next = OPTIONS[(i + step + OPTIONS.length) % OPTIONS.length];
-    setThemePref(next.value);
-    e.currentTarget.querySelector(`[data-value="${next.value}"]`)?.focus();
-  };
+  const { resolved } = useTheme();
+  const dark = resolved === "dark";
+  const toggle = () => setThemePref(dark ? "light" : "dark");
 
   return (
-    <div>
-      <p
-        id="appearance-label"
-        style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--c-faint2)", margin: "0 0 8px 2px" }}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={dark}
+      aria-label="Dark appearance"
+      onClick={toggle}
+      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-fg/5 transition-colors text-left"
+      style={{ minHeight: 48, background: "none", border: "none", cursor: "pointer" }}
+      data-testid="appearance-switch"
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          position: "relative", width: 30, height: 18, borderRadius: 999, flexShrink: 0, marginLeft: -4, marginRight: -8,
+          background: dark ? "var(--c-seg-on)" : "rgb(var(--c-fg-rgb) / 0.12)",
+          border: "1px solid rgb(var(--c-fg-rgb) / 0.10)", transition: "background-color .2s",
+        }}
       >
+        <span
+          style={{
+            position: "absolute", top: 1, left: dark ? 13 : 1, width: 14, height: 14, borderRadius: "50%",
+            background: dark ? "var(--c-ink)" : "#fff", boxShadow: "0 1px 3px rgb(0 0 0 / 0.25)",
+            display: "grid", placeItems: "center", transition: "left .2s ease-out",
+          }}
+        >
+          {dark
+            ? <Moon className="w-[9px] h-[9px]" strokeWidth={2.4} style={{ color: "#111" }} />
+            : <Sun className="w-[9px] h-[9px]" strokeWidth={2.4} style={{ color: "#B42318" }} />}
+        </span>
+      </span>
+      <span style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontSize: "15px", fontWeight: 500, color: "var(--c-sub)" }}>
         Appearance
-      </p>
-      <div
-        role="radiogroup"
-        aria-labelledby="appearance-label"
-        onKeyDown={onKeyDown}
-        style={{ display: "flex", gap: "2px", padding: "3px", borderRadius: "11px", background: "var(--c-surface2)", border: "1px solid rgb(var(--c-fg-rgb) / 0.06)" }}
-      >
-        {OPTIONS.map(({ value, label, Icon }) => {
-          const on = pref === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              tabIndex={on ? 0 : -1}
-              data-value={value}
-              data-testid={`appearance-${value}`}
-              onClick={() => setThemePref(value)}
-              style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-                minHeight: "36px", padding: "0 6px", borderRadius: "8px", border: "none", cursor: "pointer",
-                fontSize: "12.5px", fontWeight: 500,
-                background: on ? "var(--c-seg-on)" : "transparent",
-                color: on ? "var(--c-ink)" : "var(--c-muted)",
-                boxShadow: on ? "0 1px 3px rgb(0 0 0 / 0.18)" : "none",
-                transition: "background-color .2s, color .2s",
-              }}
-            >
-              <Icon className="w-[14px] h-[14px]" strokeWidth={2} aria-hidden="true" />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }

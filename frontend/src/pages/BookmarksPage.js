@@ -123,7 +123,7 @@ const BookmarksPage = () => {
                     </div>
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "5px" }}>
-                        {article.category && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.1em", color: "#DC2626", textTransform: "uppercase" }}>{article.category}</span>}
+                        {article.category && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9.5px", letterSpacing: "0.1em", color: "#DC2626", textTransform: "uppercase" }}>{article.category_v2 || article.category}</span>}
                         {article.source && <><span style={{ color: "var(--c-dim2)" }}>·</span><span style={{ color: "var(--c-faint)", fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{article.source}</span></>}
                       </div>
                       <h3 style={{ fontFamily: "'Playfair Display', 'Georgia', serif", fontWeight: 500, fontSize: "15px", lineHeight: 1.32, color: "var(--c-ink2)", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{article.title}</h3>

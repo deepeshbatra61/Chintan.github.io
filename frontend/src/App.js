@@ -8,8 +8,10 @@ import "./App.css";
 import WelcomeSplash from "./components/WelcomeSplash";
 import { loadToken, getCachedToken, getRefreshToken, setTokens, clearToken } from "./lib/tokenStore";
 import { clearFeedCache } from "./lib/feedCache";
+import { APP_VERSION, CLIENT_HEADER } from "./lib/appVersion";
 
-const REFRESH_URL = "https://chintangithubio-production.up.railway.app/api/auth/refresh";
+const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
+const REFRESH_URL = `${BACKEND_URL}/api/auth/refresh`;
 
 // ── Global axios setup ────────────────────────────────────────────────────────
 // Always send cookies AND, when available, the access token as a Bearer header.
@@ -21,6 +23,10 @@ axios.interceptors.request.use((config) => {
   const token = getCachedToken();
   if (token && !config.headers["Authorization"]) {
     config.headers["Authorization"] = `Bearer ${token}`;
+  }
+  // Only our own API: third-party hosts shouldn't learn the app version.
+  if (String(config.url || "").startsWith(BACKEND_URL)) {
+    config.headers[CLIENT_HEADER] = APP_VERSION;
   }
   return config;
 });
@@ -84,7 +90,6 @@ import PushController from "./components/PushController";
 import PushAsk from "./components/PushAsk";
 import { unregisterDevice } from "./lib/push";
 
-const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
 const API = `${BACKEND_URL}/api`;
 
 // Auth Context
@@ -487,14 +492,14 @@ function AppRouter() {
         </ProtectedRoute>
       } />
       <Route path="/developing" element={
-        <ProtectedRoute>
+        <GuestOrProtectedRoute>
           <DevelopingPage />
-        </ProtectedRoute>
+        </GuestOrProtectedRoute>
       } />
       <Route path="/developing/:storyId" element={
-        <ProtectedRoute>
+        <GuestOrProtectedRoute>
           <DevelopingStoryDetail />
-        </ProtectedRoute>
+        </GuestOrProtectedRoute>
       } />
       <Route path="/ask-ai/:articleId" element={
         <ProtectedRoute>

@@ -9,7 +9,12 @@ const isDevServer = process.env.NODE_ENV !== "production";
 // Environment variable overrides
 const config = {
   enableHealthCheck: process.env.ENABLE_HEALTH_CHECK === "true",
-  enableVisualEdits: isDevServer, // Only enable during dev server
+  // Only during the dev server, and only if the plugin is present in this
+  // checkout (it isn't committed everywhere; `craco test` runs as non-production
+  // too and must not crash on its absence).
+  enableVisualEdits: isDevServer && process.env.NODE_ENV !== "test" && (() => {
+    try { require.resolve("./plugins/visual-edits/dev-server-setup"); return true; } catch { return false; }
+  })(),
 };
 
 // Conditionally load visual edits modules only in dev mode
@@ -101,6 +106,21 @@ webpackConfig.devServer = (devServerConfig) => {
   }
 
   return devServerConfig;
+};
+
+// Jest 27 (bundled with CRA) can't read React Router 7's package "exports";
+// point it at the CommonJS builds. Only affects `craco test`.
+webpackConfig.jest = {
+  configure: (jestConfig) => ({
+    ...jestConfig,
+    moduleNameMapper: {
+      ...(jestConfig.moduleNameMapper || {}),
+      "^@/(.*)$": "<rootDir>/src/$1",
+      "^react-router-dom$": "<rootDir>/node_modules/react-router-dom/dist/index.js",
+      "^react-router$": "<rootDir>/node_modules/react-router/dist/development/index.js",
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js",
+    },
+  }),
 };
 
 module.exports = webpackConfig;
