@@ -146,6 +146,58 @@ def choose_event(vec: dict, article_id: str, published: datetime, candidates: It
     return best
 
 
+def event_id_for(article_id: str) -> str:
+    """Deterministic: re-running a cycle never forks the same founder twice."""
+    return f"ev-{article_id}"
+
+
+def plan_batch(new_articles: list, candidates: list, df: DocFreq) -> tuple:
+    """Assign one cycle's new articles, in publish order. Pure: mutates only
+    the passed-in df and candidate dicts, returns what to write.
+
+    new_articles: [{article_id, title, description, content, published_at: datetime,
+                    publisher}]   (publisher = canonical key)
+    candidates:   events as loaded by the service: {event_id, centroid, founding,
+                  size, first_member_at, last_member_at, blocked, closed, members}
+                  members = [{article_id, title, content, publisher, published_at}]
+    returns (assignments, touched): assignments = [{article_id, event_id, vec_terms,
+             syndicated_of, syndicated_publisher}], touched = {event_id: event dict}
+    """
+    by_id = {c["event_id"]: c for c in candidates}
+    assignments, touched = [], {}
+    for a in sorted(new_articles, key=lambda x: x["published_at"]):
+        w = term_weights(a.get("title", ""), a.get("description", ""), a.get("content", ""))
+        df.add(w)
+        vec = vectorize(w, df)
+        brief = {"article_id": a["article_id"], "title": a.get("title", ""),
+                 "content": (a.get("content") or "")[:300], "publisher": a["publisher"],
+                 "published_at": a["published_at"]}
+        eid = choose_event(vec, a["article_id"], a["published_at"], by_id.values()) if vec else None
+        syn_of = syn_pub = None
+        if eid:
+            ev = by_id[eid]
+            for mbr in ev.get("members", []):
+                if mbr["publisher"] != a["publisher"] and is_syndicated(mbr, brief):
+                    syn_of, syn_pub = mbr["article_id"], mbr.get("syndicated_publisher") or mbr["publisher"]
+                    break
+            ev["centroid"] = merge_centroid(ev.get("centroid") or {}, ev.get("size", 0), vec)
+            if len(ev.get("founding", [])) < FOUNDING:
+                ev.setdefault("founding", []).append(vec)
+            ev["size"] = ev.get("size", 0) + 1
+            ev["last_member_at"] = max(ev.get("last_member_at") or a["published_at"], a["published_at"])
+            ev.setdefault("members", []).append({**brief, "syndicated_publisher": syn_pub})
+        else:
+            eid = event_id_for(a["article_id"])
+            by_id[eid] = {"event_id": eid, "centroid": vec, "founding": [vec] if vec else [], "size": 1,
+                          "first_member_at": a["published_at"], "last_member_at": a["published_at"],
+                          "blocked": set(), "closed": False, "members": [{**brief, "syndicated_publisher": None}],
+                          "is_new": True}
+        touched[eid] = by_id[eid]
+        assignments.append({"article_id": a["article_id"], "event_id": eid, "vec_terms": dict(w),
+                            "syndicated_of": syn_of, "syndicated_publisher": syn_pub})
+    return assignments, touched
+
+
 def _words(s: str) -> set:
     return {w for w, _ in textutil.tokens(s, stop=frozenset())}
 

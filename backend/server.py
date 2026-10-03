@@ -64,6 +64,7 @@ import feed      # pure feed diversification, no I/O — see backend/feed.py
 import insights  # pure reading-observation logic, no I/O — see backend/insights.py
 import research  # verified web research (native web_search + citation check) — see backend/research.py
 import textutil      # shared tokenising / stopwords — see backend/textutil.py
+import events_service  # News v2 event clustering (Mongo side) — see backend/events_service.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
 import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
@@ -1100,6 +1101,14 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
     # ── 10. The Developing label follows live-story membership ──────────────
     await _reconcile_developing_labels()
 
+    # ── 11. News v2 events (EVENTS_MODE: off | shadow | live) ────────────────
+    #       Shadow: groups articles into events for the Desk + /api/health/news
+    #       without touching the feed. Its own failure must never cost a cycle.
+    try:
+        await events_service.run_cycle(db)
+    except Exception as e:  # noqa: BLE001 -- isolate the new subsystem from ingest
+        logger.exception(f"Events cycle failed: {e}")
+
 
 async def _cleanup_scout_stories_v2() -> None:
     """One-time repair of scout stories built under the old keyword rule
@@ -1535,6 +1544,11 @@ async def lifespan(app: FastAPI):
     await db.articles.create_index([("category", 1), ("rank_at", -1)])
     await db.articles.create_index("merged_into", sparse=True)
     await db.articles.create_index("origin", sparse=True)
+    # News v2 events (events_service.py): membership lookups + candidate scans
+    await db.articles.create_index("event_id", sparse=True)
+    await db.events.create_index("event_id", unique=True)
+    await db.events.create_index([("status", 1), ("last_member_at", -1)])
+    await db.events.create_index("first_member_at")
     # Desk
     await db.desk_admins.create_index("email", unique=True)
     await db.desk_sessions.create_index("token_hash", unique=True)
@@ -6228,10 +6242,12 @@ async def news_health():
     g = await db.app_meta.find_one({"_id": "gnews_state"}, {"_id": 0}) or {}
     ing = await db.app_meta.find_one({"_id": "ingest_state"}, {"_id": 0}) or {}
     usage = (await db.app_meta.find_one({"_id": f"gnews_usage:{day}"}) or {}).get("n", 0)
+    ev = await db.app_meta.find_one({"_id": "events_state"}, {"_id": 0}) or {}
     return {"gnews_configured": _gnews_live(), "newsapi_enabled": _newsapi_live(),
             "interval_min": news_sources.INTERVAL_MIN if _gnews_live() else 60,
             "last_ingest_run": ing.get("last_run"), "gnews": g,
-            "gnews_requests_today": usage, "gnews_daily_cap": GNEWS_DAILY_CAP}
+            "gnews_requests_today": usage, "gnews_daily_cap": GNEWS_DAILY_CAP,
+            "events": {"mode": events_service.current_mode(), **ev}}
 
 
 @api_router.get("/admin/test-gnews")
