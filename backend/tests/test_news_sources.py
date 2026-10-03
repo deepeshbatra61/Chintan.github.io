@@ -247,3 +247,23 @@ async def test_restart_spacing(db):
     await db.app_meta.update_one({"_id": "ingest_state"},
                                  {"$set": {"last_run": (NOW - timedelta(minutes=30)).isoformat()}})
     assert await server._ran_recently(15) is False
+
+
+def test_query_key_is_mongo_safe():
+    assert N.query_key("top-headlines", {"category": "nation"}) == "top-headlines~nation"
+    assert N.query_key("search", {"q": "Tamil Nadu OR Kerala"}) == "search~Tamil_Nadu_OR_Kerala"
+    assert "." not in N.query_key("search", {"q": "a.b$c"})
+
+
+async def test_yield_counts_new_admitted_per_query(db):
+    await db.articles.insert_one({"article_id": N.article_id_for("https://www.thehindu.com/old"), "url": "x"})
+    fake = FakeGNews({
+        ("top-headlines", "nation", 1): [g("https://www.thehindu.com/old", "Parliament old story"),
+                                         g("https://www.thehindu.com/new", "Parliament new story")],
+        ("top-headlines", "world", 1): [g("https://www.thehindu.com/new", "Parliament new story")],
+    })
+    await server.fetch_from_gnews(client=fake)
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    y = (await db.app_meta.find_one({"_id": f"gnews_yield:{day}"}))["q"]
+    assert y["top-headlines~nation"] == {"requests": 1, "returned": 2, "new": 1}
+    assert y["top-headlines~world"] == {"requests": 1, "returned": 1, "new": 0}   # first query gets the credit

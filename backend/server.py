@@ -4778,6 +4778,31 @@ async def _gnews_take_request() -> bool:
     return doc.get("n", 0) <= GNEWS_DAILY_CAP
 
 
+async def _record_gnews_yield(now, results, query_of, q_requests, q_returned) -> None:
+    """Per-query daily counters: requests, articles returned, and NEW admitted
+    stories (not already stored), credited to the query that first returned
+    each URL. The budget is re-planned from this (eng review OV6)."""
+    if not q_requests:
+        return
+    try:
+        ids = [r["article_id"] for r in results]
+        have = {d["article_id"] async for d in db.articles.find({"article_id": {"$in": ids}}, {"_id": 0, "article_id": 1})}
+        new_by_q: dict = {}
+        for r in results:
+            if r["article_id"] not in have:
+                q = query_of.get(r["url"])
+                if q:
+                    new_by_q[q] = new_by_q.get(q, 0) + 1
+        inc = {}
+        for q in q_requests:
+            inc[f"q.{q}.requests"] = q_requests[q]
+            inc[f"q.{q}.returned"] = q_returned.get(q, 0)
+            inc[f"q.{q}.new"] = new_by_q.get(q, 0)
+        await db.app_meta.update_one({"_id": f"gnews_yield:{now.strftime('%Y-%m-%d')}"}, {"$inc": inc}, upsert=True)
+    except Exception as e:  # noqa: BLE001 -- telemetry must never cost a fetch
+        logger.warning(f"GNews yield record failed: {e}")
+
+
 async def fetch_from_gnews(client=None) -> list:
     """GNews Essential: every category + an 'India' search for India/English,
     only stories since the last successful run, a second page when a run is
@@ -4794,6 +4819,9 @@ async def fetch_from_gnews(client=None) -> list:
             last_ok = None
     since = news_sources.iso_z(news_sources.gnews_since(last_ok, now))
     seen: dict = {}            # url -> (raw article, gnews category)
+    query_of: dict = {}        # url -> the query that first returned it (yield, OV6)
+    q_requests: dict = {}
+    q_returned: dict = {}
     ok_calls = 0
     last_error = None
     stop = False
@@ -4835,10 +4863,14 @@ async def fetch_from_gnews(client=None) -> list:
                 ok_calls += 1
                 arts = (resp.json() or {}).get("articles") or []
                 cat = extra.get("category")
+                qkey = news_sources.query_key(endpoint, extra)
+                q_requests[qkey] = q_requests.get(qkey, 0) + 1
+                q_returned[qkey] = q_returned.get(qkey, 0) + len(arts)
                 for a in arts:
                     u = a.get("url") or ""
                     if u and u not in seen:
                         seen[u] = (a, cat)
+                        query_of[u] = qkey
                 if len(arts) < news_sources.GNEWS_MAX:
                     break                       # no second page needed
     finally:
@@ -4864,6 +4896,7 @@ async def fetch_from_gnews(client=None) -> list:
             source_name=((a.get("source") or {}).get("name") or ""), published_at=published_at,
             image_url=a.get("image"), author=None, provider="gnews", rank_at=rank_at or published_at,
             detect_category=detect_category, default_image=DEFAULT_ARTICLE_IMAGE))
+    await _record_gnews_yield(now, results, query_of, q_requests, q_returned)
     if ok_calls:
         await db.app_meta.update_one({"_id": "gnews_state"},
                                      {"$set": {"last_success": now.isoformat(), "last_count": len(results),
@@ -6247,11 +6280,13 @@ async def news_health():
     ing = await db.app_meta.find_one({"_id": "ingest_state"}, {"_id": 0}) or {}
     usage = (await db.app_meta.find_one({"_id": f"gnews_usage:{day}"}) or {}).get("n", 0)
     ev = await db.app_meta.find_one({"_id": "events_state"}, {"_id": 0}) or {}
+    yld = (await db.app_meta.find_one({"_id": f"gnews_yield:{day}"}, {"_id": 0}) or {}).get("q", {})
     return {"gnews_configured": _gnews_live(), "newsapi_enabled": _newsapi_live(),
             "interval_min": news_sources.INTERVAL_MIN if _gnews_live() else 60,
             "last_ingest_run": ing.get("last_run"), "gnews": g,
             "gnews_requests_today": usage, "gnews_daily_cap": GNEWS_DAILY_CAP,
-            "events": {"mode": events_service.current_mode(), **ev}}
+            "events": {"mode": events_service.current_mode(), **ev},
+            "gnews_yield_today": yld}
 
 
 @api_router.get("/admin/test-gnews")

@@ -160,3 +160,11 @@ def iso_z(dt: datetime) -> str:
 def summarize_quota(hourly_limit: int, interval_min: int) -> int:
     """Per-cycle summary cap that keeps the HOURLY Claude spend unchanged."""
     return max(1, round(hourly_limit * interval_min / 60))
+
+
+def query_key(endpoint: str, extra: dict) -> str:
+    """Stable, Mongo-key-safe name for a GNews query ("top-headlines~nation",
+    "search~India"), used for per-query yield counters."""
+    which = extra.get("category") or extra.get("q") or "all"
+    safe = "".join(ch if ch.isalnum() else "_" for ch in str(which))[:40]
+    return f"{endpoint}~{safe}"
