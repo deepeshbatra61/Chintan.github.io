@@ -197,3 +197,24 @@ def test_pin_never_drops_or_duplicates():
     ordered = [art(f"a{i}", "Business") for i in range(6)]
     out = feed.pin_first(ordered, lambda a: a["article_id"] == "a4")
     assert sorted(a["article_id"] for a in out) == sorted(a["article_id"] for a in ordered)
+
+
+# ── publisher variety (News v2) ───────────────────────────────────────────────
+
+def test_publisher_variety_off_by_default_and_reorders_when_on():
+    arts = [(100 - i, {"article_id": f"a{i}", "category": c, "publisher": p})
+            for i, (c, p) in enumerate([("Politics", "toi"), ("Business", "toi"), ("Sports", "hindu"),
+                                        ("World", "toi"), ("Science", "ie")])]
+    off = [a["article_id"] for a in feed.diversify(arts, needed=5)]
+    assert off == ["a0", "a1", "a2", "a3", "a4"]
+    on = feed.diversify(arts, needed=5, publisher_variety=True)
+    pubs = [a["publisher"] for a in on]
+    assert pubs[0] != pubs[1]                              # TOI no longer leads twice running
+    runs = max(len(list(g)) for _, g in __import__("itertools").groupby(pubs))
+    assert runs <= 2                                       # soft rule: reorders near-ties, never forces
+    assert feed.max_consecutive_repeats(on) == 1          # category rule still holds
+
+
+def test_publisher_variety_ignores_articles_without_publisher():
+    arts = [(10 - i, {"article_id": f"a{i}", "category": c}) for i, c in enumerate(["A", "B", "C"])]
+    assert [a["article_id"] for a in feed.diversify(arts, needed=3, publisher_variety=True)] == ["a0", "a1", "a2"]

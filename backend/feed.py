@@ -16,11 +16,15 @@ would trade a boring feed for an irrelevant one. What was missing was any
 notion that a feed is a SEQUENCE, not a leaderboard -- position 3 shouldn't be
 chosen as though positions 1 and 2 didn't happen.
 
-TWO RULES, DOING DIFFERENT JOBS
--------------------------------
+THREE RULES, DOING DIFFERENT JOBS
+---------------------------------
 1. HARD: never two of the same category back to back.
 2. SOFT: a category already used in the recent window is penalised, more each
    time it repeats.
+3. SOFT (News v2, many voices): a PUBLISHER already used in the window is
+   penalised too, and doubly when it led the card just above. It only
+   reorders -- it never swaps an event's lead (that is fixed at ingest, so
+   pages stay stable). Times of India led ~20% of cards on 2026-10-03.
 
 The hard rule alone permits B,T,B,T,B,T -- adjacency satisfied, and business
 still owns half the screen, which is the complaint restated rather than fixed.
@@ -45,12 +49,22 @@ CATEGORY_REPEAT_PENALTY = 22.0
 # thing that felt monotonous.
 DIVERSITY_WINDOW = 6
 
+# Publisher variety, as a share of the category penalty so it scales with
+# whichever penalty the caller uses (22 personalised, 6 guest). Weaker than the
+# category rule: variety of voices should reorder near-ties, not bury news.
+PUBLISHER_REPEAT_SHARE = 0.6
+
+
+def _publisher(article: dict) -> str:
+    return article.get("publisher") or ""      # canonical key, set by events_service
+
 
 def diversify(
     scored: List[Tuple[float, dict]],
     needed: int,
     penalty: float = CATEGORY_REPEAT_PENALTY,
     window: int = DIVERSITY_WINDOW,
+    publisher_variety: bool = False,
 ) -> List[dict]:
     """Greedily re-rank `scored` (highest first) into a varied sequence.
 
@@ -66,12 +80,17 @@ def diversify(
     remaining = list(scored)
     out: List[dict] = []
     emitted: List[str] = []
+    emitted_pubs: List[str] = []
+    # Off until News v2 events are live (the caller passes EVENTS_MODE == live).
+    pub_penalty = penalty * PUBLISHER_REPEAT_SHARE if publisher_variety else 0.0
     counts = category_counts([a for _, a in remaining])
     counts.pop("", None)  # uncategorised never conflicts, so never constrains
 
     while remaining and len(out) < needed:
         prev_cat = emitted[-1] if emitted else None
         recent = emitted[-window:]
+        recent_pubs = emitted_pubs[-window:]
+        prev_pub = emitted_pubs[-1] if emitted_pubs else None
 
         best_i = best_val = None      # best that also keeps the rest arrangeable
         loose_i = loose_val = None    # best that merely satisfies adjacency
@@ -82,6 +101,9 @@ def diversify(
             if cat and cat == prev_cat:
                 continue
             adjusted = score - penalty * (recent.count(cat) if cat else 0)
+            pub = _publisher(article)
+            if pub:
+                adjusted -= pub_penalty * (recent_pubs.count(pub) + (1 if pub == prev_pub else 0))
             if loose_i is None or adjusted > loose_val:
                 loose_i, loose_val = i, adjusted
             if _still_arrangeable(counts, len(remaining), cat) and (best_i is None or adjusted > best_val):
@@ -97,6 +119,7 @@ def diversify(
         out.append(article)
         cat = article.get("category") or ""
         emitted.append(cat)
+        emitted_pubs.append(_publisher(article))
         if cat:
             counts[cat] -= 1
 

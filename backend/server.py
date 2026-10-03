@@ -4906,6 +4906,8 @@ async def get_articles(
     # Desk items. Both fields are absent on nearly every document.
     query["merged_into"] = {"$exists": False}
     query["desk_hidden"] = {"$ne": True}
+    # News v2: one card per event. Only events_service in live mode sets this.
+    query["event_hidden"] = {"$ne": True}
 
     user = await get_current_user(request) if request else None
     user_interests: List[str] = user.get("interests", []) if user else []
@@ -4933,7 +4935,8 @@ async def get_articles(
         # apart, so 22 would push a repeated category ~22 slots down and bury
         # genuinely fresh news. 6 keeps recency dominant while the hard
         # adjacency rule still guarantees no two in a row.
-        ordered = feed.diversify(ranked, needed=skip + limit, penalty=6.0)
+        ordered = feed.diversify(ranked, needed=skip + limit, penalty=6.0,
+                                 publisher_variety=events_service.current_mode() == "live")
         if skip == 0:
             ordered = feed.pin_first(ordered, lambda a: desk.article_is_pinned(a, now))
         return ordered[skip:skip + limit]
@@ -4998,7 +5001,8 @@ async def get_articles(
     # sequence before paginating, NOT after: diversifying a single page can't see
     # what the previous page ended with, so page 2 would happily open with the
     # same category page 1 closed on.
-    ordered = feed.diversify(scored, needed=skip + limit)
+    ordered = feed.diversify(scored, needed=skip + limit,
+                             publisher_variety=events_service.current_mode() == "live")
     if skip == 0:
         ordered = feed.pin_first(ordered, lambda a: desk.article_is_pinned(a, now))
     return ordered[skip:skip + limit]
