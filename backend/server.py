@@ -4704,6 +4704,7 @@ async def fetch_from_gnews(client=None) -> list:
     since = news_sources.iso_z(news_sources.gnews_since(last_ok, now))
     seen: dict = {}            # url -> (raw article, gnews category)
     ok_calls = 0
+    last_error = None
     stop = False
     own = client is None
     client = client or httpx.AsyncClient(timeout=20.0)
@@ -4724,17 +4725,21 @@ async def fetch_from_gnews(client=None) -> list:
                     resp = await client.get(f"https://gnews.io/api/v4/{endpoint}", params=params)
                 except Exception as e:
                     logger.error(f"GNews {endpoint} {extra}: {e}")
+                    last_error = f"network: {str(e)[:120]}"
                     break
                 if resp.status_code in (401, 403):
                     logger.error(f"GNews rejected the key ({resp.status_code}): {resp.text[:200]}")
+                    last_error = f"{resp.status_code}: {resp.text[:160]}"
                     stop = True
                     break
                 if resp.status_code == 429:
                     logger.warning("GNews: rate/quota limited (429) — stopping this run")
+                    last_error = f"429: {resp.text[:160]}"
                     stop = True
                     break
                 if resp.status_code != 200:
                     logger.warning(f"GNews {endpoint} {extra} p{page}: {resp.status_code} {resp.text[:200]}")
+                    last_error = f"{resp.status_code}: {resp.text[:160]}"
                     break
                 ok_calls += 1
                 arts = (resp.json() or {}).get("articles") or []
@@ -4770,8 +4775,11 @@ async def fetch_from_gnews(client=None) -> list:
             detect_category=detect_category, default_image=DEFAULT_ARTICLE_IMAGE))
     if ok_calls:
         await db.app_meta.update_one({"_id": "gnews_state"},
-                                     {"$set": {"last_success": now.isoformat(), "last_count": len(results)}},
+                                     {"$set": {"last_success": now.isoformat(), "last_count": len(results),
+                                               "last_dropped": dropped}},
                                      upsert=True)
+    await db.app_meta.update_one({"_id": "gnews_state"},
+                                 {"$set": {"last_attempt": now.isoformat(), "last_error": last_error}}, upsert=True)
     logger.info(f"GNews: {ok_calls} requests, {len(seen)} fetched, {len(results)} kept, dropped {dropped}")
     return results
 
@@ -6134,6 +6142,20 @@ async def admin_purge_blacklisted_domains(admin: dict = Depends(require_admin)):
         deleted = 0
 
     return {"deleted": deleted, "domains": domain_counts}
+
+@api_router.get("/health/news")
+async def news_health():
+    """Public, secret-free ingest status for monitoring: which sources are on,
+    when GNews last ran/succeeded, today's request count, the last error."""
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    g = await db.app_meta.find_one({"_id": "gnews_state"}, {"_id": 0}) or {}
+    ing = await db.app_meta.find_one({"_id": "ingest_state"}, {"_id": 0}) or {}
+    usage = (await db.app_meta.find_one({"_id": f"gnews_usage:{day}"}) or {}).get("n", 0)
+    return {"gnews_configured": _gnews_live(), "newsapi_enabled": _newsapi_live(),
+            "interval_min": news_sources.INTERVAL_MIN if _gnews_live() else 60,
+            "last_ingest_run": ing.get("last_run"), "gnews": g,
+            "gnews_requests_today": usage, "gnews_daily_cap": GNEWS_DAILY_CAP}
+
 
 @api_router.get("/admin/test-gnews")
 async def admin_test_gnews(admin: dict = Depends(require_admin)):
