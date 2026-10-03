@@ -257,3 +257,26 @@ from code with `/impeccable document` (documents what exists, no redesign). Incl
 push copy rules from the CEO plan's "Design review" section. **Effort:** S. **Priority:** P3.
 
 **Depends on / blocked by:** Best after phase 1's push UI ships.
+
+---
+
+## 11. "Every angle" on event pages
+
+**What:** On an event covered by 3+ outlets, list each outlet's headline side by side
+with one AI-written line on what each emphasises ("focuses on the court's reasoning").
+
+**Why:** Makes "many voices" visible. News v2 groups outlets into events but only shows
+the count and the type mix, not how the coverage differs.
+
+**Pros:** A feature no Indian news app does well. Cheap once events exist: one cached
+AI call per big event.
+
+**Cons:** The framing line must stay neutral and factual, never "biased" or a lean
+label. It adds AI cost and needs wording rules plus an eval.
+
+**Context:** Deferred by the owner in the News v2 CEO review (2026-10-03). The spec is in
+`~/.gstack/projects/deepeshbatra61-Chintan.github.io/ceo-plans/2026-10-03-news-v2-events.md`.
+Build on `events.article_ids`, the publisher registry (`publishers.py`) and `_llm()`.
+**Effort:** M → with CC: S. **Priority:** P2.
+
+**Depends on / blocked by:** News v2 events live in production with the golden-set gate met.
