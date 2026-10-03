@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-KEY = os.environ.get("MEDIASTACK_KEY", "").strip()
+KEY = os.environ.get("MEDIASTACK_KEY", "").strip().strip('"').strip("'").strip()
 BASES = ("https://api.mediastack.com/v1", "http://api.mediastack.com/v1")  # free plans may be http-only
 calls_used = 0
 
@@ -90,6 +90,9 @@ def main():
         sys.exit(1)
     now = datetime.now(timezone.utc)
     print("Mediastack India coverage test —", now.strftime("%Y-%m-%d %H:%M UTC"))
+    # A masked hint to compare against the dashboard (never the key itself).
+    print(f"Key in use: {len(KEY)} characters, starts '{KEY[:2]}', ends '{KEY[-2:]}' "
+          "(a Mediastack access key is normally 32 characters)")
     print("=" * 70)
 
     # 1-3: newest India English news, 300 stories
