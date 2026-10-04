@@ -434,8 +434,9 @@ source have no text; decide on that number. CEO plan:
 `~/.gstack/projects/deepeshbatra61-Chintan.github.io/ceo-plans/2026-10-04-government-tracker.md`.
 **Effort:** M -> with CC: S. **Priority:** P3.
 
-**Depends on / blocked by:** Tracker live with DGFT + eGazette readers and a few weeks of
-health-panel data.
+**Depends on / blocked by:** A few weeks of health-panel data. DGFT is live (2026-10-04) and
+every DGFT PDF checked so far is a scan, so DGFT items are summarised from the one-line
+official description only. That makes this more valuable than first thought.
 
 ---
 
@@ -455,3 +456,48 @@ redirected to Hindi). The tracker v1 pins English (`Lang=1&Regid=3&reg=3`). CEO 
 **Effort:** L -> with CC: M. **Priority:** P3.
 
 **Depends on / blocked by:** A product decision to support other languages.
+
+---
+
+## 18. CBIC (GST and customs) notifications in The Bureau
+
+**What:** Add a reader for CBIC's GST, customs and excise notifications and circulars.
+
+**Why:** GST rate changes and customs duty changes are some of the most reader-relevant
+official decisions, and they are not always covered by a PIB release.
+
+**Pros:** Covers tax decisions directly at the source, with the notification number.
+
+**Cons:** The real notifications live on taxinformation.cbic.gov.in, a heavy single-page app
+whose data calls are not yet worked out. The main site's ticker feed
+(`www.cbic.gov.in/api/getTickerData/Tickers`) is not usable: it is mostly exams, recruitment
+and tenders, and was two weeks stale when checked. Some CBIC PDFs may be scans.
+
+**Context:** Checked 2026-10-04 while adding DGFT, MoSPI and Parliament (commit 8876ae7).
+Documents on the main site sit at `https://www.cbic.gov.in/content/anotherfile/media/<filePathEn>`.
+Adapter pattern: `backend/official_sources/` (see `dgft.py`). CEO plan as #16.
+**Effort:** M -> with CC: S (if the portal's API can be found). **Priority:** P2.
+
+**Depends on / blocked by:** Working out the taxinformation.cbic.gov.in data calls; ideally
+OCR (#16) first in case the PDFs are scans.
+
+---
+
+## 19. eGazette in The Bureau (only if the Desk shows gaps)
+
+**What:** Add a reader for the Gazette of India (egazette.gov.in).
+
+**Why:** The Gazette is the legal record; some notifications appear there first.
+
+**Pros:** Completeness; catches notifications no press release mentions.
+
+**Cons:** Hard and noisy. `RecentUploads.aspx` needs a per-session path (`(S(...))` taken
+from the home page redirect); downloads go through ASP.NET postbacks, not plain links; the
+list is mostly land-acquisition and railway notices; PDFs are likely scans. Most important
+items also come through PIB or the ministry, which The Bureau already reads.
+
+**Context:** Checked 2026-10-04 (same pass as #18). Decision: skip unless Desk review shows
+real stories that only the Gazette had.
+**Effort:** M -> with CC: M. **Priority:** P4.
+
+**Depends on / blocked by:** OCR (#16), and Desk evidence that the Gazette adds stories.
