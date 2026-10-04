@@ -419,6 +419,9 @@ def silence_alarm(last_new_at: Optional[datetime], now: datetime, expected_gap_h
 
 # ── item document ─────────────────────────────────────────────────────────────
 
+SOURCE_TEXT_KEEP = 6000
+
+
 def build_item(*, ref: Ref, detail: dict, kind: str, ext: dict, dropped: list, importance_level: str,
                topic: tuple, now: datetime, source_name: str, issuer_key: str) -> dict:
     """The one shape of an official item. Stored in official_items while in
@@ -456,5 +459,7 @@ def build_item(*, ref: Ref, detail: dict, kind: str, ext: dict, dropped: list, i
         "category": category,
         "subcategory": subcategory,
         "body_chars": len(body),
+        # Kept so the Desk can check the summary against the source (T1 gate).
+        "source_text": body[:SOURCE_TEXT_KEEP],
         "status": "shadow",
     }

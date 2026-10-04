@@ -6921,6 +6921,9 @@ async def _events_touch(article_id: str) -> None:
                                              mode=events_service.current_mode())
 
 
+official_svc = official_service.OfficialService(
+    db, _llm, classify_topic=lambda title, body: categories.classify(title, body))
+
 api_router.include_router(desk_routes.build_desk_router(
     db=db,
     auth=desk_auth.DeskAuth(db, DESK_ENCRYPTION_KEY),
@@ -6940,13 +6943,12 @@ api_router.include_router(desk_routes.build_desk_router(
     events_block=lambda article_id: events_service.block_member(db, article_id, datetime.now(timezone.utc)),
     events_touch=_events_touch,
     events=events_service,
+    bureau=official_svc,
 ))
 
 api_router.include_router(events_routes.build_events_router(
     db_getter=lambda: db, get_user=get_current_user))
 
-official_svc = official_service.OfficialService(
-    db, _llm, classify_topic=lambda title, body: categories.classify(title, body))
 api_router.include_router(official_routes.build_official_router(
     service=official_svc, require_admin=require_admin))
 

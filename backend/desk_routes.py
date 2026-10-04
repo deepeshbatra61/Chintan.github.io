@@ -31,6 +31,9 @@ Login is the only route behind _gate alone.
     POST /desk/events/{id}/remove/{article_id}    take one article out for good
     GET  /desk/golden/pairs     same story or not? pairs for the owner's spot-check
     POST /desk/golden/labels    {pair_id, a, b, same, engine_same} → running score
+    GET  /desk/bureau/review    The Bureau: unchecked hidden items + score + source health
+    POST /desk/bureau/labels    {official_id, facts_ok, readable, note} → running score
+    POST /desk/bureau/items/{id}/importance   {level: never|low|normal|high}
 """
 
 from __future__ import annotations
@@ -54,6 +57,17 @@ try:  # real driver in production; mongomock raises the same class
 except ImportError:  # pragma: no cover
     class DuplicateKeyError(Exception):
         pass
+
+
+class BureauLabel(BaseModel):
+    official_id: str = Field(min_length=1, max_length=64)
+    facts_ok: bool
+    readable: bool
+    note: str = Field(default="", max_length=500)
+
+
+class BureauImportance(BaseModel):
+    level: str = Field(max_length=10)
 
 
 class LoginBody(BaseModel):
@@ -160,6 +174,7 @@ def build_desk_router(
     events_touch: Optional[Callable[[str], Awaitable]] = None,   # News v2: recompute the article's event
     events=None,                                 # News v2: events_service module (Newsroom)
     push_test_email: Callable[[], str] = lambda: "",
+    bureau=None,                                 # official_service.OfficialService (The Bureau)
 ) -> APIRouter:
     router = APIRouter(prefix="/desk")
     background: set = set()          # strong refs so tasks can't be GC'd mid-flight
@@ -766,5 +781,36 @@ def build_desk_router(
             await _audit(ctx, "push_breaking", article_id=body.article_id, sent=res["sent"],
                          failed=res["failed"], held=res["held"])
             return res
+
+    # ── The Bureau: the owner's quality check before readers see it (CEO T1) ──
+    if bureau is not None:
+        import official_service as OS   # local: keeps this module importable without the Bureau
+
+        @router.get("/bureau/review")
+        async def bureau_review(ctx: dict = Depends(_session)):
+            return {"items": await OS.review_queue(db, 10), "summary": await OS.review_summary(db),
+                    "health": await bureau.health()}
+
+        @router.post("/bureau/labels")
+        async def bureau_label(body: BureauLabel, ctx: dict = Depends(_session)):
+            try:
+                await OS.record_label(db, body.official_id, body.facts_ok, body.readable, body.note,
+                                      by=ctx.get("email", ""), now=desk.utcnow())
+            except ValueError:
+                raise HTTPException(status_code=404, detail="That item isn't in the Bureau.")
+            await _audit(ctx, "bureau_label", official_id=body.official_id, facts_ok=body.facts_ok,
+                         readable=body.readable)
+            return await OS.review_summary(db)
+
+        @router.post("/bureau/items/{official_id}/importance")
+        async def bureau_importance(official_id: str, body: BureauImportance, ctx: dict = Depends(_session)):
+            try:
+                found = await OS.set_importance(db, official_id[:64], body.level)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Importance must be never, low, normal or high.")
+            if not found:
+                raise HTTPException(status_code=404, detail="That item isn't in the Bureau.")
+            await _audit(ctx, "bureau_importance", official_id=official_id, level=body.level)
+            return {"ok": True, "level": body.level}
 
     return router

@@ -419,6 +419,72 @@ class OfficialService:
         return out
 
 
+# ── Desk quality gate (CEO T1): the owner checks hidden items ────────────────
+
+GATE = {"facts": 0.95, "readable": 0.85, "min_checked": 30}
+IMPORTANCE_LEVELS = ("never", "low", "normal", "high")
+_REVIEW_FIELDS = {"_id": 0}
+
+
+async def review_queue(db, limit: int = 10) -> list:
+    """Hidden, reader-facing items the owner hasn't checked yet: important
+    first, then newest, never more than half from one source."""
+    done = {d["official_id"] async for d in db.official_labels.find({}, {"_id": 0, "official_id": 1})}
+    rank = {"high": 0, "normal": 1, "low": 2, "never": 3}
+    pool = [d async for d in db.official_items.find(
+        {"status": "shadow", "official_id": {"$nin": list(done)}}, _REVIEW_FIELDS
+    ).sort("fetched_at", -1).limit(200)]
+    pool.sort(key=lambda d: (rank.get(d.get("importance_override") or d.get("importance"), 4),
+                             d.get("title_only", False)))
+    out, per_source = [], {}
+    cap = max(1, limit // 2)
+    for d in pool:
+        if per_source.get(d.get("source"), 0) >= cap:
+            continue
+        per_source[d.get("source")] = per_source.get(d.get("source"), 0) + 1
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def record_label(db, official_id: str, facts_ok: bool, readable: bool, note: str, by: str,
+                       now: datetime) -> None:
+    item = await db.official_items.find_one({"official_id": official_id}, {"_id": 0, "source": 1, "status": 1})
+    if not item or item.get("status") == "filtered":
+        raise ValueError("unknown item")
+    await db.official_labels.update_one({"official_id": official_id}, {"$set": {
+        "official_id": official_id, "source": item.get("source"), "facts_ok": bool(facts_ok),
+        "readable": bool(readable), "note": (note or "")[:500], "by": by, "at": now.isoformat()}}, upsert=True)
+
+
+async def review_summary(db) -> dict:
+    rows = [r async for r in db.official_labels.find({}, {"_id": 0})]
+    n = len(rows)
+
+    def rate(key, subset):
+        return round(sum(1 for r in subset if r.get(key)) / len(subset), 3) if subset else None
+
+    by_source = {}
+    for r in rows:
+        by_source.setdefault(r.get("source") or "?", []).append(r)
+    facts, readable = rate("facts_ok", rows), rate("readable", rows)
+    passed = (n >= GATE["min_checked"] and facts is not None and readable is not None
+              and facts >= GATE["facts"] and readable >= GATE["readable"])
+    return {"checked": n, "facts_ok": facts, "readable": readable, "gate": GATE, "passed": passed,
+            "by_source": {k: {"checked": len(v), "facts_ok": rate("facts_ok", v), "readable": rate("readable", v)}
+                          for k, v in sorted(by_source.items())},
+            "notes": [{"official_id": r["official_id"], "note": r["note"]} for r in rows if r.get("note")][-10:]}
+
+
+async def set_importance(db, official_id: str, level: str) -> bool:
+    if level not in IMPORTANCE_LEVELS:
+        raise ValueError("bad level")
+    res = await db.official_items.update_one({"official_id": official_id},
+                                             {"$set": {"importance_override": level}})
+    return bool(res.matched_count)
+
+
 async def run_scheduler(svc: OfficialService, logger=None):
     """Forever: one cycle, then wait 10 min by day / 60 min at night."""
     lg = logger or log
