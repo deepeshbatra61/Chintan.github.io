@@ -90,8 +90,12 @@ def fold_duplicates(items: list) -> list:
     for it in ranked:
         ids = set(it.get("_ids") or [])
         foldable = it.get("kind") in ("auto", "scout")
+        # An auto story (a trending word) also folds into a scheduled story it
+        # duplicates ("India's Performance at Asian Games" vs "Asian Games 2026");
+        # a scout story (one specific match, verdict...) can stand beside it.
+        hosts = ("auto", "scout", "desk", "scheduled") if it.get("kind") == "auto" else ("auto", "scout", "desk")
         if foldable and ids and any(
-                k_kind in ("auto", "scout", "desk") and len(ids & k) >= FOLD_OVERLAP * min(len(ids), len(k))
+                k_kind in hosts and len(ids & k) >= FOLD_OVERLAP * min(len(ids), len(k))
                 for k_kind, k in kept_sets):
             continue
         kept.append(it)

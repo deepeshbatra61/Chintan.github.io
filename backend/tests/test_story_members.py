@@ -123,6 +123,7 @@ def test_one_entry_per_event_in_the_list():
         {"story_id": "scout-flydubai", "kind": "scout", "article_count": 4, "_ids": ["f1", "f2", "f3", "f4"]},
         {"story_id": "asian-games", "kind": "scheduled", "article_count": 90, "_ids": odi + ["g1"]},
         {"story_id": "world-animal-day", "kind": "calendar", "article_count": 0},
+        {"story_id": "auto-games", "kind": "auto", "article_count": 30, "_ids": ["g1"] + odi[:10]},
     ]
     out = SM.fold_duplicates(items)
     assert [i["story_id"] for i in out] == ["scout-ind-wi-3rd-odi", "scout-flydubai", "asian-games", "world-animal-day"]
