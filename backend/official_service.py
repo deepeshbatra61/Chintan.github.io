@@ -506,6 +506,102 @@ async def set_importance(db, official_id: str, level: str) -> bool:
     return bool(res.matched_count)
 
 
+# ── readers (app 1.14): the chip feed and the item page ──────────────────────
+#
+#   who sees what
+#     OFFICIAL_MODE=live    everyone; items the Desk hasn't cleared stay hidden
+#                           (needs_desk, importance "never", facts marked wrong)
+#     OFFICIAL_MODE=shadow  Desk admins only ("preview"), everything kept, flagged
+#     OFFICIAL_MODE=off     nobody
+#   Items are read from official_items in both modes; lane L4 decides whether
+#   they are also copied into `articles` for the "All" feed.
+
+LENSES = {  # sub-pill key -> issuer_key (the app shows these labels)
+    "cabinet": "cabinet", "rbi": "rbi", "sebi": "sebi", "ministries": "pib",
+    "trade": "dgft", "data": "mospi", "parliament": "parliament",
+}
+READER_LIMIT_MAX = 30
+_READER_FIELDS = {"_id": 0, "official_id": 1, "source": 1, "source_name": 1, "source_url": 1, "issuer": 1,
+                  "issuer_key": 1, "ministry": 1, "kind": 1, "title": 1, "published_at": 1, "what_changed": 1,
+                  "key_number": 1, "facts": 1, "who": 1, "dates": 1, "analogy": 1, "sectors": 1, "summary": 1,
+                  "importance": 1, "importance_override": 1, "title_only": 1, "needs_desk": 1, "refs": 1,
+                  "category": 1, "subcategory": 1}
+
+
+def reader_access(mode: str, is_admin: bool) -> Optional[str]:
+    """"public", "preview" (shadow, admins) or None (hidden)."""
+    if mode == "live":
+        return "preview" if is_admin else "public"
+    if mode == "shadow" and is_admin:
+        return "preview"
+    return None
+
+
+async def _hidden_ids(db) -> list:
+    return [d["official_id"] async for d in db.official_labels.find({"facts_ok": False}, {"_id": 0, "official_id": 1})]
+
+
+async def _reader_query(db, access: str, extra: dict) -> dict:
+    q = {"status": {"$ne": "filtered"}, **extra}
+    if access == "public":
+        q["needs_desk"] = {"$ne": True}
+        q["importance"] = {"$ne": "never"}
+        q["importance_override"] = {"$ne": "never"}
+        hidden = await _hidden_ids(db)
+        if hidden:
+            # $and, so a caller adding its own official_id filter can't undo this one.
+            q["$and"] = [{"official_id": {"$nin": hidden}}]
+    return q
+
+
+def _reader_item(d: dict, access: str) -> dict:
+    d = dict(d)
+    d["importance"] = d.pop("importance_override", None) or d.get("importance")
+    if access != "preview":
+        d.pop("needs_desk", None)
+    return d
+
+
+def _ist_day(now: datetime) -> str:
+    return (now + timedelta(minutes=official.IST_OFFSET_MIN)).date().isoformat()
+
+
+async def reader_feed(db, *, access: str, lens: Optional[str], before: Optional[str], limit: int,
+                      now: datetime, health: Optional[dict] = None) -> dict:
+    extra = {}
+    if lens in LENSES:
+        extra["issuer_key"] = LENSES[lens]
+    q = await _reader_query(db, access, extra)
+    page_q = {**q, "published_at": {"$lt": before}} if before else q
+    limit = max(1, min(limit, READER_LIMIT_MAX))
+    rows = await db.official_items.find(page_q, _READER_FIELDS).sort("published_at", -1).limit(limit).to_list(limit)
+    # "Today" is the reader's day in India, counted for the whole lens, not one page.
+    start = datetime.fromisoformat(_ist_day(now)).replace(tzinfo=timezone.utc) - timedelta(minutes=official.IST_OFFSET_MIN)
+    today = await db.official_items.count_documents({**q, "published_at": {"$gte": start.isoformat()}})
+    delayed = sorted({ADAPTERS[n].source_name for n, s in ((health or {}).get("sources") or {}).items()
+                      if s.get("broken") and n in ADAPTERS})
+    return {"items": [_reader_item(r, access) for r in rows], "today_count": today,
+            "has_more": len(rows) == limit, "delayed": delayed, "preview": access == "preview"}
+
+
+async def reader_item(db, official_id: str, *, access: str) -> Optional[dict]:
+    q = await _reader_query(db, access, {})
+    doc = await db.official_items.find_one({**q, "official_id": official_id}, _READER_FIELDS)
+    if not doc:
+        return None
+    item = _reader_item(doc, access)
+    earlier = []
+    refs = [r for r in (doc.get("refs") or []) if r]
+    if refs:
+        rows = await db.official_items.find(
+            {**q, "refs": {"$in": refs}, "official_id": {"$ne": official_id}},
+            {"_id": 0, "official_id": 1, "title": 1, "what_changed": 1, "published_at": 1, "issuer": 1, "kind": 1},
+        ).sort("published_at", -1).limit(6).to_list(6)
+        earlier = rows
+    item["earlier"] = earlier
+    return item
+
+
 async def run_scheduler(svc: OfficialService, logger=None):
     """Forever: one cycle, then wait 10 min by day / 60 min at night."""
     lg = logger or log

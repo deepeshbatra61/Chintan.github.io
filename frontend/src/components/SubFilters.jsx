@@ -9,7 +9,7 @@ const API = "https://chintangithubio-production.up.railway.app/api";
 // Outlined sub-pills under the active chip (design review direction B):
 // drawn 30px tall with a 44px hit area; the active one gets an accent border
 // and a 12% accent tint. Announced as a list with the selected state.
-function Pill({ label, active, onClick, testid }) {
+export function Pill({ label, active, onClick, testid }) {
   return (
     <button
       type="button"

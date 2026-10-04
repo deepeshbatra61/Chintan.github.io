@@ -26,6 +26,9 @@ import {
   setLatestSeenArticleId, setNewArticlesAvailable,
 } from "../lib/feedCache";
 import { formatCalendarDate } from "../lib/calendar";
+import BureauFeed from "../components/bureau/BureauFeed";
+import { Seal } from "../components/bureau/BureauArt";
+import { BUREAU_KEY, BUREAU_LABEL, isBureauKey, getBureauStatus } from "../lib/bureau";
 
 // www, not the apex: chintan.news 308-redirects to www, and Android does NOT
 // follow redirects when fetching /.well-known/assetlinks.json -- pointing
@@ -188,6 +191,11 @@ const FeedPage = () => {
   // is one filter key ("Sports/Hockey", "States/Kerala"), see lib/taxonomy.
   const categories = TOP_CHIPS;
   const [stateSheet, setStateSheet] = useState(null);   // null | "pick" | "first"
+  // The Bureau (1.14): the chip appears only when the server says so (live
+  // for everyone, or a shadow preview for Desk admins).
+  const [bureauOn, setBureauOn] = useState(false);
+  const [bureauTick, setBureauTick] = useState(0);
+  const inBureau = isBureauKey(activeCategory);
 
   const longPress = useLongPress((article) => {
     triggerHaptic(ImpactStyle.Light);
@@ -352,6 +360,21 @@ const FeedPage = () => {
     loadData();
   }, [fetchArticles, fetchDevelopingStories, fetchNotifications]);
 
+  useEffect(() => {
+    let alive = true;
+    getBureauStatus().then(({ enabled }) => {
+      if (!alive) return;
+      setBureauOn(enabled);
+      // Restored onto The Bureau but it is no longer available: back to All.
+      if (!enabled && isBureauKey(getFeedCache()?.activeCategory)) {
+        setActiveCategory(null);
+        setFeedCache({ activeCategory: null });
+        fetchArticles(null, 1, false);
+      }
+    });
+    return () => { alive = false; };
+  }, [user, fetchArticles]);
+
   // Shared by pull-to-refresh and the bottom-nav Feed tab (tapped while
   // already on the feed) -- both just want a full, fresh reload.
   const doRefresh = useCallback(async () => {
@@ -361,8 +384,9 @@ const FeedPage = () => {
     setPage(1);
     setHasMore(true);
     setLoadError(null);
+    if (isBureauKey(activeCategory)) setBureauTick((n) => n + 1);
     await Promise.all([
-      fetchArticles(activeCategory, 1, false),
+      isBureauKey(activeCategory) ? Promise.resolve() : fetchArticles(activeCategory, 1, false),
       fetchDevelopingStories(),
       fetchNotifications(),
     ]);
@@ -431,6 +455,13 @@ const FeedPage = () => {
 
   const handleCategoryChange = (category) => {
     let cat = category === "All" ? null : category;
+    if (isBureauKey(cat)) {
+      // The Bureau loads its own cards; the article feed underneath is left as is.
+      setActiveCategory(cat);
+      setFeedCache({ activeCategory: cat });
+      mainRef.current?.scrollTo({ top: 0 });
+      return;
+    }
     if (cat === "States") {
       // Your state first; the first time with none set, ask (Skip always shown).
       const home = homeStateOf(user);
@@ -454,7 +485,7 @@ const FeedPage = () => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !loadError) {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !loadError && !isBureauKey(activeCategory)) {
           const nextPage = page + 1;
           setLoadingMore(true);
           // Only advance the page counter once the page actually arrived, so a
@@ -783,14 +814,16 @@ const FeedPage = () => {
           {/* Categories — active pill glides between chips */}
           <div className="mb-6 overflow-x-auto hide-scrollbar">
             <div className="flex gap-2">
-              {categories.map((cat) => {
-                const active = (cat === "All" && !activeCategory) || parseFilter(activeCategory).top === cat;
+              {(bureauOn ? [categories[0], BUREAU_KEY, ...categories.slice(1)] : categories).map((cat) => {
+                const bureau = cat === BUREAU_KEY;
+                const active = bureau ? inBureau
+                  : (cat === "All" && !activeCategory) || (!inBureau && parseFilter(activeCategory).top === cat);
                 return (
                   <button
                     key={cat}
                     onClick={() => handleCategoryChange(cat)}
                     className="relative rounded-full text-sm whitespace-nowrap"
-                    style={{ flexShrink: 0, padding: "8px 16px", border: "none", cursor: "pointer", background: active ? "transparent" : "rgb(var(--c-fg-rgb) / 0.05)", color: active ? "#fff" : "var(--c-muted2)", transition: "color .3s ease" }}
+                    style={{ flexShrink: 0, padding: "8px 16px", border: bureau && !active ? "1px solid rgba(220,38,38,0.35)" : "none", cursor: "pointer", background: active ? "transparent" : bureau ? "rgba(220,38,38,0.07)" : "rgb(var(--c-fg-rgb) / 0.05)", color: active ? "#fff" : bureau ? "var(--c-accent-ink)" : "var(--c-muted2)", transition: "color .3s ease" }}
                     data-testid={`category-filter-${cat.toLowerCase()}`}
                   >
                     {active && (
@@ -800,13 +833,18 @@ const FeedPage = () => {
                         style={{ position: "absolute", inset: 0, borderRadius: "9999px", background: "linear-gradient(180deg, #DC2626, #B91C1C)", zIndex: 0 }}
                       />
                     )}
-                    <span style={{ position: "relative", zIndex: 1 }}>{cat}</span>
+                    <span style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {bureau && <Seal size={12} />}{bureau ? BUREAU_LABEL : cat}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
+          {inBureau ? (
+            <BureauFeed filterKey={activeCategory} onFilterChange={handleCategoryChange} refreshTick={bureauTick} />
+          ) : (<>
           <SubPills filter={activeCategory} onChange={(key) => handleCategoryChange(key || "All")}
             homeState={homeStateOf(user)} onPickState={() => setStateSheet("pick")} />
           {(() => {
@@ -958,6 +996,7 @@ const FeedPage = () => {
               </button>
             </div>
           )}
+          </>)}
         </div>
       </main>
 

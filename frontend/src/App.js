@@ -77,6 +77,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import FeedPage from "./pages/FeedPage";
 import ArticlePage from "./pages/ArticlePage";
+import BureauItemPage from "./pages/BureauItemPage";
 import BriefPage from "./pages/BriefPage";
 import BookmarksPage from "./pages/BookmarksPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -488,6 +489,11 @@ function AppRouter() {
       <Route path="/article/:articleId" element={
         <GuestOrProtectedRoute>
           <ArticlePage />
+        </GuestOrProtectedRoute>
+      } />
+      <Route path="/bureau/:officialId" element={
+        <GuestOrProtectedRoute>
+          <BureauItemPage />
         </GuestOrProtectedRoute>
       } />
       <Route path="/brief/:briefType" element={

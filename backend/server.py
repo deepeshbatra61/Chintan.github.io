@@ -6950,7 +6950,8 @@ api_router.include_router(events_routes.build_events_router(
     db_getter=lambda: db, get_user=get_current_user))
 
 api_router.include_router(official_routes.build_official_router(
-    service=official_svc, require_admin=require_admin))
+    service=official_svc, require_admin=require_admin,
+    get_user=get_current_user, admin_emails=lambda: ADMIN_EMAILS))
 
 app.include_router(api_router)
 
