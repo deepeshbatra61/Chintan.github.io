@@ -4867,7 +4867,13 @@ async def fetch_from_gnews(client=None) -> list:
             last_ok = datetime.fromisoformat(last_ok)
         except ValueError:
             last_ok = None
-    since = news_sources.iso_z(news_sources.gnews_since(last_ok, now))
+    since_dt = news_sources.gnews_since(last_ok, now)
+    last_hl = meta.get("last_headlines")
+    if isinstance(last_hl, str):
+        try:
+            last_hl = datetime.fromisoformat(last_hl)
+        except ValueError:
+            last_hl = None
     seen: dict = {}            # url -> (raw article, gnews category)
     query_of: dict = {}        # url -> the query that first returned it (yield, OV6)
     q_requests: dict = {}
@@ -4875,12 +4881,12 @@ async def fetch_from_gnews(client=None) -> list:
     ok_calls = 0
     last_error = None
     stop = False
+    headlines_due = False
     own = client is None
     client = client or httpx.AsyncClient(timeout=20.0)
     try:
-        plan = [("top-headlines", {"category": c}) for c in news_sources.GNEWS_CATEGORIES]
-        plan += [("search", {"q": q, "sortby": "publishedAt"}) for q in news_sources.GNEWS_SEARCHES]
-        for endpoint, extra in plan:
+        plan, headlines_due = news_sources.gnews_plan(now, since_dt, last_hl)
+        for endpoint, extra, cat in plan:
             if stop:
                 break
             for page in (1, 2):
@@ -4888,7 +4894,7 @@ async def fetch_from_gnews(client=None) -> list:
                     logger.warning("GNews: daily request budget reached — skipping the rest of this run")
                     stop = True
                     break
-                params = {"lang": "en", "country": "in", "max": news_sources.GNEWS_MAX, "from": since,
+                params = {"lang": "en", "country": "in", "max": news_sources.GNEWS_MAX,
                           "page": page, "apikey": GNEWS_KEY, **extra}
                 try:
                     resp = await client.get(f"https://gnews.io/api/v4/{endpoint}", params=params)
@@ -4912,7 +4918,6 @@ async def fetch_from_gnews(client=None) -> list:
                     break
                 ok_calls += 1
                 arts = (resp.json() or {}).get("articles") or []
-                cat = extra.get("category")
                 qkey = news_sources.query_key(endpoint, extra)
                 q_requests[qkey] = q_requests.get(qkey, 0) + 1
                 q_returned[qkey] = q_returned.get(qkey, 0) + len(arts)
@@ -4950,9 +4955,11 @@ async def fetch_from_gnews(client=None) -> list:
         results.append(built)
     await _record_gnews_yield(now, results, query_of, q_requests, q_returned)
     if ok_calls:
+        done = {"last_success": now.isoformat(), "last_count": len(results), "last_dropped": dropped}
+        if headlines_due and not stop:
+            done["last_headlines"] = now.isoformat()
         await db.app_meta.update_one({"_id": "gnews_state"},
-                                     {"$set": {"last_success": now.isoformat(), "last_count": len(results),
-                                               "last_dropped": dropped}},
+                                     {"$set": done},
                                      upsert=True)
     await db.app_meta.update_one({"_id": "gnews_state"},
                                  {"$set": {"last_attempt": now.isoformat(), "last_error": last_error}}, upsert=True)

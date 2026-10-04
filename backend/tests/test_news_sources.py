@@ -139,8 +139,9 @@ async def test_fetch_maps_filters_and_dedupes(db):
     a = next(x for x in arts if x["url"].endswith("/a"))
     assert a["provider"] == "gnews" and a["is_breaking"] is False
     assert a["rank_at"].startswith(a["published_at"][:16]) or a["rank_at"] == a["published_at"]
-    # 9 categories + 1 search, one page each (nothing was full)
-    assert len(fake.calls) == 10
+    # first run: 6 searches + the 9 headline categories (due), one page each
+    assert len(fake.calls) == 15
+    assert [c[0][0] for c in fake.calls[:6]] == ["search"] * 6
     assert all(c[1]["country"] == "in" and c[1]["lang"] == "en" and c[1]["max"] == 25 for c in fake.calls)
     assert all("apikey" in c[1] for c in fake.calls)
 
@@ -177,7 +178,7 @@ async def test_daily_budget_stops_requests(db, monkeypatch):
 
 
 async def test_rejected_key_stops_the_run_and_keeps_last_success(db):
-    fake = FakeGNews({("top-headlines", "general", 1): Resp(401, None, "invalid key")})
+    fake = FakeGNews({("search", "India", 1): Resp(401, None, "invalid key")})
     assert await server.fetch_from_gnews(client=fake) == []
     assert len(fake.calls) == 1
     state = await db.app_meta.find_one({"_id": "gnews_state"})
@@ -267,3 +268,24 @@ async def test_yield_counts_new_admitted_per_query(db):
     y = (await db.app_meta.find_one({"_id": f"gnews_yield:{day}"}))["q"]
     assert y["top-headlines~nation"] == {"requests": 1, "returned": 2, "new": 1}
     assert y["top-headlines~world"] == {"requests": 1, "returned": 1, "new": 0}   # first query gets the credit
+
+
+async def test_headlines_only_every_few_hours_searches_every_run(db):
+    await server.fetch_from_gnews(client=FakeGNews(default=[]))      # first run: headlines due
+    fake2 = FakeGNews(default=[])
+    await server.fetch_from_gnews(client=fake2)                       # 20 min later: searches only
+    assert {c[0][0] for c in fake2.calls} == {"search"}
+    assert len(fake2.calls) == len(N.GNEWS_SEARCHES)
+
+
+def test_gnews_plan_windows():
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    since = now - timedelta(minutes=20)
+    plan, due = N.gnews_plan(now, since, now - timedelta(minutes=30))
+    assert not due and all(e == "search" and x["from"] == N.iso_z(since) for e, x, _ in plan)
+    plan, due = N.gnews_plan(now, since, now - timedelta(hours=4))
+    hl = [x for e, x, _ in plan if e == "top-headlines"]
+    assert due and len(hl) == 9 and hl[0]["from"] == N.iso_z(now - timedelta(hours=6))
+    cats = {q: c for q, c in N.GNEWS_SEARCHES}
+    assert cats["India"] is None and set(cats.values()) - {None} <= set(N.GNEWS_CATEGORIES)

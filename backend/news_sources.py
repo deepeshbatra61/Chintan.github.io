@@ -23,7 +23,22 @@ from typing import Callable, Iterable, Optional
 
 GNEWS_CATEGORIES = ("general", "nation", "world", "business", "technology",
                     "entertainment", "sports", "science", "health")
-GNEWS_SEARCHES = ("India",)
+# Every 20-min cycle: searches, which honour "from" (only stories since the last
+# run). Each carries the GNews category we treat as its taxonomy prior.
+# Measured 2026-10-04: top-headlines asked for "the last 20 minutes" returned
+# NOTHING (234 of 260 requests that day) because top stories are older than
+# the window; the "India" search returned 159 new stories from 26 requests.
+GNEWS_SEARCHES = (
+    ("India", None),
+    ("Sensex OR Nifty OR RBI OR economy OR rupee OR inflation", "business"),
+    ("cricket OR hockey OR football OR badminton OR tennis OR kabaddi", "sports"),
+    ("ISRO OR startup OR smartphone OR \"artificial intelligence\" OR cyber", "technology"),
+    ("Bollywood OR film OR actor OR OTT OR music", "entertainment"),
+    ("hospital OR disease OR vaccine OR health OR doctors", "health"),
+)
+# Top headlines are a slow-moving list: ask every few hours over a wider window.
+HEADLINES_EVERY_MIN = 180
+HEADLINES_WINDOW_H = 6
 GNEWS_MAX = 25                 # articles per request on Essential
 INTERVAL_MIN = 20              # GNews cycle
 STARTUP_MIN_GAP_MIN = 15       # a restart within this of the last run doesn't refetch
@@ -160,6 +175,18 @@ def iso_z(dt: datetime) -> str:
 def summarize_quota(hourly_limit: int, interval_min: int) -> int:
     """Per-cycle summary cap that keeps the HOURLY Claude spend unchanged."""
     return max(1, round(hourly_limit * interval_min / 60))
+
+
+def gnews_plan(now: datetime, since: datetime, last_headlines: Optional[datetime]) -> tuple[list, bool]:
+    """This cycle's GNews requests: [(endpoint, params, category prior)], and
+    whether top headlines are due (the caller records when they ran)."""
+    plan = [("search", {"q": q, "sortby": "publishedAt", "from": iso_z(since)}, cat)
+            for q, cat in GNEWS_SEARCHES]
+    due = last_headlines is None or (now - last_headlines) >= timedelta(minutes=HEADLINES_EVERY_MIN)
+    if due:
+        hl_from = iso_z(min(since, now - timedelta(hours=HEADLINES_WINDOW_H)))
+        plan += [("top-headlines", {"category": c, "from": hl_from}, c) for c in GNEWS_CATEGORIES]
+    return plan, due
 
 
 def query_key(endpoint: str, extra: dict) -> str:
