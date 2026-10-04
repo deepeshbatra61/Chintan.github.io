@@ -413,3 +413,45 @@ Run `/impeccable` or `/design-review` to pick between 2–3 variants. **Effort:*
 **Priority:** P1 (next app build).
 
 **Depends on / blocked by:** Nothing.
+
+---
+
+## 16. Read scanned PDFs in the Government Tracker (OCR)
+
+**What:** Some DGFT and Gazette notices are scanned images with no text layer. The tracker
+v1 shows them as title + link only; OCR would let them be summarised like the rest.
+
+**Why:** A complete record. The notices that matter most to traders are sometimes scans.
+
+**Pros:** Fewer "summary pending" items; the tracker covers every notice.
+
+**Cons:** CPU-heavy on Railway or a paid OCR service; OCR errors on numbers must still pass
+the verify-or-drop check (E1), so many scanned items may still fall back to title-only.
+
+**Context:** Government Tracker CEO review (2026-10-04, S1). v1 limits: PDFs <= 8 MB, <= 40
+pages, 20 s worker timeout, no OCR. The Desk Sources panel will show how many PDFs per
+source have no text; decide on that number. CEO plan:
+`~/.gstack/projects/deepeshbatra61-Chintan.github.io/ceo-plans/2026-10-04-government-tracker.md`.
+**Effort:** M -> with CC: S. **Priority:** P3.
+
+**Depends on / blocked by:** Tracker live with DGFT + eGazette readers and a few weeks of
+health-panel data.
+
+---
+
+## 17. Hindi and regional-language official sources
+
+**What:** Add PIB's Hindi and regional feeds (and, later, state government sources that
+publish only in their own language) to the Government Tracker.
+
+**Why:** Reach readers beyond English when Chintan supports other languages.
+
+**Pros:** A large audience no English-only news app serves well.
+
+**Cons:** Needs a multi-language Chintan first (UI, summaries, number checks in other scripts).
+
+**Context:** PIB's RSS serves Hindi when `Lang=2` (seen 2026-10-04: the URL Gemini suggested
+redirected to Hindi). The tracker v1 pins English (`Lang=1&Regid=3&reg=3`). CEO plan as #16.
+**Effort:** L -> with CC: M. **Priority:** P3.
+
+**Depends on / blocked by:** A product decision to support other languages.
