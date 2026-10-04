@@ -1157,6 +1157,11 @@
   resolved "https://registry.npmjs.org/@capacitor/haptics/-/haptics-8.0.1.tgz"
   integrity sha512-8v8rowLBMeb3CryqoQvXndwyUsoi4pPXf0qFw7IGA4D32Uk7+K6juN2SjRowqunoovkvvbFmU9TD7JIAz2zmFw==
 
+"@capacitor/ios@^8.2.0":
+  version "8.2.0"
+  resolved "https://registry.yarnpkg.com/@capacitor/ios/-/ios-8.2.0.tgz#f346587edf9552d05a1a38d99cfbf469a814e878"
+  integrity sha512-X2/VtM4qP/R1SM0VQ5W/VotEc6PS/KTooD33EijsfAHWBdee+xmBapW8SeNLnu16wJ+tsfWlvtipaJEyfKbRKQ==
+
 "@capacitor/preferences@^8.0.1":
   version "8.0.1"
   resolved "https://registry.npmjs.org/@capacitor/preferences/-/preferences-8.0.1.tgz"
