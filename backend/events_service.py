@@ -230,6 +230,55 @@ async def run_cycle(db, now: Optional[datetime] = None, mode: Optional[str] = No
     return metrics
 
 
+async def notify_container_follows(db, notify, now: Optional[datetime] = None) -> int:
+    """Follow pings for the Developing stories readers can follow today (the
+    developing_stories containers, ids without "ev-"). run_cycle only pings
+    for events, so before this a followed container never sent anything.
+
+        per followed story, a watch doc remembers the article ids already seen
+        (the first look only records, so nothing old is announced)
+        new ids ─▶ newest article whose headline is new (overlap < 0.6 with the
+                   story's recent headlines) ─▶ notify once per story per cycle;
+                   push_service holds it for quiet hours / gaps / daily caps
+    Returns how many stories were pinged."""
+    now = now or datetime.now(timezone.utc)
+    pinged = 0
+    story_ids = {f["story_id"] for f in await db.follows.find({}, {"_id": 0, "story_id": 1}).to_list(5000)}
+    for sid in sorted(s for s in story_ids if s and not s.startswith("ev-")):
+        st = await db.developing_stories.find_one({"story_id": sid}, {"_id": 0, "title": 1, "article_ids": 1,
+                                                                      "is_active": 1})
+        if not st or not st.get("is_active"):
+            continue
+        ids = list(dict.fromkeys(st.get("article_ids") or []))
+        watch = await db.follow_watch.find_one({"story_id": sid})
+        if watch is None:
+            await db.follow_watch.insert_one({"story_id": sid, "seen_ids": ids, "updated_at": _iso(now)})
+            continue
+        seen = set(watch.get("seen_ids") or [])
+        new_ids = [i for i in ids if i not in seen]
+        if not new_ids:
+            continue
+        await db.follow_watch.update_one({"story_id": sid},
+                                         {"$set": {"seen_ids": ids[-500:], "updated_at": _iso(now)}})
+        fields = {"_id": 0, "article_id": 1, "title": 1, "source": 1, "published_at": 1}
+        fresh = await db.articles.find({"article_id": {"$in": new_ids}}, fields).to_list(len(new_ids))
+        older = await db.articles.find({"article_id": {"$in": [i for i in ids if i in seen][-20:]}},
+                                       {"_id": 0, "title": 1}).to_list(20)
+        titles = [o.get("title") or "" for o in older]
+        fresh = [a for a in fresh if a.get("title")
+                 and not any(_overlap(a["title"], t) >= FOLLOW_NEW_HEADLINE for t in titles)]
+        if not fresh:
+            continue
+        art = max(fresh, key=lambda a: a.get("published_at") or "")
+        try:
+            await notify(story_id=sid, story_title=st.get("title") or art["title"], headline=art["title"],
+                         outlet=art.get("source") or "")
+            pinged += 1
+        except Exception as e:  # noqa: BLE001 -- a push failure must not cost the cycle
+            logger.warning(f"Follow push for {sid} failed: {e}")
+    return pinged
+
+
 async def backfill_taxonomy(db, now: datetime, limit: int = 300) -> int:
     """Give older articles (the feed shows 7 days; events only covers 72h) their
     v2 category and state, a few hundred per cycle, so 1.13's Health / sub /

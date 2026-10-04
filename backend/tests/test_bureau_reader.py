@@ -1,6 +1,7 @@
 """The Bureau for readers (app 1.14): who can see it, what they see.
 
-    access   ─ live: everyone (admins as preview); shadow: admins only; off: nobody
+    access   ─ live: everyone, admins too, as readers (no Preview line); shadow:
+               admins only, as a preview; off: nobody
     hiding   ─ public never sees filtered, needs_desk, "never", or facts marked wrong
                (not even by id); preview sees all but filtered, with needs_desk shown
     feed     ─ lens = issuer, newest first, paging by `before`, today counted in IST
@@ -57,7 +58,7 @@ def ids(feed):
 
 def test_access_rules():
     assert OS.reader_access("live", False) == "public"
-    assert OS.reader_access("live", True) == "preview"
+    assert OS.reader_access("live", True) == "public"
     assert OS.reader_access("shadow", True) == "preview"
     assert OS.reader_access("shadow", False) is None
     assert OS.reader_access("off", True) is None
@@ -152,4 +153,7 @@ async def test_http_live_and_off(db):
     assert guest.get("/api/bureau/status").json() == {"enabled": True, "preview": False}
     assert [i["official_id"] for i in guest.get("/api/bureau?lens=sebi").json()["items"]] == ["b"]
     assert guest.get("/api/bureau/items/wrong").status_code == 404
+    owner = client(db, "live", "owner@chintan.news")
+    assert owner.get("/api/bureau/status").json() == {"enabled": True, "preview": False}
+    assert owner.get("/api/bureau").json()["preview"] is False
     assert client(db, "off", "owner@chintan.news").get("/api/bureau/status").json()["enabled"] is False

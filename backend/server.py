@@ -1115,6 +1115,11 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
         await events_service.run_cycle(db, notify=_follow_notify)
     except Exception as e:  # noqa: BLE001 -- isolate the new subsystem from ingest
         logger.exception(f"Events cycle failed: {e}")
+    # Follow pings for the Developing stories readers follow today (containers).
+    try:
+        await events_service.notify_container_follows(db, notify=_follow_notify)
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"Follow pings failed: {e}")
 
 
 async def _cleanup_scout_stories_v2() -> None:
@@ -1853,12 +1858,24 @@ async def _get_user_affinity_scores(user_id: str) -> dict:
     return scores
 
 
+def _feed_jitter(seed: Optional[int], article_id: Optional[str], n: int) -> int:
+    """A stable pseudo-random 0..n-1 per (feed seed, article).
+
+    OWNER RULE (2026-10-04, keep): pull-to-refresh must RESHUFFLE the feed. The
+    app sends a new `seed` on every refresh and keeps it for later pages, so
+    each refresh is a fresh order and paging within one order stays
+    consistent. Guests and readers without interests get it too."""
+    h = hashlib.blake2b(f"{seed}:{article_id}".encode(), digest_size=4).digest()
+    return int.from_bytes(h, "big") % n
+
+
 def _score_article(
     article: dict,
     user_interests: List[str],
     affinity: dict,
     relevance_by_category: Dict[str, float],
-    now: datetime
+    now: datetime,
+    seed: Optional[int] = None,
 ) -> float:
     """Score one article. Pure function — no I/O."""
     score = 0.0
@@ -1913,9 +1930,13 @@ def _score_article(
         elif age_hours <= 24:
             score += 5.0
 
-    # Signal 5: Discovery wildcard (10 pts, 20% probability)
-    if random.random() < 0.20:
+    # Signal 5: Discovery wildcard (10 pts, 20% probability). With a feed seed
+    # the draw is fixed per (seed, article), so page 2 sees the same feed page 1
+    # did, and a new seed (pull-to-refresh) reshuffles; see _feed_jitter.
+    if (_feed_jitter(seed, article.get("article_id"), 100) < 20) if seed is not None else (random.random() < 0.20):
         score += 10.0
+    if seed is not None:
+        score += _feed_jitter(seed, article.get("article_id"), 9)    # 0-8 pts: a visible reshuffle
 
     return score
 
@@ -4987,7 +5008,8 @@ async def get_articles(
     page: int = 1,
     request: Request = None,
     state: Optional[str] = None,
-    refresh: bool = False
+    refresh: bool = False,
+    seed: Optional[int] = None,
 ):
     """Get articles from DB with personalised scoring."""
 
@@ -5018,7 +5040,10 @@ async def get_articles(
     query["event_hidden"] = {"$ne": True}
 
     user = await get_current_user(request) if request else None
-    user_interests: List[str] = user.get("interests", []) if user else []
+    # Legacy list first; 1.13+ accounts whose picks are v2-only (Health, a
+    # state, Hockey ...) derive it, so they stay on the personalised path.
+    user_interests: List[str] = (user.get("interests") or categories.interests_to_legacy(user.get("interests_v2") or [])
+                                 ) if user else []
 
     # ── Unauthenticated path: sort by freshness, then diversify ───────────────
     # Diversify here too. This path is the FIRST feed every new user and every
@@ -5036,7 +5061,9 @@ async def get_articles(
         # Desk heat adds whole SLOTS here, since adjacent scores are 1 apart
         # (desk.heat_slots); it's 0 for every ordinary article.
         now = datetime.now(timezone.utc)
-        ranked = [(float(len(fresh) - i) + desk.heat_slots(a, now), a) for i, a in enumerate(fresh)]
+        ranked = [(float(len(fresh) - i) + desk.heat_slots(a, now)
+                   + (_feed_jitter(seed, a.get("article_id"), 7) if seed is not None else 0.0), a)
+                  for i, a in enumerate(fresh)]
         ranked.sort(key=lambda x: x[0], reverse=True)
         # penalty=6, not the default 22: that default is sized for personalised
         # scores spanning ~100 points, but here adjacent stories are 1 point
@@ -5099,7 +5126,7 @@ async def get_articles(
     # 3. Score every candidate, sort, paginate
     now = datetime.now(timezone.utc)
     scored = [
-        (_score_article(a, user_interests, affinity, relevance_by_category, now) + desk.heat_points(a, now), a)
+        (_score_article(a, user_interests, affinity, relevance_by_category, now, seed) + desk.heat_points(a, now), a)
         for a in candidates
     ]
     scored.sort(key=lambda x: x[0], reverse=True)

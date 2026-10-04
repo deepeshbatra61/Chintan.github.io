@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import axios from "axios";
@@ -89,6 +89,20 @@ function useLongPress(onLongPress, threshold = 500, moveThreshold = 10) {
   });
 
   return { bind, didFire: () => firedRef.current };
+}
+
+// OWNER RULES (2026-10-04) -- keep both, tests in __tests__/feedRules.test.jsx:
+//  1. Pull-to-refresh RESHUFFLES the feed: every refresh sends a new `seed`
+//     (the server reorders by it); later pages reuse it so paging stays whole.
+//  2. Coming back from an article lands on the same spot in the list, never the
+//     top: the scroll position lives in the feed cache and is restored on mount.
+export const newFeedSeed = () => Math.floor(Math.random() * 1e9);
+function feedSeed() {
+  const c = getFeedCache();
+  if (c?.seed !== undefined) return c.seed;
+  const seed = newFeedSeed();
+  setFeedCache({ seed });
+  return seed;
 }
 
 const BACKEND_URL = "https://chintangithubio-production.up.railway.app";
@@ -280,7 +294,7 @@ const FeedPage = () => {
   const fetchArticles = useCallback(async (category = null, pageNum = 1, append = false) => {
     const seq = append ? loadSeq.current : ++loadSeq.current;
     try {
-      const params = filterParams(category, new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT }));
+      const params = filterParams(category, new URLSearchParams({ page: pageNum, limit: PAGE_LIMIT, seed: feedSeed() }));
       const response = await axios.get(`${API}/articles?${params}`, { withCredentials: true });
       if (seq !== loadSeq.current) return false;
       const data = response.data;
@@ -348,7 +362,7 @@ const FeedPage = () => {
     // Already have a cached feed from a prior mount this session (e.g.
     // returning from an article) — show it as-is instead of refetching, so
     // navigating back never reshuffles or reloads what the user was reading.
-    if (getFeedCache()) {
+    if (getFeedCache()?.articles) {
       setLoading(false);
       return;
     }
@@ -385,6 +399,7 @@ const FeedPage = () => {
     setHasMore(true);
     setLoadError(null);
     if (isBureauKey(activeCategory)) setBureauTick((n) => n + 1);
+    setFeedCache({ seed: newFeedSeed() });          // owner rule 1: a refresh reshuffles
     await Promise.all([
       isBureauKey(activeCategory) ? Promise.resolve() : fetchArticles(activeCategory, 1, false),
       fetchDevelopingStories(),
@@ -406,6 +421,19 @@ const FeedPage = () => {
     window.addEventListener("chintan:feed-refresh", handler);
     return () => window.removeEventListener("chintan:feed-refresh", handler);
   }, [doRefresh, R]);
+
+  // Owner rule 2: back from an article = the same spot in the list.
+  const restoredRef = useRef(false);
+  useLayoutEffect(() => {
+    if (loading || restoredRef.current) return;
+    restoredRef.current = true;
+    const y = getFeedCache()?.scrollTop || 0;
+    const el = mainRef.current;
+    if (!el || y <= 0) return;
+    el.scrollTop = y;
+    // Late layout (fonts, images) can clamp the first try; set it once more.
+    requestAnimationFrame(() => { if (Math.abs(el.scrollTop - y) > 4) el.scrollTop = y; });
+  }, [loading]);
 
   const handlePullStart = (e) => {
     if (!refreshing && mainRef.current && mainRef.current.scrollTop <= 0) {
@@ -728,6 +756,7 @@ const FeedPage = () => {
         ref={mainRef}
         className="pb-24 px-4"
         style={{ paddingTop: '14px', height: '100vh', overflowY: 'auto' }}
+        onScroll={(e) => setFeedCache({ scrollTop: e.currentTarget.scrollTop })}
         onTouchStart={handlePullStart}
         onTouchMove={handlePullMove}
         onTouchEnd={handlePullEnd}
@@ -814,13 +843,19 @@ const FeedPage = () => {
           {/* Categories — active pill glides between chips */}
           <div className="mb-6 overflow-x-auto hide-scrollbar">
             <div className="flex gap-2">
-              {(bureauOn ? [categories[0], BUREAU_KEY, ...categories.slice(1)] : categories).map((cat) => {
+              {/* Owner call (2026-10-04): The Bureau sits last, after States, set
+                  apart by a thin divider -- a lens on sources, not a topic. */}
+              {(bureauOn ? [...categories, BUREAU_KEY] : categories).map((cat) => {
                 const bureau = cat === BUREAU_KEY;
                 const active = bureau ? inBureau
                   : (cat === "All" && !activeCategory) || (!inBureau && parseFilter(activeCategory).top === cat);
                 return (
+                  <React.Fragment key={cat}>
+                  {bureau && (
+                    <span aria-hidden="true" data-testid="bureau-divider"
+                      style={{ flexShrink: 0, alignSelf: "center", width: 1, height: 22, background: "rgb(var(--c-fg-rgb) / 0.16)", margin: "0 2px" }} />
+                  )}
                   <button
-                    key={cat}
                     onClick={() => handleCategoryChange(cat)}
                     className="relative rounded-full text-sm whitespace-nowrap"
                     style={{ flexShrink: 0, padding: "8px 16px", border: bureau && !active ? "1px solid rgba(220,38,38,0.35)" : "none", cursor: "pointer", background: active ? "transparent" : bureau ? "rgba(220,38,38,0.07)" : "rgb(var(--c-fg-rgb) / 0.05)", color: active ? "#fff" : bureau ? "var(--c-accent-ink)" : "var(--c-muted2)", transition: "color .3s ease" }}
@@ -837,6 +872,7 @@ const FeedPage = () => {
                       {bureau && <Seal size={12} />}{bureau ? BUREAU_LABEL : cat}
                     </span>
                   </button>
+                  </React.Fragment>
                 );
               })}
             </div>

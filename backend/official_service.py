@@ -509,8 +509,10 @@ async def set_importance(db, official_id: str, level: str) -> bool:
 # ── readers (app 1.14): the chip feed and the item page ──────────────────────
 #
 #   who sees what
-#     OFFICIAL_MODE=live    everyone; items the Desk hasn't cleared stay hidden
-#                           (needs_desk, importance "never", facts marked wrong)
+#     OFFICIAL_MODE=live    everyone, admins included, sees the reader view;
+#                           items the Desk hasn't cleared stay hidden (needs_desk,
+#                           importance "never", facts marked wrong). Admins check
+#                           flagged items on the Desk, not in the app.
 #     OFFICIAL_MODE=shadow  Desk admins only ("preview"), everything kept, flagged
 #     OFFICIAL_MODE=off     nobody
 #   Items are read from official_items in both modes; lane L4 decides whether
@@ -531,7 +533,7 @@ _READER_FIELDS = {"_id": 0, "official_id": 1, "source": 1, "source_name": 1, "so
 def reader_access(mode: str, is_admin: bool) -> Optional[str]:
     """"public", "preview" (shadow, admins) or None (hidden)."""
     if mode == "live":
-        return "preview" if is_admin else "public"
+        return "public"
     if mode == "shadow" and is_admin:
         return "preview"
     return None
