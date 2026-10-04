@@ -501,3 +501,55 @@ real stories that only the Gazette had.
 **Effort:** M -> with CC: M. **Priority:** P4.
 
 **Depends on / blocked by:** OCR (#16), and Desk evidence that the Gazette adds stories.
+
+---
+
+## 20. The Bureau: follow an issuer ("Follow RBI")
+
+**What:** A Follow button for each issuer (RBI, SEBI, Cabinet, ministries, Parliament, DGFT,
+MoSPI). It sits in the pinned bar at the bottom of each Bureau item page, after the
+"Think of it like" box, and on a long-press of an issuer pill. Followers get a push when that
+issuer announces something important, and followed issuers are listed under Following in the
+side menu.
+
+**Why:** It's in the approved design (CEO/design review 2026-10-04, P3/P7-A). It turns The
+Bureau from a page you visit into something that comes to you.
+
+**Pros:** Gives readers a reason to return; reuses the push holds (quiet hours, gaps, daily caps)
+and the Following list built for stories.
+
+**Cons:** Needs new server work: an issuer-follow store and a push trigger on new live Bureau
+items (importance rules decide what is worth a ping). Also a new push copy style.
+
+**Context:** Deferred by the owner on 2026-10-05 ("keep this in to do for now"). Bureau reader
+endpoints: `backend/official_routes.py` (`/bureau`, `/bureau/items/{id}`). Item page:
+`frontend/src/pages/BureauItemPage.jsx` (bottom bar is Original + Share today). Story follows to
+copy from: `backend/events_routes.py` (`/follows`), `push_service.send_follow_update`. CEO plan:
+`~/.gstack/projects/deepeshbatra61-Chintan.github.io/ceo-plans/2026-10-04-government-tracker.md`.
+**Effort:** M -> with CC: S. **Priority:** P2.
+
+**Depends on / blocked by:** Nothing. The Bureau is live (OFFICIAL_MODE=live since 2026-10-04).
+
+---
+
+## 21. The Bureau: "Add to Calendar" for key dates
+
+**What:** Each key date on a Bureau item page (effective date, deadline, comments close,
+applications open) gets an "Add to Calendar" action that adds an event to the phone's calendar
+with the issuer, what changes and a link to the original.
+
+**Why:** It's in the approved design (item page, key dates). Deadlines are the most
+actionable part of an official announcement.
+
+**Pros:** Small and self-contained, and useful from day one.
+
+**Cons:** Dates come from the AI extraction as text ("1 November 2026"). They must parse
+reliably, or the action is hidden for that date. On the phone, either an .ics file or a native
+calendar plugin is needed; check what works on both Android and iOS.
+
+**Context:** Deferred with #20 on 2026-10-05. Dates live in each item's `dates` field
+(`[{label, date}]`), are verified against the source (E1), and are shown as tiles or a "Key dates"
+list in `BureauItemPage.jsx`.
+**Effort:** S -> with CC: S. **Priority:** P2.
+
+**Depends on / blocked by:** Nothing.
