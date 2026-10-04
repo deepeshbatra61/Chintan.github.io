@@ -25,6 +25,10 @@ class Adapter:
     needs_detail: Callable
     parse_detail: Callable
     detail_url: Callable = lambda ref: ref.url
+    # When the detail document IS a PDF (MoSPI releases, bill texts):
+    detail_is_pdf: bool = False
+    pdf_pages: Callable = lambda n: list(range(min(n, 40)))     # which pages to read
+    pdf_body: Callable = lambda text: text                      # trim the PDF text to the useful part
 
 
 def strip_html(s: str) -> str:

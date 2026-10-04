@@ -29,10 +29,13 @@ ISSUERS = {
     "pib": "PIB",          # a ministry release; the ministry name is kept separately
     "rbi": "RBI",
     "sebi": "SEBI",
+    "dgft": "DGFT",
+    "mospi": "MoSPI",
+    "parliament": "Parliament",
 }
 
 KINDS = ("cabinet_decision", "policy", "circular", "notification", "scheme", "consultation",
-         "appointment", "data_release", "mou", "statement", "event", "enforcement", "ceremonial")
+         "appointment", "data_release", "mou", "statement", "event", "enforcement", "ceremonial", "bill")
 
 
 @dataclass
@@ -115,6 +118,12 @@ def classify_kind(source: str, title: str, ministry: str = "", url: str = "") ->
     if is_cabinet(t, ministry):
         return "cabinet_decision"
     tl = t.lower()
+    if source.startswith("parliament"):
+        return "bill"
+    if source.startswith("mospi"):
+        return "data_release"
+    if source.startswith("dgft"):
+        return "consultation" if re.search(r"\b(draft|comments|stakeholder)\b", tl) else "notification"
     if source.startswith("rbi"):
         if re.search(r"monetary policy|repo rate|policy rate|mpc", tl):
             return "policy"
@@ -168,6 +177,12 @@ def importance(source: str, kind: str, title: str, ai_score: Optional[int] = Non
     if kind == "cabinet_decision":
         return "high"
     if source.startswith("rbi") and (kind == "policy" or _HIGH_RBI.search(title or "")):
+        return "high"
+    if kind == "bill":
+        # A bill passed by a House or signed into law is news; introduction is normal.
+        return "high" if re.search(r"\b(passes|passed|assent|becomes law)\b", title or "", re.I) else "normal"
+    if source.startswith("mospi") and re.search(r"\b(gdp|cpi|inflation|iip|industrial production|"
+                                                r"unemployment|plfs|national accounts)\b", title or "", re.I):
         return "high"
     if source.startswith("sebi") and kind in ("circular", "policy"):
         return "high" if (ai_score or 0) >= 6 else "normal"
@@ -374,6 +389,29 @@ def verify_extraction(ext: dict, source_text: str) -> tuple:
     return clean, dropped
 
 
+# ── embargo (MoSPI and others release under embargo) ─────────────────────────
+
+_EMBARGO = re.compile(
+    r"embargo\w*.{0,120}?\btill\s+(\d{1,2})[.:](\d{2})\s*([AP])\.?\s*M\.?\s*(?:on\s+)?(?:the\s+)?"
+    r"(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+),?\s+(\d{4})", re.I | re.S)
+
+
+def embargo_until(text: str) -> Optional[datetime]:
+    """When a release says it is embargoed till a time, that time (UTC)."""
+    m = _EMBARGO.search(text or "")
+    if not m:
+        return None
+    hh, mm, ap, d, mon, y = m.groups()
+    try:
+        month = _MONTHS[mon[:3].lower()]
+        h = int(hh) % 12 + (12 if ap.upper() == "P" else 0)
+        from datetime import timedelta as _td
+        local = datetime(int(y), month, int(d), h, int(mm))
+        return (local - _td(minutes=IST_OFFSET_MIN)).replace(tzinfo=timezone.utc)
+    except (KeyError, ValueError):
+        return None
+
+
 # ── schedule (CEO E2 + owner: GNews sweeps by day only) ──────────────────────
 
 IST_OFFSET_MIN = 330
@@ -455,7 +493,7 @@ def build_item(*, ref: Ref, detail: dict, kind: str, ext: dict, dropped: list, i
         "importance": importance_level,
         "verified_dropped": dropped,
         "needs_desk": len(dropped) >= 3 or not ext,
-        "refs": reference_numbers(f"{title} {body}"),
+        "refs": ([ref.extra["ref"]] if ref.extra.get("ref") else []) + reference_numbers(f"{title} {body}"),
         "category": category,
         "subcategory": subcategory,
         "body_chars": len(body),

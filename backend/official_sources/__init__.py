@@ -17,9 +17,13 @@ fetches, caches, rate-limits and handles errors once, for all of them.
 
 from __future__ import annotations
 
-from . import pib, rbi, sebi
+from . import dgft, mospi, parliament, pib, rbi, sebi
 
-ADAPTERS = {a.name: a for a in (pib.ADAPTER, rbi.PRESS, rbi.NOTIFICATIONS, sebi.ADAPTER)}
+ADAPTERS = {a.name: a for a in (
+    pib.ADAPTER, rbi.PRESS, rbi.NOTIFICATIONS, sebi.ADAPTER,
+    dgft.NOTIFICATIONS, dgft.PUBLIC_NOTICES, mospi.ADAPTER,
+    parliament.LOK_SABHA, parliament.RAJYA_SABHA,
+)}
 
 # Honest identity that the sites accept. PIB's CDN refuses user agents that
 # contain "bot", an email address or a "+http" link (tested 2026-10-04), so the

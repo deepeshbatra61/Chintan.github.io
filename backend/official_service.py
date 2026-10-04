@@ -45,6 +45,7 @@ PDF_TIMEOUT_S = 20
 BACKOFF_MIN = 30                    # after 403 / 429
 BODY_CHARS_FOR_AI = 9000
 LEASE_S = 15 * 60
+MAX_AGE_DAYS = 21                   # never import history older than this (first runs, DGFT, bills)
 
 FAST_MODEL = "claude-haiku-4-5-20251001"
 
@@ -176,26 +177,29 @@ class PoliteFetcher:
 _pdf_slots = asyncio.Semaphore(2)    # eng 4A: at most two PDFs at once
 
 
-def _pdf_text_sync(data: bytes) -> str:
+def _pdf_text_sync(data: bytes, pages=None) -> str:
     from pypdf import PdfReader
     reader = PdfReader(io.BytesIO(data))
+    n = len(reader.pages)
+    picks = [i for i in (pages(n) if pages else range(n)) if 0 <= i < n][:PDF_MAX_PAGES]
     parts = []
-    for page in reader.pages[:PDF_MAX_PAGES]:
+    for i in picks:
         try:
-            parts.append(page.extract_text() or "")
+            parts.append(reader.pages[i].extract_text() or "")
         except Exception:            # one broken page must not lose the rest
             continue
     return "\n".join(parts)
 
 
-async def pdf_text(data: bytes) -> str:
-    """Text of a PDF in a worker thread, two at a time, 20 s budget. Empty
-    string for scans or failures (the item falls back to title-only)."""
+async def pdf_text(data: bytes, pages=None) -> str:
+    """Text of a PDF in a worker thread, two at a time, 20 s budget, at most
+    40 pages (`pages(n)` picks which). Empty string for scans or failures
+    (the item falls back to title-only)."""
     if not data or len(data) > MAX_BYTES or not data[:5] == b"%PDF-":
         return ""
     async with _pdf_slots:
         try:
-            text = await asyncio.wait_for(asyncio.to_thread(_pdf_text_sync, data), PDF_TIMEOUT_S)
+            text = await asyncio.wait_for(asyncio.to_thread(_pdf_text_sync, data, pages), PDF_TIMEOUT_S)
         except (asyncio.TimeoutError, Exception) as e:
             log.warning(f"official: PDF text failed: {type(e).__name__}: {str(e)[:120]}")
             return ""
@@ -295,6 +299,8 @@ class OfficialService:
             out["error"] = "parse"
             return out
 
+        oldest = (now - timedelta(days=MAX_AGE_DAYS)).isoformat()
+        refs = [r for r in refs if not r.published_at or r.published_at >= oldest]
         ids = [official.official_id(r.url) for r in refs]
         known = {d["official_id"] async for d in self.db.official_items.find(
             {"official_id": {"$in": ids}}, {"_id": 0, "official_id": 1})}
@@ -332,7 +338,15 @@ class OfficialService:
 
         detail = {}
         body = ref.summary
-        if adapter.needs_detail(ref):
+        if adapter.needs_detail(ref) and adapter.detail_is_pdf:
+            try:
+                text = await pdf_text(await self.fetcher.get(adapter.detail_url(ref)), adapter.pdf_pages)
+            except FetchError as e:
+                log.warning(f"official {adapter.name}: pdf {e} for {ref.url}")
+                return False                         # not stored: retried next tick
+            if text:
+                body = adapter.pdf_body(text)
+        elif adapter.needs_detail(ref):
             try:
                 detail = adapter.parse_detail((await self.fetcher.get(adapter.detail_url(ref))).decode("utf-8", errors="replace"))
             except FetchError as e:
@@ -347,6 +361,11 @@ class OfficialService:
                     text = ""
                 if text:
                     body = text
+        # Embargoed releases (MoSPI) wait, unstored, until the embargo lifts.
+        lift = official.embargo_until(body)
+        if lift and lift > now:
+            log.info(f"official {adapter.name}: embargoed till {lift.isoformat()}: {ref.title[:60]}")
+            return False
         ministry = detail.get("ministry") or ""
         title = detail.get("title") or ref.title
         kind = official.classify_kind(adapter.name, title, ministry, url=ref.url)
@@ -357,7 +376,9 @@ class OfficialService:
             ai_kind = (ext or {}).get("kind")
             # The AI may only move an item between reader-facing kinds, or mark
             # a release ceremonial; it can never promote noise into a decision.
-            if ai_kind in official.KINDS and kind != "cabinet_decision" and ai_kind != "enforcement":
+            # Bill stages come from Parliament's own records, so they stay bills.
+            if (ai_kind in official.KINDS and kind not in ("cabinet_decision", "bill")
+                    and ai_kind not in ("enforcement", "bill")):
                 kind = ai_kind
         issuer_key = "cabinet" if kind == "cabinet_decision" else adapter.issuer_key
         level = official.importance(adapter.name, kind, title, (ext or {}).get("importance"))
