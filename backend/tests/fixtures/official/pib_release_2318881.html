@@ -1,0 +1,941 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head id="Head1"><title>
+	Press Release:Press Information Bureau
+</title><link href="css/style.css" rel="stylesheet" type="text/css" /><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="alternate stylesheet" href="css/change.css" media="screen" title="change" /><link rel="alternate stylesheet" href="css/green.css" media="screen" title="green" /><link rel="alternate stylesheet" href="css/yellow.css" media="screen" title="yellow" /><link rel="stylesheet" type="text/css" href="css/prtint.css" media="print" /><link rel="stylesheet" href="css/style3.1.css" type="text/css" />
+
+
+      <script src="js/jquery.min.js" type="text/javascript"></script>
+
+      <script type="text/javascript">
+            $(document).ready(function () {
+                  function getParameterByName(name) {
+                        var url = window.location.href;
+                        name = name.replace(/[\[\]]/g, '\\$&');
+                        var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                              results = regex.exec(url);
+                        if (!results) return null;
+                        if (!results[2]) return '';
+                        return decodeURIComponent(results[2].replace(/\+/g, ' '));
+                  }
+                  // Get the IDs from the current page's URL
+                  let prid = parseInt(getParameterByName('PRID'), 10);
+
+                  if (!isNaN(prid) && prid > 0) {
+                        $.ajax({
+                              type: "POST",
+                              url: "AjaxMethod.aspx/UpdatePRHitCount",
+                              async: false,
+                              data: JSON.stringify({ 'PermId': prid }),
+                              contentType: "application/json; charset=utf-8",
+                              dataType: "json",
+                              success: function (response) {
+                                    console.log(response);
+                              },
+                              error: function (error) {
+                                    console.log("Error in AJAX request", error);
+                              }
+                        });
+                  } else {
+                        console.log("Invalid parameters:", prid);
+                  }
+
+            });
+      </script>
+      <style type="text/css">
+            .table-responsive {
+                  width: 100%;
+                  overflow-x: auto;
+            }
+
+            .banner {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  background-color: #000;
+                  color: #fff;
+                  padding: 20px;
+            }
+
+            full-width {
+                  width: 100%;
+            }
+
+            .logo-left, .logo-center, .countdown {
+                  display: flex;
+                  align-items: center;
+            }
+
+                  .logo-left img, .logo-center img {
+                        height: 70px;
+                  }
+
+            .countdown {
+                  text-align: center;
+                  background-color: #444;
+                  border-radius: 10px;
+                  padding: 10px;
+                  border: 2px solid grey;
+            }
+
+            .firstnumber {
+                  color: #000000;
+                  position: absolute;
+                  top: 50px;
+                  right: 90px;
+                  font-size: 30px;
+            }
+
+            .secondnumber {
+                  position: absolute;
+                  color: #000000;
+                  right: 45px;
+                  top: 50px;
+                  font-size: 30px;
+            }
+
+            .countdown .days {
+                  font-size: 35px;
+                  color: gold;
+            }
+
+            .countdown p {
+                  margin: 0;
+            }
+
+            .countdown .text {
+                  font-size: 16px;
+            }
+
+            a {
+                  word-break: break-all;
+            }
+
+            iframe, img {
+                  max-width: 100%;
+            }
+
+            @media(max-width:1199px) {
+                  .firstnumber {
+                        top: 40px;
+                        right: 72px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 35px;
+                        top: 40px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:990px) {
+                  .firstnumber {
+                        top: 25px;
+                        right: 54px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 25px;
+                        top: 25px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:768px) {
+                  .countdown, .days {
+                        font-size: 12px !important;
+                  }
+
+
+                  .firstnumber {
+                        top: 25%;
+                        right: 8%;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 4.5%;
+                        top: 25%;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:475px) {
+                  .countdown, .days {
+                        font-size: 10px !important;
+                        top: 20%;
+                  }
+
+                  .bannerimgdiv {
+                        padding: 0 !important;
+                  }
+
+                  .bannerimg {
+                        width: 108% !important;
+                  }
+            }
+      </style>
+      <script type="text/javascript">
+            $(function () {
+                  $("[id*=printPDF]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+            $(function () {
+                  $("[id*=printPDFEvent]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+      </script>
+
+      
+
+      <link id="pibConsentCss" href="/css/consent.css?v=1" rel="stylesheet" type="text/css" /><meta property="og:title" content="Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam" /><meta property="og:url" content="www.pib.gov.in/Pressreleaseshare.aspx?PRID=2318881" /><meta property="og:description" content="Vice-President Shri C. P. Radhakrishnan today addressed the 58th Foundation Day celebrations of the " /><meta property="og:image" content="https:/pib.gov.in/images/indian-emblem.png" />
+                                <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="C4E7H-KSCMC-422L4-W3EM5-U36MF",function(){function e(){if(!i){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,o.parentNode.appendChild(e),i=!0}}function t(e){i=!0;var n,t,a,r,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(o.parentNode,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",r=(a.frameElement||a).style,r.width=0,r.height=0,r.border=0,r.display="none",o.parentNode.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void(0);",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=12,window.BOOMR.url=n+"C4E7H-KSCMC-422L4-W3EM5-U36MF";var o=document.currentScript||document.getElementsByTagName("script")[0],i=!1,r=document.createElement("link");if(r.relList&&"function"==typeof r.relList.supports&&r.relList.supports("preload")&&"as"in r)window.BOOMR.snippetMethod="p",r.href=window.BOOMR.url,r.rel="preload",r.as="script",r.addEventListener("load",e),r.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!i)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),o.parentNode.appendChild(r);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="phmkvamvq5ijs2wceosa-f-635549549-clientnsv4-s.akamaihd.net",o="false"=="true"?2:1,i={"ak.v":"41","ak.cp":"1825201","ak.ai":parseInt("1215205",10),"ak.ol":"0","ak.cr":7,"ak.ipv":4,"ak.proto":"http/1.1","ak.rid":"1817028c","ak.r":34464,"ak.a2":n,"ak.m":"dscb","ak.n":"ff","ak.cport":51923,"ak.gh":"149.135.80.108","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.0rtt.ed":"","ak.csrc":"-","ak.acc":"bbr","ak.t":"1791108004","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==/EPMtJ7NWrvVDFAnOCVB+p2YyEMkvrl6qh+FiS1QIvzVG9qTGA1sTfFKnZkfbKWAY/wxn+Wvll2YoAfgUqzd1UCTa+GanIzx/wNlzqCbEfoeN5nnlTiSvgBarDLzC2jBInjZUecfxSKjI/059xUnvvC9bvN4z2Kx4bmZ0dC2lLZMI04mZfOvHfbhYwsNvfIOFbFVJl7gaflrOZHrJkV2zcjTQsBzxkZn957Cpj7NqImFHL0Xp+QFha6IMMzfUnbzKBZMbZ5cRABqLZjC3oM5w3nuitaLU6kvUmQFA+4xHMIKKSs07fz+b1gGcEvGjSQDtU2tk26hiRTKW3tz3fwpKR90ikX8b9vllS27OxXbN+MGITfJ9ZQ3l1u8tEU2+Yvl4u1NCuLWOWMqOGEktvCLlkfy7teSRJQG4BJH+dBql0w=","ak.pv":"9","ak.dpoabenc":"","ak.tf":o};if(""!==t)i["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))i["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(i)},rv:function(){var e=["ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.0rtt.ed","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:i,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body>
+    
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden" id="dbim-icon-sprite">
+    <defs>
+        <symbol id="icon-angle-double-left" viewBox="0 0 24 24"><path d="M11.6 4.6 4.2 12l7.4 7.4 2.2-2.2L8.6 12l5.2-5.2z"/><path d="M19 4.6 11.6 12 19 19.4l2.2-2.2L16 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-angle-double-right" viewBox="0 0 24 24"><path d="M12.4 4.6 10.2 6.8 15.4 12l-5.2 5.2 2.2 2.2L19.8 12z"/><path d="M5 4.6 2.8 6.8 8 12l-5.2 5.2L5 19.4 12.4 12z"/></symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="M20.8 10.6H9.6v2.8h11.2z"/><path d="M10.8 5.6 3.2 12l7.6 6.4z"/></symbol>
+        <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M3.2 10.6h11.2v2.8H3.2z"/><path d="M13.2 5.6 20.8 12l-7.6 6.4z"/></symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M7.6 2.4H10v2.4H7.6z"/><path d="M14 2.4h2.4v2.4H14z"/><path fill-rule="evenodd" d="M4 4.8h16a1.6 1.6 0 0 1 1.6 1.6v13.2a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6V6.4A1.6 1.6 0 0 1 4 4.8zm.4 5.6v8.4h15.2v-8.4z"/><path d="M6.4 12.4h3.2v3.2H6.4z"/></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4 2.2-2.2L12.4 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="M8.6 4.6 6.4 6.8 11.6 12l-5.2 5.2 2.2 2.2L16 12z"/></symbol>
+        <symbol id="icon-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24"><path d="M10.8 3h2.4v7.6h3.4L12 16.6l-4.6-6h3.4z"/><path d="M4 17.2h2.4v2.4h11.2v-2.4H20v3.2a1.4 1.4 0 0 1-1.4 1.4H5.4A1.4 1.4 0 0 1 4 20.4z"/></symbol>
+        <symbol id="icon-facebook" viewBox="0 0 24 24"><path d="M13.6 21.6v-8.4h2.8l.42-3.3h-3.22V7.8c0-.95.27-1.6 1.64-1.6h1.74V3.26a23 23 0 0 0-2.54-.13c-2.5 0-4.22 1.53-4.22 4.34v2.43H7.4v3.3h2.82v8.4z"/></symbol>
+        <symbol id="icon-hashtag" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8.8 3h2.4l-1 6h3.2l1-6h2.4l-1 6h3.4v2.4h-3.8l-.6 3.2h3.6V17h-4l-1 5h-2.4l1-5h-3.2l-1 5H5.4l1-5H3V14.6h3.8l.6-3.2H3.8V9h4zm.6 8.4-.6 3.2h3.2l.6-3.2z"/></symbol>
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M12 3.4 2.8 11.6h2.4v8.4a1 1 0 0 0 1 1h3.3v-5.4h5v5.4h3.3a1 1 0 0 0 1-1v-8.4h2.4z"/></symbol>
+        <symbol id="icon-instagram" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.6 2.4h8.8a5.2 5.2 0 0 1 5.2 5.2v8.8a5.2 5.2 0 0 1-5.2 5.2H7.6a5.2 5.2 0 0 1-5.2-5.2V7.6a5.2 5.2 0 0 1 5.2-5.2zm0 2.4a2.8 2.8 0 0 0-2.8 2.8v8.8a2.8 2.8 0 0 0 2.8 2.8h8.8a2.8 2.8 0 0 0 2.8-2.8V7.6a2.8 2.8 0 0 0-2.8-2.8z"/><path fill-rule="evenodd" d="M12 6.8a5.2 5.2 0 1 0 0 10.4 5.2 5.2 0 0 0 0-10.4zm0 2.4a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6z"/><circle cx="17.3" cy="6.7" r="1.3"/></symbol>
+        <symbol id="icon-linkedin" viewBox="0 0 24 24"><path d="M4.8 8.8h3.6v12H4.8z"/><circle cx="6.6" cy="5.4" r="2.1"/><path d="M10.8 8.8h3.45v1.65h.05c.48-.9 1.65-1.85 3.4-1.85 3.63 0 4.3 2.35 4.3 5.4v6.6h-3.6v-5.85c0-1.4-.03-3.2-1.95-3.2-1.95 0-2.25 1.52-2.25 3.1v5.95h-3.6z"/></symbol>
+        <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M2.4 7.6v9.2a1.6 1.6 0 0 0 1.6 1.6h16a1.6 1.6 0 0 0 1.6-1.6V7.6L12 14z"/><path d="M21.2 5.4H2.8L12 11.8z"/></symbol>
+        <symbol id="icon-mail-open" viewBox="0 0 24 24"><path d="M2.4 9.8h19.2v9.6A1.6 1.6 0 0 1 20 21H4a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M12 2.6 21.6 9.2h-3.8L12 5.3 6.2 9.2H2.4z"/><path d="m3.9 11.2 8.1 5.4 8.1-5.4 1.5 1.3-9.6 6.4-9.6-6.4z"/></symbol>
+        <symbol id="icon-map-marker" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.4a7 7 0 0 0-7 7c0 5.2 7 12.2 7 12.2s7-7 7-12.2a7 7 0 0 0-7-7zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></symbol>
+        <symbol id="icon-newspaper" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.8 4.4h14.8v15.2H2.8zm2 2v11.2h10.8V6.4z"/><path d="M6 7.6h8.4v1.6H6z"/><path d="M6 10.8h8.4v1.6H6z"/><path d="M6 14h5.2v1.6H6z"/><path d="M18.4 8.4h2.8v9.6a1.4 1.4 0 0 1-2.8 0z"/></symbol>
+        <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7.4" y="4" width="3.6" height="16" rx="0.9"/><rect x="13" y="4" width="3.6" height="16" rx="0.9"/></symbol>
+        <symbol id="icon-picture" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.4 5.2h19.2v13.6H2.4zm2 2v9.6h15.2V7.2z"/><path d="M5.6 16.4 10 11l2.6 3 2-2.2 4 4.6z"/><circle cx="8" cy="10.4" r="1.5"/></symbol>
+        <symbol id="icon-press-conference" viewBox="0 0 24 24"><circle cx="12" cy="5.2" r="2.6"/><path d="M7.6 12.2a4.4 4.4 0 0 1 8.8 0z"/><circle cx="4.9" cy="9.6" r="2.2"/><path d="M1.8 15.2a3.1 3.1 0 0 1 6.2 0z"/><circle cx="19.1" cy="9.6" r="2.2"/><path d="M16 15.2a3.1 3.1 0 0 1 6.2 0z"/><path d="M6.6 13.6h10.8l2.2 7.8H4.4z"/></symbol>
+        <symbol id="icon-print" viewBox="0 0 24 24"><path d="M6.4 2.8h11.2v4.4H6.4z"/><path d="M4 8.4h16a1.6 1.6 0 0 1 1.6 1.6v5.6a1.6 1.6 0 0 1-1.6 1.6h-1.6v-2.8H6v2.8H4a1.6 1.6 0 0 1-1.6-1.6V10A1.6 1.6 0 0 1 4 8.4z"/><path d="M7.2 15.6h9.6v5.6H7.2z"/></symbol>
+        <symbol id="icon-rss" viewBox="0 0 24 24"><circle cx="4.8" cy="19.2" r="2.4"/><path d="M2.4 11.2v3.2a6.4 6.4 0 0 1 6.4 6.4H12A9.6 9.6 0 0 0 2.4 11.2z"/><path d="M2.4 4.8V8A13.6 13.6 0 0 1 16 21.6h3.2A16.8 16.8 0 0 0 2.4 4.8z"/></symbol>
+        <symbol id="icon-search-plus" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 2.8a7.2 7.2 0 1 0 0 14.4 7.2 7.2 0 0 0 0-14.4zm0 2.4a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6z"/><path d="M15.3 14.6 21.2 20.5l-1.5 1.5-5.9-5.9z"/><path d="M9.2 6.8h1.6v2.4h2.4v1.6h-2.4v2.4H9.2v-2.4H6.8V9.2h2.4z"/></symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5.6" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="18.4" r="3"/><path d="M8.3 10.9 15.7 7.2l.9 1.8-7.4 3.7z"/><path d="M9.2 13.1 16.6 16.8l-.9 1.8-7.4-3.7z"/></symbol>
+        <symbol id="icon-twitter" viewBox="0 0 24 24"><path d="M4.2 3h4.3l11.3 18h-4.3z"/><path d="M19.3 3h-2.6L4.2 21h2.6z"/></symbol>
+        <symbol id="icon-university" viewBox="0 0 24 24"><path d="M12 2.4 21.6 7.2v1.6H2.4V7.2z"/><path d="M4.8 10.4h2.4v8H4.8z"/><path d="M9.2 10.4h2.4v8H9.2z"/><path d="M13.4 10.4h2.4v8h-2.4z"/><path d="M17.6 10.4H20v8h-2.4z"/><path d="M3.2 19.8h17.6v1.8H3.2z"/></symbol>
+        <symbol id="icon-volume-up" viewBox="0 0 24 24"><path d="M3.2 9.2h3.3l5-4.2v14l-5-4.2H3.2z"/><path d="M14.6 8.4a5 5 0 0 1 0 7.2l1.6 1.6a7.2 7.2 0 0 0 0-10.4z"/><path d="M17.4 5.6a8.8 8.8 0 0 1 0 12.8l1.5 1.5a10.9 10.9 0 0 0 0-15.8z"/></symbol>
+    </defs>
+</svg>
+
+      <form method="post" action="./PressReleaseIframePage.aspx?PRID=2318881&amp;reg=48&amp;lang=2" id="form1">
+<input type="hidden" name="sc_HiddenField" id="sc_HiddenField" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+
+
+<script src="/ScriptResource.axd?d=x6wALODbMJK5e0eRC_p1LdIxBJXt0U_WW5GWfJqHAqo6frgCmGRfEywglicTersO2OKrFhK1gAIp0Wk2al2YrpdR3uWqH6f4nfjBsCyRUfTUUVmb0&amp;t=ffffffffecf8d3f2" type="text/javascript"></script>
+<script src="/PressReleaseIframePage.aspx?_TSM_HiddenField_=sc_HiddenField&amp;_TSM_CombinedScripts_=%3b%3bAjaxControlToolkit%2c+Version%3d3.5.7.123%2c+Culture%3dneutral%2c+PublicKeyToken%3d28f01b0e84b6d53e%3aen-US%3a5a4df314-b4a2-4da2-a207-9284f1b1e96c%3ade1feab2%3af2c8e708%3a8613aea7%3af9cec9bc%3a3202a5a2%3aab09e3fe%3a87104b7c%3a720a52bf%3a589eaa30%3aa67c2700%3abe6fb298" type="text/javascript"></script>
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="8166A38A" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="MiR6PPC65Ms+C5G7VAG+22Q/Pq66u2fPtQVMBJfMCkF6JAtQrWTukoE/gp/00UI+IVC5MVazbZS6kf8+/L8XxfGVP6hp3E9D9Lz/22DYYHOc8N4h8u+/+644HxBjgLlLIr45NCVDitFurTU84z/hKRWDmE+3GN0N+wDXVnA/Ar5mcqG3Yx7AdcgYow9bFeskJePnP/fcz1jNTZwnHhVXXS5P67uxTTzizL214nZ0G+mLjAgGzlA4PLt5JFkXjj6dwKvglcqkuNHSjOKxrUj1eV5lZPc=" />
+                              
+            <div id="templateCss"></div>
+            
+            <input type="hidden" name="hfGridHtml" id="hfGridHtml" />
+            <div class="container" style='margin-bottom: 50px;'>
+                  <div id="accessories">
+
+                        
+                        <div class="pull-right" style="display: flex">
+                              <div id="voll"></div>
+                              <div id="vollDT"></div>
+                              
+                              
+<div class="print-icons">
+<input type="image" name="Print1$print" id="Print1_print" aria-label="Print" src="images/printer_icon.png" alt="print page button" style="padding: 5px 10px 5px 10px;" />
+</div>
+                        </div>
+                  </div>
+                  <input type="hidden" name="hydpermid" id="hydpermid" value="2318881" />
+                  
+
+
+
+                  <div class="innner-page-main-about-us-content-right-part">
+
+                        <div id="MinistryName" class="MinistryNameSubhead text-center">
+                              Vice President's Secretariat
+                        </div>
+                        
+                        <div id="lg_g"><div class='log_oo'>  <img src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2021/aug/ph202183101.png' alt='azadi ka amrit mahotsav' /> </div></div>
+
+
+
+
+
+                        <div class="text-center event-heading-background">
+                              
+                              <h1 id="Titleh2">
+                                    Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam
+                              </h1>
+                              <h3 id="Subtitleh3">
+                                    <span id="ltrSubtitle"><br/>“Good Governance is the Invisible Infrastructure that Sustains Investor Confidence”: Vice-President<br/><br/>“Company Secretaries are Guardians of Governance and Nucleus of India Inc.’s Trust Architecture”: Vice-President<br/><br/>“ICSI, ICAI and ICMAI are Key Institutional Pillars of a Viksit Bharat”: Vice-President<br/><br/>“Technology May Transform Decisions, But Integrity and Accountability Remain Human”: Vice-President</span>
+                              </h3>
+                        </div>
+
+                        <div id="PrDateTime" class="ReleaseDateSubHeaddateTime text-center pt20">
+                              प्रविष्टि तिथि:
+                04 OCT 2026 2:54PM by PIB Delhi
+                        </div>
+                        
+                        <div class='pt20'>
+                        </div>
+                        <input type="hidden" name="hydphotoUrl" id="hydphotoUrl" />
+                        
+                        <p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Vice-President Shri C. P. Radhakrishnan today addressed the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi. Extending his greetings to the entire ICSI fraternity, he commended the Institute for its nearly six-decade journey in strengthening transparent, ethical and inclusive corporate governance.</span></span></p>
+
+<center><blockquote class="twitter-tweet"><p lang="en" dir="ltr">Vice President Shri C. P. Radhakrishnan graced the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi today. 
+
+He emphasised that good governance is the “invisible infrastructure” that sustains investor confidence and public trust, and described Company Secretaries as the “Guardians of Governance” and the nucleus of India Inc.’s trust architecture.</p>&mdash; Vice-President of India (@VPIndia) <a href="https://x.com/VPIndia/status/2106672508388966699?ref_src=twsrc%5Etfw">October 4, 2026</a></blockquote>
+<script async src="https://platform.x.com/widgets.js" charset="utf-8"></script></center>
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Emphasising that good governance is essential for taking care of citizens and safeguarding public trust, the Vice-President said that when people pay taxes, they expect responsible governance, while investors expect companies to protect their interests through sound corporate governance. He noted that ICSI has moved beyond traditional regulatory compliance to become an important institution in advancing good governance.<br />
+<br />
+Shri C. P. Radhakrishnan said the transformation of the Institute mirrors the evolution of the profession, which today has an important role in strengthening corporate transparency, investor confidence and India&rsquo;s standing in the global economy.<br />
+<br />
+In an era shaped by Artificial Intelligence, advanced data analytics and rapidly evolving business models, the Vice-President called upon Company Secretaries, as &ldquo;Guardians of Governance,&rdquo; to uphold the legal, strategic and ethical foundations of India Inc. &ldquo;Technology may transform the manner in which information is generated and decisions are supported, but integrity, accountability, transparency and responsibility remain human,&rdquo; he said.<br />
+<br />
+Describing trust, transparency and corporate governance as the &ldquo;invisible infrastructure&rdquo; of a modern economy, Shri C. P. Radhakrishnan said investor confidence is essential for sustained economic progress. Company Secretaries, he noted, are at the centre of this architecture and play a vital role in enabling enterprises, start-ups, family businesses and listed companies to grow responsibly.<br />
+<br />
+The Vice-President said strong institutions and sound governance will be as important as physical and digital infrastructure in building a Viksit Bharat. He underlined the complementary role of ICAI, ICMAI and ICSI in India&rsquo;s journey towards Viksit Bharat @2047, describing these professional institutions as key pillars of a strong corporate and economic ecosystem.<br />
+<br />
+Calling for greater opportunities for young people to enter the profession, Shri C. P. Radhakrishnan appreciated ICSI&rsquo;s fee-waiver initiatives and urged continued student outreach. He launched the MSME Compliance Calendar 2027 and appreciated ICSI&rsquo;s initiatives for MSMEs and start-ups, including the ICSI MSME &amp; Start-up Catalyst. He also appreciated ICSI&rsquo;s contributions to the National Defence Fund under the Shaheed Ki Beti initiative and the Armed Forces Flag Day Fund of the Ministry of Defence, saying, &ldquo;When the intention is good, everything will be good.&rdquo;<br />
+<br />
+Concluding, the Vice-President called upon ICSI to continue upholding the trust reposed in the profession and contribute towards building a strong, Aatma-nirbhar and Viksit Bharat @2047. He said India should aspire to become the world&rsquo;s largest economy, not to dictate terms to others, but &ldquo;so that no one can dictate unwanted terms to us.&rdquo; He also invoked the timeless ethos of &ldquo;Satyam Vada, Dharmam Chara&rdquo; and extended his greetings to the ICSI fraternity on its Foundation Day.<br />
+<br />
+President, ICSI, C.S. Pawan Chandak; former Member of Parliament, Rajya Sabha, Dr. Sonal Mansingh; and Secretary, ICSI, C.S. Asish Mohan, among others, were present on the occasion.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">*****</span></span></p>
+
+<p style="text-align:justify"><strong><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">PR/ASM/VMJ</span></span></strong></p>
+
+
+                        
+                        <div id="reel_pic">
+                        </div>
+
+
+
+                        
+                        <br />
+                        <span id="ReleaseId">(रिलीज़ आईडी: 2318881)</span>
+                        <span id="lblViews">	आगंतुक पटल  : 48</span>
+                        <div>
+                              
+                        </div>
+                        
+
+                        <span id="lblRefPhoto"></span>
+
+                        <div class="BackgroundRelease">
+                              
+                        </div>
+                        <div>
+                              
+                        </div>
+                        
+                        
+                        
+
+                        <div class="RelTag">
+                              <ul>
+                                    
+                              </ul>
+                        </div>
+                        <div class="clear">
+                        </div>
+                        <div id="RelLink" class="RelLink">
+                              <ul>
+                                    
+                                    
+                              </ul>
+                        </div>
+                        <center>
+                              
+                        </center>
+                  </div>
+
+                  <div id="update12">
+	
+                              
+                              <input type="hidden" name="Hidden" id="Hidden" />
+                              <div id="P_CategoryManagement" class="ModalWindow" style="display: none">
+		
+                                    <div>
+                                          <input type="image" name="btnClose" id="btnClose" src="images/close_flat_icon.png" />
+                                    </div>
+                                    <div id="description">
+                                    </div>
+                                    <div class="text-center">
+                                          <h2>
+                                                
+                                                <br>
+                                                
+                                          </h2>
+                                    </div>
+                                    <br />
+                                    <div class="clear">
+                                    </div>
+                                    
+                              
+	</div>
+                        
+</div>
+            </div>
+            
+            <div id="PdfDiv" style="display: none;">
+                  <table width="100%">
+                        <tr>
+                              <td style="font-weight: 200; text-align: center">
+                                    Vice President's Secretariat
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          <div style='height:30px;width:100%;'></div>“Good Governance is the Invisible Infrastructure that Sustains Investor Confidence”: Vice-President<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>“Company Secretaries are Guardians of Governance and Nucleus of India Inc.’s Trust Architecture”: Vice-President<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>“ICSI, ICAI and ICMAI are Key Institutional Pillars of a Viksit Bharat”: Vice-President<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>“Technology May Transform Decisions, But Integrity and Accountability Remain Human”: Vice-President
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="text-align: center; font-size: 14px;">
+                                          प्रविष्टि तिथि:
+                        04 OCT 2026 2:54PM by PIB Delhi
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: left; font-size: 16px;">
+                                          <p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Vice-President Shri C. P. Radhakrishnan today addressed the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi. Extending his greetings to the entire ICSI fraternity, he commended the Institute for its nearly six-decade journey in strengthening transparent, ethical and inclusive corporate governance.</span></span></p>
+
+<center><blockquote class="twitter-tweet"><p lang="en" dir="ltr">Vice President Shri C. P. Radhakrishnan graced the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi today. 
+
+He emphasised that good governance is the “invisible infrastructure” that sustains investor confidence and public trust, and described Company Secretaries as the “Guardians of Governance” and the nucleus of India Inc.’s trust architecture.</p>&mdash; Vice-President of India (@VPIndia) <a href="https://x.com/VPIndia/status/2106672508388966699?ref_src=twsrc%5Etfw">October 4, 2026</a></blockquote>
+<script async src="https://platform.x.com/widgets.js" charset="utf-8"></script></center>
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Emphasising that good governance is essential for taking care of citizens and safeguarding public trust, the Vice-President said that when people pay taxes, they expect responsible governance, while investors expect companies to protect their interests through sound corporate governance. He noted that ICSI has moved beyond traditional regulatory compliance to become an important institution in advancing good governance.<br />
+<br />
+Shri C. P. Radhakrishnan said the transformation of the Institute mirrors the evolution of the profession, which today has an important role in strengthening corporate transparency, investor confidence and India&rsquo;s standing in the global economy.<br />
+<br />
+In an era shaped by Artificial Intelligence, advanced data analytics and rapidly evolving business models, the Vice-President called upon Company Secretaries, as &ldquo;Guardians of Governance,&rdquo; to uphold the legal, strategic and ethical foundations of India Inc. &ldquo;Technology may transform the manner in which information is generated and decisions are supported, but integrity, accountability, transparency and responsibility remain human,&rdquo; he said.<br />
+<br />
+Describing trust, transparency and corporate governance as the &ldquo;invisible infrastructure&rdquo; of a modern economy, Shri C. P. Radhakrishnan said investor confidence is essential for sustained economic progress. Company Secretaries, he noted, are at the centre of this architecture and play a vital role in enabling enterprises, start-ups, family businesses and listed companies to grow responsibly.<br />
+<br />
+The Vice-President said strong institutions and sound governance will be as important as physical and digital infrastructure in building a Viksit Bharat. He underlined the complementary role of ICAI, ICMAI and ICSI in India&rsquo;s journey towards Viksit Bharat @2047, describing these professional institutions as key pillars of a strong corporate and economic ecosystem.<br />
+<br />
+Calling for greater opportunities for young people to enter the profession, Shri C. P. Radhakrishnan appreciated ICSI&rsquo;s fee-waiver initiatives and urged continued student outreach. He launched the MSME Compliance Calendar 2027 and appreciated ICSI&rsquo;s initiatives for MSMEs and start-ups, including the ICSI MSME &amp; Start-up Catalyst. He also appreciated ICSI&rsquo;s contributions to the National Defence Fund under the Shaheed Ki Beti initiative and the Armed Forces Flag Day Fund of the Ministry of Defence, saying, &ldquo;When the intention is good, everything will be good.&rdquo;<br />
+<br />
+Concluding, the Vice-President called upon ICSI to continue upholding the trust reposed in the profession and contribute towards building a strong, Aatma-nirbhar and Viksit Bharat @2047. He said India should aspire to become the world&rsquo;s largest economy, not to dictate terms to others, but &ldquo;so that no one can dictate unwanted terms to us.&rdquo; He also invoked the timeless ethos of &ldquo;Satyam Vada, Dharmam Chara&rdquo; and extended his greetings to the ICSI fraternity on its Foundation Day.<br />
+<br />
+President, ICSI, C.S. Pawan Chandak; former Member of Parliament, Rajya Sabha, Dr. Sonal Mansingh; and Secretary, ICSI, C.S. Asish Mohan, among others, were present on the occasion.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">*****</span></span></p>
+
+<p style="text-align:justify"><strong><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">PR/ASM/VMJ</span></span></strong></p>
+
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 100; text-align: left; font-size: 16px;">
+                                          (रिलीज़ आईडी: 2318881)
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                              </td>
+                        </tr>
+                        <tr>
+                              <td style="font-weight: 200; text-align: center; font-size: 24px;"></td>
+                        </tr>
+                  </table>
+            </div>
+            <div class="clearfix">
+            </div>
+
+            
+
+            <div class="section1">
+                  <div id="frst_t">
+                        <div id="arr_rm"><div class='sticky-social_mb'><ul class='social_mb'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='40' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&text=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='40' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='40' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='40' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&title=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='40' /></li></a></ul></div></div>
+                  </div>
+                  <div id="second_t">
+                        <div id="sndr_rm"><div class='sticky-social'><ul class='social'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='35' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&text=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='35' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='35' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='35' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318881&title=Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='35' /></li></a></ul></div></div>
+                  </div>
+            </div>
+            <input type="hidden" name="ltrTitlee" id="ltrTitlee" value="Vice-President Shri C. P. Radhakrishnan Addresses 58th Foundation Day of ICSI at Bharat Mandapam" />
+            <input type="hidden" name="ltrSubtitlee" id="ltrSubtitlee" value="&lt;br/>“Good Governance is the Invisible Infrastructure that Sustains Investor Confidence”: Vice-President&lt;br/>&lt;br/>“Company Secretaries are Guardians of Governance and Nucleus of India Inc.’s Trust Architecture”: Vice-President&lt;br/>&lt;br/>“ICSI, ICAI and ICMAI are Key Institutional Pillars of a Viksit Bharat”: Vice-President&lt;br/>&lt;br/>“Technology May Transform Decisions, But Integrity and Accountability Remain Human”: Vice-President" />
+            <input type="hidden" name="ltrDescriptionn" id="ltrDescriptionn" value="&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Vice-President Shri C. P. Radhakrishnan today addressed the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi. Extending his greetings to the entire ICSI fraternity, he commended the Institute for its nearly six-decade journey in strengthening transparent, ethical and inclusive corporate governance.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p lang=&quot;en&quot; dir=&quot;ltr&quot;>Vice President Shri C. P. Radhakrishnan graced the 58th Foundation Day celebrations of the Institute of Company Secretaries of India (ICSI) at Bharat Mandapam, New Delhi today. 
+
+He emphasised that good governance is the “invisible infrastructure” that sustains investor confidence and public trust, and described Company Secretaries as the “Guardians of Governance” and the nucleus of India Inc.’s trust architecture.&lt;/p>&amp;mdash; Vice-President of India (@VPIndia) &lt;a href=&quot;https://x.com/VPIndia/status/2106672508388966699?ref_src=twsrc%5Etfw&quot;>October 4, 2026&lt;/a>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Emphasising that good governance is essential for taking care of citizens and safeguarding public trust, the Vice-President said that when people pay taxes, they expect responsible governance, while investors expect companies to protect their interests through sound corporate governance. He noted that ICSI has moved beyond traditional regulatory compliance to become an important institution in advancing good governance.&lt;br />
+&lt;br />
+Shri C. P. Radhakrishnan said the transformation of the Institute mirrors the evolution of the profession, which today has an important role in strengthening corporate transparency, investor confidence and India&amp;rsquo;s standing in the global economy.&lt;br />
+&lt;br />
+In an era shaped by Artificial Intelligence, advanced data analytics and rapidly evolving business models, the Vice-President called upon Company Secretaries, as &amp;ldquo;Guardians of Governance,&amp;rdquo; to uphold the legal, strategic and ethical foundations of India Inc. &amp;ldquo;Technology may transform the manner in which information is generated and decisions are supported, but integrity, accountability, transparency and responsibility remain human,&amp;rdquo; he said.&lt;br />
+&lt;br />
+Describing trust, transparency and corporate governance as the &amp;ldquo;invisible infrastructure&amp;rdquo; of a modern economy, Shri C. P. Radhakrishnan said investor confidence is essential for sustained economic progress. Company Secretaries, he noted, are at the centre of this architecture and play a vital role in enabling enterprises, start-ups, family businesses and listed companies to grow responsibly.&lt;br />
+&lt;br />
+The Vice-President said strong institutions and sound governance will be as important as physical and digital infrastructure in building a Viksit Bharat. He underlined the complementary role of ICAI, ICMAI and ICSI in India&amp;rsquo;s journey towards Viksit Bharat @2047, describing these professional institutions as key pillars of a strong corporate and economic ecosystem.&lt;br />
+&lt;br />
+Calling for greater opportunities for young people to enter the profession, Shri C. P. Radhakrishnan appreciated ICSI&amp;rsquo;s fee-waiver initiatives and urged continued student outreach. He launched the MSME Compliance Calendar 2027 and appreciated ICSI&amp;rsquo;s initiatives for MSMEs and start-ups, including the ICSI MSME &amp;amp; Start-up Catalyst. He also appreciated ICSI&amp;rsquo;s contributions to the National Defence Fund under the Shaheed Ki Beti initiative and the Armed Forces Flag Day Fund of the Ministry of Defence, saying, &amp;ldquo;When the intention is good, everything will be good.&amp;rdquo;&lt;br />
+&lt;br />
+Concluding, the Vice-President called upon ICSI to continue upholding the trust reposed in the profession and contribute towards building a strong, Aatma-nirbhar and Viksit Bharat @2047. He said India should aspire to become the world&amp;rsquo;s largest economy, not to dictate terms to others, but &amp;ldquo;so that no one can dictate unwanted terms to us.&amp;rdquo; He also invoked the timeless ethos of &amp;ldquo;Satyam Vada, Dharmam Chara&amp;rdquo; and extended his greetings to the ICSI fraternity on its Foundation Day.&lt;br />
+&lt;br />
+President, ICSI, C.S. Pawan Chandak; former Member of Parliament, Rajya Sabha, Dr. Sonal Mansingh; and Secretary, ICSI, C.S. Asish Mohan, among others, were present on the occasion.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:center&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>*****&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;strong>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>PR/ASM/VMJ&lt;/span>&lt;/span>&lt;/strong>&lt;/p>
+" />
+            <script type="text/javascript">
+                  var mPlayer = document.getElementById("background_music");
+                  var mPlayAction = document.getElementById("playbutton");
+
+                  var isPlaying = false;
+
+                  function playAudio() {
+                        mPlayer.play();
+                        isPlaying = true;
+                        document.getElementById('stopA').style.display = "block";
+                        document.getElementById('playA').style.display = "none";
+                  }
+
+                  function pauseAudio() {
+                        mPlayer.pause();
+                        isPlaying = false;
+                        document.getElementById('playA').style.display = "block";
+                        document.getElementById('stopA').style.display = "none";
+                  }
+                  //function HandleAudio() {
+                  //    if (isPlaying == true) {
+                  //        //Playing already Pause it
+                  //        pauseAudio();
+                  //    } else {
+                  //        //Play the music
+                  //        playAudio();
+                  //    }
+                  //}
+            </script>
+            <script type="text/javascript">
+                  var synth = window.speechSynthesis;
+
+            
+                  function CleanHtml(html) {
+
+                        html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+                        return html;
+                  }
+                  function stripHtml(html) {
+                        let tmp = document.createElement("DIV");
+                        tmp.innerHTML = CleanHtml(html);
+                        return tmp.textContent || tmp.innerText || "";
+                  }
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        //for responsive tables
+                        $("table").each(function () {
+                              if (!$(this).closest(".table-responsive").length) {
+                                    $(this).wrap("<div class='table-responsive'></div>");
+                              }
+                        });
+
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            
+            <style type="text/css">
+                  @media print {
+                        .sticky-social, .sticky-social_mb, .pull-right, #printPDF {
+                              display: none !important;
+                        }
+                  }
+
+                  .f_vl {
+                        padding-right: 30px;
+                        font-size: 17px;
+                        cursor: pointer;
+                  }
+
+                  .log_oo {
+                        // width: 20%;
+                        display: flex;
+                        justify-content: space-between;
+                  }
+
+                        .log_oo img {
+                              width: 150px;
+                              /*width: 100%;
+                    height: auto;*/
+                        }
+
+                  .sticky-social_mb {
+                        position: fixed;
+                        bottom: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                        width: 100%;
+                  }
+
+                  .social_mb {
+                        list-style: none;
+                        display: flex;
+                        width: 100%;
+                        margin-bottom: -8px;
+                  }
+
+                        .social_mb a {
+                              padding: 8px 0px;
+                              font-size: 30px;
+                              transition: all 0.8s ease-in-out;
+                              width: 20% !important;
+                              text-align: center;
+                        }
+            </style>
+            <style type="text/css">
+                  .section1 {
+                        position: relative;
+                        padding: 10px 0px;
+                        width: 100%;
+                  }
+
+
+
+                  .sticky-social {
+                        position: fixed;
+                        top: 20px;
+                        left: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                  }
+
+                  .social {
+                        list-style: none;
+                  }
+
+                        .social a li {
+                              padding: 8px 12px;
+                              font-size: 25px;
+                              transition: all 0.8s ease-in-out;
+                        }
+
+                              .social a li:hover {
+                                    margin-right: -30px;
+                                    box-shadow: 2px 5px 10px grey;
+                              }
+
+                                    .social a li:hover .fa {
+                                          margin-left: 20px;
+                                    }
+
+                  .fb_b {
+                        /* background-color: rgb(59, 89, 152);*/
+                        background-color: rgba(65,103,178,255);
+                  }
+
+                  .twitter_r {
+                        /* background-color: rgb(29, 161, 242);*/
+                        background-color: #000000;
+                  }
+
+                  .whatsapp_r {
+                        /* background-color: rgb(77, 194, 71);*/
+                        background-color: rgba(13,191,67,255);
+                  }
+
+                  .fa-envelope_r {
+                        /* background-color: rgb(219, 68, 55);*/
+                        background-color: #e2123d;
+                  }
+
+                  .fa-linkedin_r {
+                        background-color: rgb(0, 119, 181);
+                  }
+            </style>
+            <style type="text/css">
+                  @media only screen and (max-device-width: 767px) {
+                        p span img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        p img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        h2 {
+                              font-size: var(--dbim-h2, 20px);   /* was 20px !important - the !important blocked A+/A- */
+                              font-weight: 600 !important;
+                        }
+
+                        h3 {
+                              font-size: var(--dbim-h3, 16px);   /* was 16px !important */
+                              font-weight: 600 !important;
+                        }
+                  }
+            </style>
+            <style type="text/css">
+                  /* === Film Roll Badge Styling(IFFI2025 countdown) === */
+                  .film-roll-badge {
+                        position: absolute;
+                        top:82%;
+                        right: 20px;
+                        width: 230px;
+                        height: 70px;
+                        background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 18px, #6e2b8b 18px, #6e2b8b 36px );
+                        border-top: 8px solid #9a2375;
+                        border-bottom: 8px solid #9a2375;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                        animation: moveFilm 8s linear infinite;
+                        z-index: 10;
+                  }
+
+                        /* film sprocket holes */
+                        .film-roll-badge::before,
+                        .film-roll-badge::after {
+                              content: "";
+                              position: absolute;
+                              width: 100%;
+                              height: 10px;
+                              background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 10px, #fff 10px, #fff 20px );
+                              left: 0;
+                              z-index: 2;
+                        }
+
+                        .film-roll-badge::before {
+                              top: -4px;
+                        }
+
+                        .film-roll-badge::after {
+                              bottom: -4px;
+                        }
+
+                  .film-roll-inner {
+                        position: relative;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        animation: flicker 2s infinite ease-in-out;
+                  }
+
+                  .countdown-text {
+                        font-size: 1.3rem;
+                        font-weight: 700;
+                        color: #fff;
+                        text-shadow: 0 0 6px rgba(255, 255, 255, 0.4), 0 0 10px #000;
+                        white-space: nowrap;
+                  }
+
+                  /* === Animations === */
+                  @keyframes moveFilm {
+                        0% {
+                              background-position: 0 0;
+                        }
+
+                        100% {
+                              background-position: 120px 0;
+                        }
+                  }
+
+                  @keyframes flicker {
+                        0%, 100% {
+                              opacity: 1;
+                        }
+
+                        50% {
+                              opacity: 0.9;
+                        }
+
+                        25% {
+                              opacity: 0.95;
+                        }
+
+                        75% {
+                              opacity: 0.85;
+                        }
+                  }
+
+                  /* === Responsive Adjustments === */
+                  @media (max-width: 1500px) {
+                        .film-roll-badge {
+                              top: 68%;
+                              right: 18px;
+                              /* width: 220px; */
+                              height: 65px;
+                              font-size: 0.85rem;
+                        }
+
+                        .press-section {
+                              margin-top: 35px;
+                        }
+                  }
+
+                  @media (max-width: 992px) {
+                        .film-roll-badge {
+                              top: 52%;
+                              right: 10px;
+                               width: 200px; 
+                              height: 60px;
+                        }
+                  }
+
+                  @media (max-width: 768px) {
+                        .film-roll-badge {
+                              top: 56%;
+                              right: 10px;
+                               width: 124px; 
+                              height: 55px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.9rem;
+                        }
+                  }
+
+                  @media (max-width: 576px) {
+                        .film-roll-badge {
+                              top: 59%;
+                              right: 5px;
+                              /* width: 160px; */
+                              height: 50px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.85rem;
+                        }
+                  }
+            </style>
+                        <script type="text/javascript">
+                  const festivalStart = new Date("2025-11-20T00:00:00").getTime();
+                  const festivalEnd = new Date("2025-11-28T23:59:59").getTime();
+
+                  const countdownElement = document.getElementById("countdown");
+
+                  const interval = setInterval(() => {
+                        const now = new Date().getTime();
+
+                        // BEFORE FESTIVAL — show days + hours left
+                        if (now < festivalStart) {
+                              const diff = festivalStart - now;
+                              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                              countdownElement.innerHTML = `
+                ${days} Day${days !== 1 ? 's' : ''} 
+                ${hours} Hour${hours !== 1 ? 's' : ''} to go
+            `;
+
+                        }
+
+                        // DURING FESTIVAL — show 56th IFFI - Day X
+                        else if (now >= festivalStart && now <= festivalEnd) {
+                              const dayNumber = Math.floor((now - festivalStart) / (1000 * 60 * 60 * 24)) + 1;
+                              countdownElement.innerHTML = `56th IFFI - Day ${dayNumber}`;
+                        }
+
+                        // AFTER FESTIVAL — new message
+                        else {
+                              countdownElement.innerHTML = `✨ IFFI closes but never ends…`;
+
+                              // Width change logic
+                              const elements = document.querySelectorAll('.film-roll-badge');
+                              elements.forEach(el => el.style.width = "350px");
+
+                              clearInterval(interval);
+                        }
+
+                  }, 1000);
+            </script>
+
+      
+
+<script type="text/javascript">
+//<![CDATA[
+(function() {var fn = function() {$get("sc_HiddenField").value = '';Sys.Application.remove_init(fn);};Sys.Application.add_init(fn);})();Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"BackgroundCssClass":"modalBackground","PopupControlID":"P_CategoryManagement","dynamicServicePath":"/PressReleaseIframePage.aspx","id":"mpe"}, null, null, $get("Hidden"));
+});
+//]]>
+</script>
+</form>
+      
+      
+
+<script type="application/json" id="pibConsentConfig">{"ga4Id":"G-Q414Y0X6EE,G-QJJ6LZ8LHV","policyUrl":"/CookiePolicy.aspx","text":{"bannerLabel":"कुकी सहमति","title":"इस वेबसाइट पर कुकीज़","body":"इस वेबसाइट को चलाने के लिए हम आवश्यक कुकीज़ का उपयोग करते हैं। आपके आने पर हम विश्लेषण कुकीज़ भी सेट करते हैं, ताकि हम देख सकें कि साइट का उपयोग कैसे हो रहा है और उसे बेहतर बना सकें - आप इन्हें नीचे या कभी भी कुकी नीति पृष्ठ से बंद कर सकते हैं। सोशल मीडिया सामग्री की कुकीज़ केवल आपकी अनुमति से ही सेट की जाती हैं।","policyLink":"हमारी कुकी नीति पढ़ें","accept":"सभी स्वीकार करें","reject":"वैकल्पिक अस्वीकार करें","customize":"अनुकूलित करें","prefsTitle":"कुकी प्राथमिकताएं","prefsIntro":"चुनें कि यह वेबसाइट कौन सी कुकीज़ सेट कर सकती है। आवश्यक कुकीज़ बंद नहीं की जा सकतीं क्योंकि उनके बिना साइट काम नहीं करती। विश्लेषण कुकीज़ तब तक चालू रहती हैं जब तक आप उन्हें बंद न करें। सोशल मीडिया कुकीज़ तब तक बंद रहती हैं जब तक आप अनुमति न दें। आप ये विकल्प कभी भी कुकी नीति पृष्ठ से बदल सकते हैं।","essentialName":"आवश्यक कुकीज़","essentialDesc":"साइट के कार्य करने के लिए आवश्यक। ये आपका सत्र, आपकी भाषा और क्षेत्र, आपके पाठ का आकार और रंग थीम याद रखती हैं, तथा फ़ॉर्म की सुरक्षा जांच सत्यापित करती हैं। ये हमेशा चालू रहती हैं।","analyticsName":"विश्लेषण कुकीज़","analyticsDesc":"ये हमें यह समझने में मदद करती हैं कि आगंतुक साइट का उपयोग कैसे करते हैं - कौन से पृष्ठ पढ़े जाते हैं और लोग कितनी देर रुकते हैं - ताकि इसे बेहतर बनाया जा सके। यह जानकारी ऐसे रूप में एकत्र की जाती है जो सीधे आपकी पहचान नहीं करती। आपके आने पर ये चालू रहती हैं; इन्हें यहां बंद करने पर ये रुक जाती हैं और पहले से सेट कुकीज़ हटा दी जाती हैं।","socialName":"सोशल मीडिया कुकीज़","socialDesc":"ये X, फेसबुक और यूट्यूब से एम्बेड की गई सामग्री, जैसे टाइमलाइन और वीडियो, द्वारा सेट की जाती हैं। ये प्लेटफ़ॉर्म इनका उपयोग विभिन्न वेबसाइटों पर आपको ट्रैक करने के लिए कर सकते हैं। ये तब तक बंद रहती हैं जब तक आप अनुमति न दें।","save":"प्राथमिकताएं सहेजें","cancel":"रद्द करें"}}</script>
+<script type="text/javascript" src='/js/consent.js?v=9'></script>
+
+<script type="text/javascript" src='/js/consent-embeds.js?v=9'></script>
+
+</body>
+</html>

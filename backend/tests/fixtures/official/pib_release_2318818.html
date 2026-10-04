@@ -1,0 +1,972 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head id="Head1"><title>
+	Press Release:Press Information Bureau
+</title><link href="css/style.css" rel="stylesheet" type="text/css" /><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="alternate stylesheet" href="css/change.css" media="screen" title="change" /><link rel="alternate stylesheet" href="css/green.css" media="screen" title="green" /><link rel="alternate stylesheet" href="css/yellow.css" media="screen" title="yellow" /><link rel="stylesheet" type="text/css" href="css/prtint.css" media="print" /><link rel="stylesheet" href="css/style3.1.css" type="text/css" />
+
+
+      <script src="js/jquery.min.js" type="text/javascript"></script>
+
+      <script type="text/javascript">
+            $(document).ready(function () {
+                  function getParameterByName(name) {
+                        var url = window.location.href;
+                        name = name.replace(/[\[\]]/g, '\\$&');
+                        var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                              results = regex.exec(url);
+                        if (!results) return null;
+                        if (!results[2]) return '';
+                        return decodeURIComponent(results[2].replace(/\+/g, ' '));
+                  }
+                  // Get the IDs from the current page's URL
+                  let prid = parseInt(getParameterByName('PRID'), 10);
+
+                  if (!isNaN(prid) && prid > 0) {
+                        $.ajax({
+                              type: "POST",
+                              url: "AjaxMethod.aspx/UpdatePRHitCount",
+                              async: false,
+                              data: JSON.stringify({ 'PermId': prid }),
+                              contentType: "application/json; charset=utf-8",
+                              dataType: "json",
+                              success: function (response) {
+                                    console.log(response);
+                              },
+                              error: function (error) {
+                                    console.log("Error in AJAX request", error);
+                              }
+                        });
+                  } else {
+                        console.log("Invalid parameters:", prid);
+                  }
+
+            });
+      </script>
+      <style type="text/css">
+            .table-responsive {
+                  width: 100%;
+                  overflow-x: auto;
+            }
+
+            .banner {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  background-color: #000;
+                  color: #fff;
+                  padding: 20px;
+            }
+
+            full-width {
+                  width: 100%;
+            }
+
+            .logo-left, .logo-center, .countdown {
+                  display: flex;
+                  align-items: center;
+            }
+
+                  .logo-left img, .logo-center img {
+                        height: 70px;
+                  }
+
+            .countdown {
+                  text-align: center;
+                  background-color: #444;
+                  border-radius: 10px;
+                  padding: 10px;
+                  border: 2px solid grey;
+            }
+
+            .firstnumber {
+                  color: #000000;
+                  position: absolute;
+                  top: 50px;
+                  right: 90px;
+                  font-size: 30px;
+            }
+
+            .secondnumber {
+                  position: absolute;
+                  color: #000000;
+                  right: 45px;
+                  top: 50px;
+                  font-size: 30px;
+            }
+
+            .countdown .days {
+                  font-size: 35px;
+                  color: gold;
+            }
+
+            .countdown p {
+                  margin: 0;
+            }
+
+            .countdown .text {
+                  font-size: 16px;
+            }
+
+            a {
+                  word-break: break-all;
+            }
+
+            iframe, img {
+                  max-width: 100%;
+            }
+
+            @media(max-width:1199px) {
+                  .firstnumber {
+                        top: 40px;
+                        right: 72px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 35px;
+                        top: 40px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:990px) {
+                  .firstnumber {
+                        top: 25px;
+                        right: 54px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 25px;
+                        top: 25px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:768px) {
+                  .countdown, .days {
+                        font-size: 12px !important;
+                  }
+
+
+                  .firstnumber {
+                        top: 25%;
+                        right: 8%;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 4.5%;
+                        top: 25%;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:475px) {
+                  .countdown, .days {
+                        font-size: 10px !important;
+                        top: 20%;
+                  }
+
+                  .bannerimgdiv {
+                        padding: 0 !important;
+                  }
+
+                  .bannerimg {
+                        width: 108% !important;
+                  }
+            }
+      </style>
+      <script type="text/javascript">
+            $(function () {
+                  $("[id*=printPDF]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+            $(function () {
+                  $("[id*=printPDFEvent]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+      </script>
+
+      
+
+      <link id="pibConsentCss" href="/css/consent.css?v=1" rel="stylesheet" type="text/css" /><meta property="og:title" content="Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games" /><meta property="og:url" content="www.pib.gov.in/Pressreleaseshare.aspx?PRID=2318818" /><meta property="og:description" content="The Prime Minister, Shri Narendra Modi has congratulated Aditi Ashok, Pranavi Sharath Urs and Diksha" /><meta property="og:image" content="https:/pib.gov.in/images/indian-emblem.png" />
+                                <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="C4E7H-KSCMC-422L4-W3EM5-U36MF",function(){function e(){if(!i){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,o.parentNode.appendChild(e),i=!0}}function t(e){i=!0;var n,t,a,r,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(o.parentNode,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",r=(a.frameElement||a).style,r.width=0,r.height=0,r.border=0,r.display="none",o.parentNode.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void(0);",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=12,window.BOOMR.url=n+"C4E7H-KSCMC-422L4-W3EM5-U36MF";var o=document.currentScript||document.getElementsByTagName("script")[0],i=!1,r=document.createElement("link");if(r.relList&&"function"==typeof r.relList.supports&&r.relList.supports("preload")&&"as"in r)window.BOOMR.snippetMethod="p",r.href=window.BOOMR.url,r.rel="preload",r.as="script",r.addEventListener("load",e),r.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!i)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),o.parentNode.appendChild(r);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="phmkvamvq5ijs2wceoqq-f-95a21c868-clientnsv4-s.akamaihd.net",o="false"=="true"?2:1,i={"ak.v":"41","ak.cp":"1825201","ak.ai":parseInt("1215205",10),"ak.ol":"0","ak.cr":6,"ak.ipv":4,"ak.proto":"http/1.1","ak.rid":"b3dda5c","ak.r":34464,"ak.a2":n,"ak.m":"dscb","ak.n":"ff","ak.cport":51917,"ak.gh":"149.135.80.149","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.0rtt.ed":"","ak.csrc":"-","ak.acc":"bbr","ak.t":"1791108001","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==e00asf2yj/JzveeP6Cvz/evOPRIbs+BKj4sZ9/qHfZ8d4/L9GyqOplLRSEfndq32mEu5cLEOssSWwPgzEcHKoxq2gAj5oIJshAjh6AJOeNVfF+WYCSkgiN3qO7Y2r7HTuXMW9lS62VehCKOMBH8CfJSFCZ0FOUGiLjVghqd2ve+vU2C4zNQ3Q//REpyyqLTJ988pLpc1CrvbIeTjgkg+GbcyR2SSyo724Ffixp5BTlCjw5yHzKR18HSTUoDADLk2MvkZ45t+vS8nYxvWy/HoReFWs0oskUgm1LEZeE0tUb59w5/aJMZiL7Xw/cFk6Xzy7gpjziP2VIJOcKXU9+ObeA8NB49VudME/whiCmheq2Q5SuZ/+VyIGUBG7kQE6+ZhH2/8FOJ6j7bu7OH1zIeaCkUKzX0hyHNhWFs5fgYmTE8=","ak.pv":"9","ak.dpoabenc":"","ak.tf":o};if(""!==t)i["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))i["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(i)},rv:function(){var e=["ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.0rtt.ed","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:i,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body>
+    
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden" id="dbim-icon-sprite">
+    <defs>
+        <symbol id="icon-angle-double-left" viewBox="0 0 24 24"><path d="M11.6 4.6 4.2 12l7.4 7.4 2.2-2.2L8.6 12l5.2-5.2z"/><path d="M19 4.6 11.6 12 19 19.4l2.2-2.2L16 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-angle-double-right" viewBox="0 0 24 24"><path d="M12.4 4.6 10.2 6.8 15.4 12l-5.2 5.2 2.2 2.2L19.8 12z"/><path d="M5 4.6 2.8 6.8 8 12l-5.2 5.2L5 19.4 12.4 12z"/></symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="M20.8 10.6H9.6v2.8h11.2z"/><path d="M10.8 5.6 3.2 12l7.6 6.4z"/></symbol>
+        <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M3.2 10.6h11.2v2.8H3.2z"/><path d="M13.2 5.6 20.8 12l-7.6 6.4z"/></symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M7.6 2.4H10v2.4H7.6z"/><path d="M14 2.4h2.4v2.4H14z"/><path fill-rule="evenodd" d="M4 4.8h16a1.6 1.6 0 0 1 1.6 1.6v13.2a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6V6.4A1.6 1.6 0 0 1 4 4.8zm.4 5.6v8.4h15.2v-8.4z"/><path d="M6.4 12.4h3.2v3.2H6.4z"/></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4 2.2-2.2L12.4 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="M8.6 4.6 6.4 6.8 11.6 12l-5.2 5.2 2.2 2.2L16 12z"/></symbol>
+        <symbol id="icon-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24"><path d="M10.8 3h2.4v7.6h3.4L12 16.6l-4.6-6h3.4z"/><path d="M4 17.2h2.4v2.4h11.2v-2.4H20v3.2a1.4 1.4 0 0 1-1.4 1.4H5.4A1.4 1.4 0 0 1 4 20.4z"/></symbol>
+        <symbol id="icon-facebook" viewBox="0 0 24 24"><path d="M13.6 21.6v-8.4h2.8l.42-3.3h-3.22V7.8c0-.95.27-1.6 1.64-1.6h1.74V3.26a23 23 0 0 0-2.54-.13c-2.5 0-4.22 1.53-4.22 4.34v2.43H7.4v3.3h2.82v8.4z"/></symbol>
+        <symbol id="icon-hashtag" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8.8 3h2.4l-1 6h3.2l1-6h2.4l-1 6h3.4v2.4h-3.8l-.6 3.2h3.6V17h-4l-1 5h-2.4l1-5h-3.2l-1 5H5.4l1-5H3V14.6h3.8l.6-3.2H3.8V9h4zm.6 8.4-.6 3.2h3.2l.6-3.2z"/></symbol>
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M12 3.4 2.8 11.6h2.4v8.4a1 1 0 0 0 1 1h3.3v-5.4h5v5.4h3.3a1 1 0 0 0 1-1v-8.4h2.4z"/></symbol>
+        <symbol id="icon-instagram" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.6 2.4h8.8a5.2 5.2 0 0 1 5.2 5.2v8.8a5.2 5.2 0 0 1-5.2 5.2H7.6a5.2 5.2 0 0 1-5.2-5.2V7.6a5.2 5.2 0 0 1 5.2-5.2zm0 2.4a2.8 2.8 0 0 0-2.8 2.8v8.8a2.8 2.8 0 0 0 2.8 2.8h8.8a2.8 2.8 0 0 0 2.8-2.8V7.6a2.8 2.8 0 0 0-2.8-2.8z"/><path fill-rule="evenodd" d="M12 6.8a5.2 5.2 0 1 0 0 10.4 5.2 5.2 0 0 0 0-10.4zm0 2.4a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6z"/><circle cx="17.3" cy="6.7" r="1.3"/></symbol>
+        <symbol id="icon-linkedin" viewBox="0 0 24 24"><path d="M4.8 8.8h3.6v12H4.8z"/><circle cx="6.6" cy="5.4" r="2.1"/><path d="M10.8 8.8h3.45v1.65h.05c.48-.9 1.65-1.85 3.4-1.85 3.63 0 4.3 2.35 4.3 5.4v6.6h-3.6v-5.85c0-1.4-.03-3.2-1.95-3.2-1.95 0-2.25 1.52-2.25 3.1v5.95h-3.6z"/></symbol>
+        <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M2.4 7.6v9.2a1.6 1.6 0 0 0 1.6 1.6h16a1.6 1.6 0 0 0 1.6-1.6V7.6L12 14z"/><path d="M21.2 5.4H2.8L12 11.8z"/></symbol>
+        <symbol id="icon-mail-open" viewBox="0 0 24 24"><path d="M2.4 9.8h19.2v9.6A1.6 1.6 0 0 1 20 21H4a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M12 2.6 21.6 9.2h-3.8L12 5.3 6.2 9.2H2.4z"/><path d="m3.9 11.2 8.1 5.4 8.1-5.4 1.5 1.3-9.6 6.4-9.6-6.4z"/></symbol>
+        <symbol id="icon-map-marker" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.4a7 7 0 0 0-7 7c0 5.2 7 12.2 7 12.2s7-7 7-12.2a7 7 0 0 0-7-7zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></symbol>
+        <symbol id="icon-newspaper" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.8 4.4h14.8v15.2H2.8zm2 2v11.2h10.8V6.4z"/><path d="M6 7.6h8.4v1.6H6z"/><path d="M6 10.8h8.4v1.6H6z"/><path d="M6 14h5.2v1.6H6z"/><path d="M18.4 8.4h2.8v9.6a1.4 1.4 0 0 1-2.8 0z"/></symbol>
+        <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7.4" y="4" width="3.6" height="16" rx="0.9"/><rect x="13" y="4" width="3.6" height="16" rx="0.9"/></symbol>
+        <symbol id="icon-picture" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.4 5.2h19.2v13.6H2.4zm2 2v9.6h15.2V7.2z"/><path d="M5.6 16.4 10 11l2.6 3 2-2.2 4 4.6z"/><circle cx="8" cy="10.4" r="1.5"/></symbol>
+        <symbol id="icon-press-conference" viewBox="0 0 24 24"><circle cx="12" cy="5.2" r="2.6"/><path d="M7.6 12.2a4.4 4.4 0 0 1 8.8 0z"/><circle cx="4.9" cy="9.6" r="2.2"/><path d="M1.8 15.2a3.1 3.1 0 0 1 6.2 0z"/><circle cx="19.1" cy="9.6" r="2.2"/><path d="M16 15.2a3.1 3.1 0 0 1 6.2 0z"/><path d="M6.6 13.6h10.8l2.2 7.8H4.4z"/></symbol>
+        <symbol id="icon-print" viewBox="0 0 24 24"><path d="M6.4 2.8h11.2v4.4H6.4z"/><path d="M4 8.4h16a1.6 1.6 0 0 1 1.6 1.6v5.6a1.6 1.6 0 0 1-1.6 1.6h-1.6v-2.8H6v2.8H4a1.6 1.6 0 0 1-1.6-1.6V10A1.6 1.6 0 0 1 4 8.4z"/><path d="M7.2 15.6h9.6v5.6H7.2z"/></symbol>
+        <symbol id="icon-rss" viewBox="0 0 24 24"><circle cx="4.8" cy="19.2" r="2.4"/><path d="M2.4 11.2v3.2a6.4 6.4 0 0 1 6.4 6.4H12A9.6 9.6 0 0 0 2.4 11.2z"/><path d="M2.4 4.8V8A13.6 13.6 0 0 1 16 21.6h3.2A16.8 16.8 0 0 0 2.4 4.8z"/></symbol>
+        <symbol id="icon-search-plus" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 2.8a7.2 7.2 0 1 0 0 14.4 7.2 7.2 0 0 0 0-14.4zm0 2.4a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6z"/><path d="M15.3 14.6 21.2 20.5l-1.5 1.5-5.9-5.9z"/><path d="M9.2 6.8h1.6v2.4h2.4v1.6h-2.4v2.4H9.2v-2.4H6.8V9.2h2.4z"/></symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5.6" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="18.4" r="3"/><path d="M8.3 10.9 15.7 7.2l.9 1.8-7.4 3.7z"/><path d="M9.2 13.1 16.6 16.8l-.9 1.8-7.4-3.7z"/></symbol>
+        <symbol id="icon-twitter" viewBox="0 0 24 24"><path d="M4.2 3h4.3l11.3 18h-4.3z"/><path d="M19.3 3h-2.6L4.2 21h2.6z"/></symbol>
+        <symbol id="icon-university" viewBox="0 0 24 24"><path d="M12 2.4 21.6 7.2v1.6H2.4V7.2z"/><path d="M4.8 10.4h2.4v8H4.8z"/><path d="M9.2 10.4h2.4v8H9.2z"/><path d="M13.4 10.4h2.4v8h-2.4z"/><path d="M17.6 10.4H20v8h-2.4z"/><path d="M3.2 19.8h17.6v1.8H3.2z"/></symbol>
+        <symbol id="icon-volume-up" viewBox="0 0 24 24"><path d="M3.2 9.2h3.3l5-4.2v14l-5-4.2H3.2z"/><path d="M14.6 8.4a5 5 0 0 1 0 7.2l1.6 1.6a7.2 7.2 0 0 0 0-10.4z"/><path d="M17.4 5.6a8.8 8.8 0 0 1 0 12.8l1.5 1.5a10.9 10.9 0 0 0 0-15.8z"/></symbol>
+    </defs>
+</svg>
+
+      <form method="post" action="./PressReleaseIframePage.aspx?PRID=2318818&amp;reg=48&amp;lang=2" id="form1">
+<input type="hidden" name="sc_HiddenField" id="sc_HiddenField" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+
+
+<script src="/ScriptResource.axd?d=x6wALODbMJK5e0eRC_p1LdIxBJXt0U_WW5GWfJqHAqo6frgCmGRfEywglicTersO2OKrFhK1gAIp0Wk2al2YrpdR3uWqH6f4nfjBsCyRUfTUUVmb0&amp;t=ffffffffecf8d3f2" type="text/javascript"></script>
+<script src="/PressReleaseIframePage.aspx?_TSM_HiddenField_=sc_HiddenField&amp;_TSM_CombinedScripts_=%3b%3bAjaxControlToolkit%2c+Version%3d3.5.7.123%2c+Culture%3dneutral%2c+PublicKeyToken%3d28f01b0e84b6d53e%3aen-US%3a5a4df314-b4a2-4da2-a207-9284f1b1e96c%3ade1feab2%3af2c8e708%3a8613aea7%3af9cec9bc%3a3202a5a2%3aab09e3fe%3a87104b7c%3a720a52bf%3a589eaa30%3aa67c2700%3abe6fb298" type="text/javascript"></script>
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="8166A38A" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="64GLVVFruRGfYzT5vp1G29SGsXj6piT5+bg/00Hdalhrdh0ZBJkOeq8uCj2ZjZTonSvGhbtrTMdYoQIDBli1F0FNdXQR2FCuShTrkkxPPyhSW0d05Jmhz+N+Hr3s5ollyqJ83Eb2pKghmTB/2FmChnHP/gce3TWB2ITpP3YL77SWVYqWLbhIWLk1iqjr2h9dyStliYuGp7V94LVGQ1OnP8ORhfp+j+G+/N89rrYIKAqkS7sKsGNqyXZZAqp31uiejeIOPeKj9HbB8rSfZbMMqgkOsC8=" />
+                              
+            <div id="templateCss"></div>
+            
+            <input type="hidden" name="hfGridHtml" id="hfGridHtml" />
+            <div class="container" style='margin-bottom: 50px;'>
+                  <div id="accessories">
+
+                        
+                        <div class="pull-right" style="display: flex">
+                              <div id="voll"></div>
+                              <div id="vollDT"></div>
+                              
+                              
+<div class="print-icons">
+<input type="image" name="Print1$print" id="Print1_print" aria-label="Print" src="images/printer_icon.png" alt="print page button" style="padding: 5px 10px 5px 10px;" />
+</div>
+                        </div>
+                  </div>
+                  <input type="hidden" name="hydpermid" id="hydpermid" value="2318818" />
+                  
+
+
+
+                  <div class="innner-page-main-about-us-content-right-part">
+
+                        <div id="MinistryName" class="MinistryNameSubhead text-center">
+                              Prime Minister's Office
+                        </div>
+                        
+                        <div id="lg_g"><div class='log_oo'>  <img src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2021/aug/ph202183101.png' alt='azadi ka amrit mahotsav' /> </div></div>
+
+
+
+
+
+                        <div class="text-center event-heading-background">
+                              
+                              <h1 id="Titleh2">
+                                    Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games
+                              </h1>
+                              <h3 id="Subtitleh3">
+                                    <span id="ltrSubtitle"></span>
+                              </h3>
+                        </div>
+
+                        <div id="PrDateTime" class="ReleaseDateSubHeaddateTime text-center pt20">
+                              प्रविष्टि तिथि:
+                04 OCT 2026 9:53AM by PIB Delhi
+                        </div>
+                        
+                        <div class='pt20'>
+                        </div>
+                        <input type="hidden" name="hydphotoUrl" id="hydphotoUrl" />
+                        
+                        <p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">The Prime Minister, Shri Narendra Modi has congratulated Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver medal in the Women&rsquo;s Team Golf event at the Asian Games 2026.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">The Prime Minister said that their success highlights their determination and passion for the sport.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">Shri Modi wished Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar continued success and expressed hope that they attain new heights of success in the times to come.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">In a post on X, the Prime Minister&rsquo;s Office said;</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">&ldquo;Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women&rsquo;s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi&rdquo;</span></span></p>
+
+<p style="text-align:justify">&nbsp;</p>
+
+<center><blockquote class="twitter-tweet"><p lang="en" dir="ltr">Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women’s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi</p>&mdash; PMO India (@PMOIndia) <a href="https://x.com/PMOIndia/status/2106586430449574248?ref_src=twsrc%5Etfw">October 4, 2026</a></blockquote>
+<script async src="https://platform.x.com/widgets.js" charset="utf-8"></script></center>
+
+<p style="text-align:justify">&nbsp;</p>
+
+<p style="text-align:center"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">&nbsp;*****</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">MJPS/SS/ST</span></span></p>
+
+
+                        
+                        <div id="reel_pic">
+                        </div>
+
+
+
+                        
+                        <br />
+                        <span id="ReleaseId">(रिलीज़ आईडी: 2318818)</span>
+                        <span id="lblViews">	आगंतुक पटल  : 276</span>
+                        <div>
+                              
+                        </div>
+                        
+
+                        <span id="lblRefPhoto"></span>
+
+                        <div class="BackgroundRelease">
+                              
+                        </div>
+                        <div>
+                              
+                        </div>
+                        <div class="ReleaseLang">इस विज्ञप्ति को इन भाषाओं में पढ़ें: 
+                        
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318836' target="_blank">
+                                          Urdu </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318839' target="_blank">
+                                          Marathi </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318833' target="_blank">
+                                          हिन्दी </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318873' target="_blank">
+                                          Bengali </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318827' target="_blank">
+                                          Gujarati </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318856' target="_blank">
+                                          Tamil </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318838' target="_blank">
+                                          Kannada </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318825' target="_blank">
+                                          Malayalam </a>
+                              
+                        </div>
+
+                        <div class="RelTag">
+                              <ul>
+                                    
+                              </ul>
+                        </div>
+                        <div class="clear">
+                        </div>
+                        <div id="RelLink" class="RelLink">
+                              <ul>
+                                    
+                                    
+                              </ul>
+                        </div>
+                        <center>
+                              
+                        </center>
+                  </div>
+
+                  <div id="update12">
+	
+                              
+                              <input type="hidden" name="Hidden" id="Hidden" />
+                              <div id="P_CategoryManagement" class="ModalWindow" style="display: none">
+		
+                                    <div>
+                                          <input type="image" name="btnClose" id="btnClose" src="images/close_flat_icon.png" />
+                                    </div>
+                                    <div id="description">
+                                    </div>
+                                    <div class="text-center">
+                                          <h2>
+                                                
+                                                <br>
+                                                
+                                          </h2>
+                                    </div>
+                                    <br />
+                                    <div class="clear">
+                                    </div>
+                                    
+                              
+	</div>
+                        
+</div>
+            </div>
+            
+            <div id="PdfDiv" style="display: none;">
+                  <table width="100%">
+                        <tr>
+                              <td style="font-weight: 200; text-align: center">
+                                    Prime Minister's Office
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="text-align: center; font-size: 14px;">
+                                          प्रविष्टि तिथि:
+                        04 OCT 2026 9:53AM by PIB Delhi
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: left; font-size: 16px;">
+                                          <p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">The Prime Minister, Shri Narendra Modi has congratulated Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver medal in the Women&rsquo;s Team Golf event at the Asian Games 2026.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">The Prime Minister said that their success highlights their determination and passion for the sport.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">Shri Modi wished Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar continued success and expressed hope that they attain new heights of success in the times to come.</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">In a post on X, the Prime Minister&rsquo;s Office said;</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">&ldquo;Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women&rsquo;s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi&rdquo;</span></span></p>
+
+<p style="text-align:justify">&nbsp;</p>
+
+<center><blockquote class="twitter-tweet"><p lang="en" dir="ltr">Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women’s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi</p>&mdash; PMO India (@PMOIndia) <a href="https://x.com/PMOIndia/status/2106586430449574248?ref_src=twsrc%5Etfw">October 4, 2026</a></blockquote>
+<script async src="https://platform.x.com/widgets.js" charset="utf-8"></script></center>
+
+<p style="text-align:justify">&nbsp;</p>
+
+<p style="text-align:center"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">&nbsp;*****</span></span></p>
+
+<p style="text-align:justify"><span style="font-size:16px"><span style="font-family:Times New Roman,Times,serif">MJPS/SS/ST</span></span></p>
+
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 100; text-align: left; font-size: 16px;">
+                                          (रिलीज़ आईडी: 2318818)
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                              </td>
+                        </tr>
+                        <tr>
+                              <td style="font-weight: 200; text-align: center; font-size: 24px;"></td>
+                        </tr>
+                  </table>
+            </div>
+            <div class="clearfix">
+            </div>
+
+            
+
+            <div class="section1">
+                  <div id="frst_t">
+                        <div id="arr_rm"><div class='sticky-social_mb'><ul class='social_mb'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='40' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&text=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='40' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='40' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='40' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&title=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='40' /></li></a></ul></div></div>
+                  </div>
+                  <div id="second_t">
+                        <div id="sndr_rm"><div class='sticky-social'><ul class='social'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='35' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&text=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='35' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='35' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='35' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318818&title=Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='35' /></li></a></ul></div></div>
+                  </div>
+            </div>
+            <input type="hidden" name="ltrTitlee" id="ltrTitlee" value="Prime Minister congratulates Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning Silver in Women’s Team Golf at Asian Games" />
+            <input type="hidden" name="ltrSubtitlee" id="ltrSubtitlee" />
+            <input type="hidden" name="ltrDescriptionn" id="ltrDescriptionn" value="&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>The Prime Minister, Shri Narendra Modi has congratulated Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver medal in the Women&amp;rsquo;s Team Golf event at the Asian Games 2026.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>The Prime Minister said that their success highlights their determination and passion for the sport.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>Shri Modi wished Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar continued success and expressed hope that they attain new heights of success in the times to come.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>In a post on X, the Prime Minister&amp;rsquo;s Office said;&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&amp;ldquo;Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women&amp;rsquo;s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi&amp;rdquo;&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&amp;nbsp;&lt;/p>
+
+&lt;p lang=&quot;en&quot; dir=&quot;ltr&quot;>Kudos to Aditi Ashok, Pranavi Sharath Urs and Diksha Dagar on winning the Silver Medal in the Women’s Team Golf event at the Asian Games 2026 yesterday. This success highlights their determination and passion for the sport. May they continue to attain new heights of success in the times to come: PM @narendramodi&lt;/p>&amp;mdash; PMO India (@PMOIndia) &lt;a href=&quot;https://x.com/PMOIndia/status/2106586430449574248?ref_src=twsrc%5Etfw&quot;>October 4, 2026&lt;/a>
+
+
+&lt;p style=&quot;text-align:justify&quot;>&amp;nbsp;&lt;/p>
+
+&lt;p style=&quot;text-align:center&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&amp;nbsp;*****&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>MJPS/SS/ST&lt;/span>&lt;/span>&lt;/p>
+" />
+            <script type="text/javascript">
+                  var mPlayer = document.getElementById("background_music");
+                  var mPlayAction = document.getElementById("playbutton");
+
+                  var isPlaying = false;
+
+                  function playAudio() {
+                        mPlayer.play();
+                        isPlaying = true;
+                        document.getElementById('stopA').style.display = "block";
+                        document.getElementById('playA').style.display = "none";
+                  }
+
+                  function pauseAudio() {
+                        mPlayer.pause();
+                        isPlaying = false;
+                        document.getElementById('playA').style.display = "block";
+                        document.getElementById('stopA').style.display = "none";
+                  }
+                  //function HandleAudio() {
+                  //    if (isPlaying == true) {
+                  //        //Playing already Pause it
+                  //        pauseAudio();
+                  //    } else {
+                  //        //Play the music
+                  //        playAudio();
+                  //    }
+                  //}
+            </script>
+            <script type="text/javascript">
+                  var synth = window.speechSynthesis;
+
+            
+                  function CleanHtml(html) {
+
+                        html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+                        return html;
+                  }
+                  function stripHtml(html) {
+                        let tmp = document.createElement("DIV");
+                        tmp.innerHTML = CleanHtml(html);
+                        return tmp.textContent || tmp.innerText || "";
+                  }
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        //for responsive tables
+                        $("table").each(function () {
+                              if (!$(this).closest(".table-responsive").length) {
+                                    $(this).wrap("<div class='table-responsive'></div>");
+                              }
+                        });
+
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            
+            <style type="text/css">
+                  @media print {
+                        .sticky-social, .sticky-social_mb, .pull-right, #printPDF {
+                              display: none !important;
+                        }
+                  }
+
+                  .f_vl {
+                        padding-right: 30px;
+                        font-size: 17px;
+                        cursor: pointer;
+                  }
+
+                  .log_oo {
+                        // width: 20%;
+                        display: flex;
+                        justify-content: space-between;
+                  }
+
+                        .log_oo img {
+                              width: 150px;
+                              /*width: 100%;
+                    height: auto;*/
+                        }
+
+                  .sticky-social_mb {
+                        position: fixed;
+                        bottom: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                        width: 100%;
+                  }
+
+                  .social_mb {
+                        list-style: none;
+                        display: flex;
+                        width: 100%;
+                        margin-bottom: -8px;
+                  }
+
+                        .social_mb a {
+                              padding: 8px 0px;
+                              font-size: 30px;
+                              transition: all 0.8s ease-in-out;
+                              width: 20% !important;
+                              text-align: center;
+                        }
+            </style>
+            <style type="text/css">
+                  .section1 {
+                        position: relative;
+                        padding: 10px 0px;
+                        width: 100%;
+                  }
+
+
+
+                  .sticky-social {
+                        position: fixed;
+                        top: 20px;
+                        left: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                  }
+
+                  .social {
+                        list-style: none;
+                  }
+
+                        .social a li {
+                              padding: 8px 12px;
+                              font-size: 25px;
+                              transition: all 0.8s ease-in-out;
+                        }
+
+                              .social a li:hover {
+                                    margin-right: -30px;
+                                    box-shadow: 2px 5px 10px grey;
+                              }
+
+                                    .social a li:hover .fa {
+                                          margin-left: 20px;
+                                    }
+
+                  .fb_b {
+                        /* background-color: rgb(59, 89, 152);*/
+                        background-color: rgba(65,103,178,255);
+                  }
+
+                  .twitter_r {
+                        /* background-color: rgb(29, 161, 242);*/
+                        background-color: #000000;
+                  }
+
+                  .whatsapp_r {
+                        /* background-color: rgb(77, 194, 71);*/
+                        background-color: rgba(13,191,67,255);
+                  }
+
+                  .fa-envelope_r {
+                        /* background-color: rgb(219, 68, 55);*/
+                        background-color: #e2123d;
+                  }
+
+                  .fa-linkedin_r {
+                        background-color: rgb(0, 119, 181);
+                  }
+            </style>
+            <style type="text/css">
+                  @media only screen and (max-device-width: 767px) {
+                        p span img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        p img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        h2 {
+                              font-size: var(--dbim-h2, 20px);   /* was 20px !important - the !important blocked A+/A- */
+                              font-weight: 600 !important;
+                        }
+
+                        h3 {
+                              font-size: var(--dbim-h3, 16px);   /* was 16px !important */
+                              font-weight: 600 !important;
+                        }
+                  }
+            </style>
+            <style type="text/css">
+                  /* === Film Roll Badge Styling(IFFI2025 countdown) === */
+                  .film-roll-badge {
+                        position: absolute;
+                        top:82%;
+                        right: 20px;
+                        width: 230px;
+                        height: 70px;
+                        background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 18px, #6e2b8b 18px, #6e2b8b 36px );
+                        border-top: 8px solid #9a2375;
+                        border-bottom: 8px solid #9a2375;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                        animation: moveFilm 8s linear infinite;
+                        z-index: 10;
+                  }
+
+                        /* film sprocket holes */
+                        .film-roll-badge::before,
+                        .film-roll-badge::after {
+                              content: "";
+                              position: absolute;
+                              width: 100%;
+                              height: 10px;
+                              background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 10px, #fff 10px, #fff 20px );
+                              left: 0;
+                              z-index: 2;
+                        }
+
+                        .film-roll-badge::before {
+                              top: -4px;
+                        }
+
+                        .film-roll-badge::after {
+                              bottom: -4px;
+                        }
+
+                  .film-roll-inner {
+                        position: relative;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        animation: flicker 2s infinite ease-in-out;
+                  }
+
+                  .countdown-text {
+                        font-size: 1.3rem;
+                        font-weight: 700;
+                        color: #fff;
+                        text-shadow: 0 0 6px rgba(255, 255, 255, 0.4), 0 0 10px #000;
+                        white-space: nowrap;
+                  }
+
+                  /* === Animations === */
+                  @keyframes moveFilm {
+                        0% {
+                              background-position: 0 0;
+                        }
+
+                        100% {
+                              background-position: 120px 0;
+                        }
+                  }
+
+                  @keyframes flicker {
+                        0%, 100% {
+                              opacity: 1;
+                        }
+
+                        50% {
+                              opacity: 0.9;
+                        }
+
+                        25% {
+                              opacity: 0.95;
+                        }
+
+                        75% {
+                              opacity: 0.85;
+                        }
+                  }
+
+                  /* === Responsive Adjustments === */
+                  @media (max-width: 1500px) {
+                        .film-roll-badge {
+                              top: 68%;
+                              right: 18px;
+                              /* width: 220px; */
+                              height: 65px;
+                              font-size: 0.85rem;
+                        }
+
+                        .press-section {
+                              margin-top: 35px;
+                        }
+                  }
+
+                  @media (max-width: 992px) {
+                        .film-roll-badge {
+                              top: 52%;
+                              right: 10px;
+                               width: 200px; 
+                              height: 60px;
+                        }
+                  }
+
+                  @media (max-width: 768px) {
+                        .film-roll-badge {
+                              top: 56%;
+                              right: 10px;
+                               width: 124px; 
+                              height: 55px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.9rem;
+                        }
+                  }
+
+                  @media (max-width: 576px) {
+                        .film-roll-badge {
+                              top: 59%;
+                              right: 5px;
+                              /* width: 160px; */
+                              height: 50px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.85rem;
+                        }
+                  }
+            </style>
+                        <script type="text/javascript">
+                  const festivalStart = new Date("2025-11-20T00:00:00").getTime();
+                  const festivalEnd = new Date("2025-11-28T23:59:59").getTime();
+
+                  const countdownElement = document.getElementById("countdown");
+
+                  const interval = setInterval(() => {
+                        const now = new Date().getTime();
+
+                        // BEFORE FESTIVAL — show days + hours left
+                        if (now < festivalStart) {
+                              const diff = festivalStart - now;
+                              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                              countdownElement.innerHTML = `
+                ${days} Day${days !== 1 ? 's' : ''} 
+                ${hours} Hour${hours !== 1 ? 's' : ''} to go
+            `;
+
+                        }
+
+                        // DURING FESTIVAL — show 56th IFFI - Day X
+                        else if (now >= festivalStart && now <= festivalEnd) {
+                              const dayNumber = Math.floor((now - festivalStart) / (1000 * 60 * 60 * 24)) + 1;
+                              countdownElement.innerHTML = `56th IFFI - Day ${dayNumber}`;
+                        }
+
+                        // AFTER FESTIVAL — new message
+                        else {
+                              countdownElement.innerHTML = `✨ IFFI closes but never ends…`;
+
+                              // Width change logic
+                              const elements = document.querySelectorAll('.film-roll-badge');
+                              elements.forEach(el => el.style.width = "350px");
+
+                              clearInterval(interval);
+                        }
+
+                  }, 1000);
+            </script>
+
+      
+
+<script type="text/javascript">
+//<![CDATA[
+(function() {var fn = function() {$get("sc_HiddenField").value = '';Sys.Application.remove_init(fn);};Sys.Application.add_init(fn);})();Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"BackgroundCssClass":"modalBackground","PopupControlID":"P_CategoryManagement","dynamicServicePath":"/PressReleaseIframePage.aspx","id":"mpe"}, null, null, $get("Hidden"));
+});
+//]]>
+</script>
+</form>
+      
+      
+
+<script type="application/json" id="pibConsentConfig">{"ga4Id":"G-Q414Y0X6EE,G-QJJ6LZ8LHV","policyUrl":"/CookiePolicy.aspx","text":{"bannerLabel":"कुकी सहमति","title":"इस वेबसाइट पर कुकीज़","body":"इस वेबसाइट को चलाने के लिए हम आवश्यक कुकीज़ का उपयोग करते हैं। आपके आने पर हम विश्लेषण कुकीज़ भी सेट करते हैं, ताकि हम देख सकें कि साइट का उपयोग कैसे हो रहा है और उसे बेहतर बना सकें - आप इन्हें नीचे या कभी भी कुकी नीति पृष्ठ से बंद कर सकते हैं। सोशल मीडिया सामग्री की कुकीज़ केवल आपकी अनुमति से ही सेट की जाती हैं।","policyLink":"हमारी कुकी नीति पढ़ें","accept":"सभी स्वीकार करें","reject":"वैकल्पिक अस्वीकार करें","customize":"अनुकूलित करें","prefsTitle":"कुकी प्राथमिकताएं","prefsIntro":"चुनें कि यह वेबसाइट कौन सी कुकीज़ सेट कर सकती है। आवश्यक कुकीज़ बंद नहीं की जा सकतीं क्योंकि उनके बिना साइट काम नहीं करती। विश्लेषण कुकीज़ तब तक चालू रहती हैं जब तक आप उन्हें बंद न करें। सोशल मीडिया कुकीज़ तब तक बंद रहती हैं जब तक आप अनुमति न दें। आप ये विकल्प कभी भी कुकी नीति पृष्ठ से बदल सकते हैं।","essentialName":"आवश्यक कुकीज़","essentialDesc":"साइट के कार्य करने के लिए आवश्यक। ये आपका सत्र, आपकी भाषा और क्षेत्र, आपके पाठ का आकार और रंग थीम याद रखती हैं, तथा फ़ॉर्म की सुरक्षा जांच सत्यापित करती हैं। ये हमेशा चालू रहती हैं।","analyticsName":"विश्लेषण कुकीज़","analyticsDesc":"ये हमें यह समझने में मदद करती हैं कि आगंतुक साइट का उपयोग कैसे करते हैं - कौन से पृष्ठ पढ़े जाते हैं और लोग कितनी देर रुकते हैं - ताकि इसे बेहतर बनाया जा सके। यह जानकारी ऐसे रूप में एकत्र की जाती है जो सीधे आपकी पहचान नहीं करती। आपके आने पर ये चालू रहती हैं; इन्हें यहां बंद करने पर ये रुक जाती हैं और पहले से सेट कुकीज़ हटा दी जाती हैं।","socialName":"सोशल मीडिया कुकीज़","socialDesc":"ये X, फेसबुक और यूट्यूब से एम्बेड की गई सामग्री, जैसे टाइमलाइन और वीडियो, द्वारा सेट की जाती हैं। ये प्लेटफ़ॉर्म इनका उपयोग विभिन्न वेबसाइटों पर आपको ट्रैक करने के लिए कर सकते हैं। ये तब तक बंद रहती हैं जब तक आप अनुमति न दें।","save":"प्राथमिकताएं सहेजें","cancel":"रद्द करें"}}</script>
+<script type="text/javascript" src='/js/consent.js?v=9'></script>
+
+<script type="text/javascript" src='/js/consent-embeds.js?v=9'></script>
+
+</body>
+</html>

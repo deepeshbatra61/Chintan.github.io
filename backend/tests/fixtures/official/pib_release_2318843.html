@@ -1,0 +1,933 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head id="Head1"><title>
+	Press Release:Press Information Bureau
+</title><link href="css/style.css" rel="stylesheet" type="text/css" /><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="alternate stylesheet" href="css/change.css" media="screen" title="change" /><link rel="alternate stylesheet" href="css/green.css" media="screen" title="green" /><link rel="alternate stylesheet" href="css/yellow.css" media="screen" title="yellow" /><link rel="stylesheet" type="text/css" href="css/prtint.css" media="print" /><link rel="stylesheet" href="css/style3.1.css" type="text/css" />
+
+
+      <script src="js/jquery.min.js" type="text/javascript"></script>
+
+      <script type="text/javascript">
+            $(document).ready(function () {
+                  function getParameterByName(name) {
+                        var url = window.location.href;
+                        name = name.replace(/[\[\]]/g, '\\$&');
+                        var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                              results = regex.exec(url);
+                        if (!results) return null;
+                        if (!results[2]) return '';
+                        return decodeURIComponent(results[2].replace(/\+/g, ' '));
+                  }
+                  // Get the IDs from the current page's URL
+                  let prid = parseInt(getParameterByName('PRID'), 10);
+
+                  if (!isNaN(prid) && prid > 0) {
+                        $.ajax({
+                              type: "POST",
+                              url: "AjaxMethod.aspx/UpdatePRHitCount",
+                              async: false,
+                              data: JSON.stringify({ 'PermId': prid }),
+                              contentType: "application/json; charset=utf-8",
+                              dataType: "json",
+                              success: function (response) {
+                                    console.log(response);
+                              },
+                              error: function (error) {
+                                    console.log("Error in AJAX request", error);
+                              }
+                        });
+                  } else {
+                        console.log("Invalid parameters:", prid);
+                  }
+
+            });
+      </script>
+      <style type="text/css">
+            .table-responsive {
+                  width: 100%;
+                  overflow-x: auto;
+            }
+
+            .banner {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  background-color: #000;
+                  color: #fff;
+                  padding: 20px;
+            }
+
+            full-width {
+                  width: 100%;
+            }
+
+            .logo-left, .logo-center, .countdown {
+                  display: flex;
+                  align-items: center;
+            }
+
+                  .logo-left img, .logo-center img {
+                        height: 70px;
+                  }
+
+            .countdown {
+                  text-align: center;
+                  background-color: #444;
+                  border-radius: 10px;
+                  padding: 10px;
+                  border: 2px solid grey;
+            }
+
+            .firstnumber {
+                  color: #000000;
+                  position: absolute;
+                  top: 50px;
+                  right: 90px;
+                  font-size: 30px;
+            }
+
+            .secondnumber {
+                  position: absolute;
+                  color: #000000;
+                  right: 45px;
+                  top: 50px;
+                  font-size: 30px;
+            }
+
+            .countdown .days {
+                  font-size: 35px;
+                  color: gold;
+            }
+
+            .countdown p {
+                  margin: 0;
+            }
+
+            .countdown .text {
+                  font-size: 16px;
+            }
+
+            a {
+                  word-break: break-all;
+            }
+
+            iframe, img {
+                  max-width: 100%;
+            }
+
+            @media(max-width:1199px) {
+                  .firstnumber {
+                        top: 40px;
+                        right: 72px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 35px;
+                        top: 40px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:990px) {
+                  .firstnumber {
+                        top: 25px;
+                        right: 54px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 25px;
+                        top: 25px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:768px) {
+                  .countdown, .days {
+                        font-size: 12px !important;
+                  }
+
+
+                  .firstnumber {
+                        top: 25%;
+                        right: 8%;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 4.5%;
+                        top: 25%;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:475px) {
+                  .countdown, .days {
+                        font-size: 10px !important;
+                        top: 20%;
+                  }
+
+                  .bannerimgdiv {
+                        padding: 0 !important;
+                  }
+
+                  .bannerimg {
+                        width: 108% !important;
+                  }
+            }
+      </style>
+      <script type="text/javascript">
+            $(function () {
+                  $("[id*=printPDF]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+            $(function () {
+                  $("[id*=printPDFEvent]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+      </script>
+
+      
+
+      <link id="pibConsentCss" href="/css/consent.css?v=1" rel="stylesheet" type="text/css" /><meta property="og:title" content="MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure" /><meta property="og:url" content="www.pib.gov.in/Pressreleaseshare.aspx?PRID=2318843" /><meta property="og:description" content="The Ministry of Road Transport &amp; Highways will organise Chintan Shivir 2026 on 5–6 October 2026 at E" /><meta property="og:image" content="https:/pib.gov.in/images/indian-emblem.png" />
+                                <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="C4E7H-KSCMC-422L4-W3EM5-U36MF",function(){function e(){if(!i){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,o.parentNode.appendChild(e),i=!0}}function t(e){i=!0;var n,t,a,r,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(o.parentNode,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",r=(a.frameElement||a).style,r.width=0,r.height=0,r.border=0,r.display="none",o.parentNode.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void(0);",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=12,window.BOOMR.url=n+"C4E7H-KSCMC-422L4-W3EM5-U36MF";var o=document.currentScript||document.getElementsByTagName("script")[0],i=!1,r=document.createElement("link");if(r.relList&&"function"==typeof r.relList.supports&&r.relList.supports("preload")&&"as"in r)window.BOOMR.snippetMethod="p",r.href=window.BOOMR.url,r.rel="preload",r.as="script",r.addEventListener("load",e),r.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!i)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),o.parentNode.appendChild(r);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="phmkvamvq5ijs2wceopa-f-fe294b455-clientnsv4-s.akamaihd.net",o="false"=="true"?2:1,i={"ak.v":"41","ak.cp":"1825201","ak.ai":parseInt("1215205",10),"ak.ol":"0","ak.cr":5,"ak.ipv":4,"ak.proto":"http/1.1","ak.rid":"b3dcfee","ak.r":34464,"ak.a2":n,"ak.m":"dscb","ak.n":"ff","ak.cport":51911,"ak.gh":"149.135.80.149","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.0rtt.ed":"","ak.csrc":"-","ak.acc":"bbr","ak.t":"1791107998","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==ZisJOjGb95hntgDKkUeeWWN/cI9SbfFFS5LOmY1lIgZbF1QHP5fYx2hsxHBydavcdaq0Fzxkxs1k3qyA6ir0yg8Sa75hhz39OqS/DRcUyPFmtdSR+t7Huq25SLQenZqY/mpnq0An0hA/g4ssOTSgHMg0ejxBxUsFX3v163XjjPABXcMsDtls0qtMdXdC5KtrnENq0MKXVfN/1+Y2/F/Fn6s3wFPMNS0MRMwuE5fZhJrP17XeeT+wEe8H4pQlt7k4l64EQPn3LDWbIfqXTuw7x1Oz2wyWTckG6/2BenXT/VlSfszKsRXHHO6fFeRg7EvQ3+ZaZZSIibn9Q1DuCxBhocAoiBv79RlvV1K8Ozp9F4MytZYXxrChufkVwT56i3qxhwGSyL2YDVnp2VaAlCj087a9faqYjmwUIV8Nhr+7rfU=","ak.pv":"9","ak.dpoabenc":"","ak.tf":o};if(""!==t)i["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))i["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(i)},rv:function(){var e=["ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.0rtt.ed","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:i,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body>
+    
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden" id="dbim-icon-sprite">
+    <defs>
+        <symbol id="icon-angle-double-left" viewBox="0 0 24 24"><path d="M11.6 4.6 4.2 12l7.4 7.4 2.2-2.2L8.6 12l5.2-5.2z"/><path d="M19 4.6 11.6 12 19 19.4l2.2-2.2L16 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-angle-double-right" viewBox="0 0 24 24"><path d="M12.4 4.6 10.2 6.8 15.4 12l-5.2 5.2 2.2 2.2L19.8 12z"/><path d="M5 4.6 2.8 6.8 8 12l-5.2 5.2L5 19.4 12.4 12z"/></symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="M20.8 10.6H9.6v2.8h11.2z"/><path d="M10.8 5.6 3.2 12l7.6 6.4z"/></symbol>
+        <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M3.2 10.6h11.2v2.8H3.2z"/><path d="M13.2 5.6 20.8 12l-7.6 6.4z"/></symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M7.6 2.4H10v2.4H7.6z"/><path d="M14 2.4h2.4v2.4H14z"/><path fill-rule="evenodd" d="M4 4.8h16a1.6 1.6 0 0 1 1.6 1.6v13.2a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6V6.4A1.6 1.6 0 0 1 4 4.8zm.4 5.6v8.4h15.2v-8.4z"/><path d="M6.4 12.4h3.2v3.2H6.4z"/></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4 2.2-2.2L12.4 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="M8.6 4.6 6.4 6.8 11.6 12l-5.2 5.2 2.2 2.2L16 12z"/></symbol>
+        <symbol id="icon-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24"><path d="M10.8 3h2.4v7.6h3.4L12 16.6l-4.6-6h3.4z"/><path d="M4 17.2h2.4v2.4h11.2v-2.4H20v3.2a1.4 1.4 0 0 1-1.4 1.4H5.4A1.4 1.4 0 0 1 4 20.4z"/></symbol>
+        <symbol id="icon-facebook" viewBox="0 0 24 24"><path d="M13.6 21.6v-8.4h2.8l.42-3.3h-3.22V7.8c0-.95.27-1.6 1.64-1.6h1.74V3.26a23 23 0 0 0-2.54-.13c-2.5 0-4.22 1.53-4.22 4.34v2.43H7.4v3.3h2.82v8.4z"/></symbol>
+        <symbol id="icon-hashtag" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8.8 3h2.4l-1 6h3.2l1-6h2.4l-1 6h3.4v2.4h-3.8l-.6 3.2h3.6V17h-4l-1 5h-2.4l1-5h-3.2l-1 5H5.4l1-5H3V14.6h3.8l.6-3.2H3.8V9h4zm.6 8.4-.6 3.2h3.2l.6-3.2z"/></symbol>
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M12 3.4 2.8 11.6h2.4v8.4a1 1 0 0 0 1 1h3.3v-5.4h5v5.4h3.3a1 1 0 0 0 1-1v-8.4h2.4z"/></symbol>
+        <symbol id="icon-instagram" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.6 2.4h8.8a5.2 5.2 0 0 1 5.2 5.2v8.8a5.2 5.2 0 0 1-5.2 5.2H7.6a5.2 5.2 0 0 1-5.2-5.2V7.6a5.2 5.2 0 0 1 5.2-5.2zm0 2.4a2.8 2.8 0 0 0-2.8 2.8v8.8a2.8 2.8 0 0 0 2.8 2.8h8.8a2.8 2.8 0 0 0 2.8-2.8V7.6a2.8 2.8 0 0 0-2.8-2.8z"/><path fill-rule="evenodd" d="M12 6.8a5.2 5.2 0 1 0 0 10.4 5.2 5.2 0 0 0 0-10.4zm0 2.4a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6z"/><circle cx="17.3" cy="6.7" r="1.3"/></symbol>
+        <symbol id="icon-linkedin" viewBox="0 0 24 24"><path d="M4.8 8.8h3.6v12H4.8z"/><circle cx="6.6" cy="5.4" r="2.1"/><path d="M10.8 8.8h3.45v1.65h.05c.48-.9 1.65-1.85 3.4-1.85 3.63 0 4.3 2.35 4.3 5.4v6.6h-3.6v-5.85c0-1.4-.03-3.2-1.95-3.2-1.95 0-2.25 1.52-2.25 3.1v5.95h-3.6z"/></symbol>
+        <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M2.4 7.6v9.2a1.6 1.6 0 0 0 1.6 1.6h16a1.6 1.6 0 0 0 1.6-1.6V7.6L12 14z"/><path d="M21.2 5.4H2.8L12 11.8z"/></symbol>
+        <symbol id="icon-mail-open" viewBox="0 0 24 24"><path d="M2.4 9.8h19.2v9.6A1.6 1.6 0 0 1 20 21H4a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M12 2.6 21.6 9.2h-3.8L12 5.3 6.2 9.2H2.4z"/><path d="m3.9 11.2 8.1 5.4 8.1-5.4 1.5 1.3-9.6 6.4-9.6-6.4z"/></symbol>
+        <symbol id="icon-map-marker" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.4a7 7 0 0 0-7 7c0 5.2 7 12.2 7 12.2s7-7 7-12.2a7 7 0 0 0-7-7zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></symbol>
+        <symbol id="icon-newspaper" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.8 4.4h14.8v15.2H2.8zm2 2v11.2h10.8V6.4z"/><path d="M6 7.6h8.4v1.6H6z"/><path d="M6 10.8h8.4v1.6H6z"/><path d="M6 14h5.2v1.6H6z"/><path d="M18.4 8.4h2.8v9.6a1.4 1.4 0 0 1-2.8 0z"/></symbol>
+        <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7.4" y="4" width="3.6" height="16" rx="0.9"/><rect x="13" y="4" width="3.6" height="16" rx="0.9"/></symbol>
+        <symbol id="icon-picture" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.4 5.2h19.2v13.6H2.4zm2 2v9.6h15.2V7.2z"/><path d="M5.6 16.4 10 11l2.6 3 2-2.2 4 4.6z"/><circle cx="8" cy="10.4" r="1.5"/></symbol>
+        <symbol id="icon-press-conference" viewBox="0 0 24 24"><circle cx="12" cy="5.2" r="2.6"/><path d="M7.6 12.2a4.4 4.4 0 0 1 8.8 0z"/><circle cx="4.9" cy="9.6" r="2.2"/><path d="M1.8 15.2a3.1 3.1 0 0 1 6.2 0z"/><circle cx="19.1" cy="9.6" r="2.2"/><path d="M16 15.2a3.1 3.1 0 0 1 6.2 0z"/><path d="M6.6 13.6h10.8l2.2 7.8H4.4z"/></symbol>
+        <symbol id="icon-print" viewBox="0 0 24 24"><path d="M6.4 2.8h11.2v4.4H6.4z"/><path d="M4 8.4h16a1.6 1.6 0 0 1 1.6 1.6v5.6a1.6 1.6 0 0 1-1.6 1.6h-1.6v-2.8H6v2.8H4a1.6 1.6 0 0 1-1.6-1.6V10A1.6 1.6 0 0 1 4 8.4z"/><path d="M7.2 15.6h9.6v5.6H7.2z"/></symbol>
+        <symbol id="icon-rss" viewBox="0 0 24 24"><circle cx="4.8" cy="19.2" r="2.4"/><path d="M2.4 11.2v3.2a6.4 6.4 0 0 1 6.4 6.4H12A9.6 9.6 0 0 0 2.4 11.2z"/><path d="M2.4 4.8V8A13.6 13.6 0 0 1 16 21.6h3.2A16.8 16.8 0 0 0 2.4 4.8z"/></symbol>
+        <symbol id="icon-search-plus" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 2.8a7.2 7.2 0 1 0 0 14.4 7.2 7.2 0 0 0 0-14.4zm0 2.4a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6z"/><path d="M15.3 14.6 21.2 20.5l-1.5 1.5-5.9-5.9z"/><path d="M9.2 6.8h1.6v2.4h2.4v1.6h-2.4v2.4H9.2v-2.4H6.8V9.2h2.4z"/></symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5.6" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="18.4" r="3"/><path d="M8.3 10.9 15.7 7.2l.9 1.8-7.4 3.7z"/><path d="M9.2 13.1 16.6 16.8l-.9 1.8-7.4-3.7z"/></symbol>
+        <symbol id="icon-twitter" viewBox="0 0 24 24"><path d="M4.2 3h4.3l11.3 18h-4.3z"/><path d="M19.3 3h-2.6L4.2 21h2.6z"/></symbol>
+        <symbol id="icon-university" viewBox="0 0 24 24"><path d="M12 2.4 21.6 7.2v1.6H2.4V7.2z"/><path d="M4.8 10.4h2.4v8H4.8z"/><path d="M9.2 10.4h2.4v8H9.2z"/><path d="M13.4 10.4h2.4v8h-2.4z"/><path d="M17.6 10.4H20v8h-2.4z"/><path d="M3.2 19.8h17.6v1.8H3.2z"/></symbol>
+        <symbol id="icon-volume-up" viewBox="0 0 24 24"><path d="M3.2 9.2h3.3l5-4.2v14l-5-4.2H3.2z"/><path d="M14.6 8.4a5 5 0 0 1 0 7.2l1.6 1.6a7.2 7.2 0 0 0 0-10.4z"/><path d="M17.4 5.6a8.8 8.8 0 0 1 0 12.8l1.5 1.5a10.9 10.9 0 0 0 0-15.8z"/></symbol>
+    </defs>
+</svg>
+
+      <form method="post" action="./PressReleaseIframePage.aspx?PRID=2318843&amp;reg=48&amp;lang=2" id="form1">
+<input type="hidden" name="sc_HiddenField" id="sc_HiddenField" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+
+
+<script src="/ScriptResource.axd?d=x6wALODbMJK5e0eRC_p1LdIxBJXt0U_WW5GWfJqHAqo6frgCmGRfEywglicTersO2OKrFhK1gAIp0Wk2al2YrpdR3uWqH6f4nfjBsCyRUfTUUVmb0&amp;t=ffffffffecf8d3f2" type="text/javascript"></script>
+<script src="/PressReleaseIframePage.aspx?_TSM_HiddenField_=sc_HiddenField&amp;_TSM_CombinedScripts_=%3b%3bAjaxControlToolkit%2c+Version%3d3.5.7.123%2c+Culture%3dneutral%2c+PublicKeyToken%3d28f01b0e84b6d53e%3aen-US%3a5a4df314-b4a2-4da2-a207-9284f1b1e96c%3ade1feab2%3af2c8e708%3a8613aea7%3af9cec9bc%3a3202a5a2%3aab09e3fe%3a87104b7c%3a720a52bf%3a589eaa30%3aa67c2700%3abe6fb298" type="text/javascript"></script>
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="8166A38A" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="++E7BO/yFhoF+iKeQ2XKZ3ZYJ28FomLJdeUjxQQXDubfKD0w5BwQwhBPfob62QMbf/4J+NZu+fi/gcAHRMQ2qR0PEkP8ksGfqjvB1HtQ8FG0FFtDZmuw4MSkFciRNPy4jrY9gkZb+onMvRjdoAsgOhLpPF1qzuE9vViQWnY0EDBQe6fOyaTWmUIlweqLAVLQlNM7jO0tuHUlE55NrphFJ1lEq2uheO+8GEFtTREVdZdU1IgfuF+TnLUsbgW7TbIwzj8BKWMdIfhk4EvOhVBmtIedu10=" />
+                              
+            <div id="templateCss"></div>
+            
+            <input type="hidden" name="hfGridHtml" id="hfGridHtml" />
+            <div class="container" style='margin-bottom: 50px;'>
+                  <div id="accessories">
+
+                        
+                        <div class="pull-right" style="display: flex">
+                              <div id="voll"></div>
+                              <div id="vollDT"></div>
+                              
+                              
+<div class="print-icons">
+<input type="image" name="Print1$print" id="Print1_print" aria-label="Print" src="images/printer_icon.png" alt="print page button" style="padding: 5px 10px 5px 10px;" />
+</div>
+                        </div>
+                  </div>
+                  <input type="hidden" name="hydpermid" id="hydpermid" value="2318843" />
+                  
+
+
+
+                  <div class="innner-page-main-about-us-content-right-part">
+
+                        <div id="MinistryName" class="MinistryNameSubhead text-center">
+                              Ministry of Road Transport & Highways
+                        </div>
+                        
+                        <div id="lg_g"><div class='log_oo'>  <img src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2021/aug/ph202183101.png' alt='azadi ka amrit mahotsav' /> </div></div>
+
+
+
+
+
+                        <div class="text-center event-heading-background">
+                              
+                              <h1 id="Titleh2">
+                                    MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure
+                              </h1>
+                              <h3 id="Subtitleh3">
+                                    <span id="ltrSubtitle"></span>
+                              </h3>
+                        </div>
+
+                        <div id="PrDateTime" class="ReleaseDateSubHeaddateTime text-center pt20">
+                              प्रविष्टि तिथि:
+                04 OCT 2026 12:14PM by PIB Delhi
+                        </div>
+                        
+                        <div class='pt20'>
+                        </div>
+                        <input type="hidden" name="hydphotoUrl" id="hydphotoUrl" />
+                        
+                        <p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Ministry of Road Transport &amp; Highways will organise Chintan Shivir 2026 on 5&ndash;6 October 2026 at Ekta Nagar, Narmada District, Gujarat, bringing together senior representatives from the Centre, States and implementing agencies to deliberate on key issues concerning the development and delivery of highway infrastructure in the country.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The inaugural session on 5 October will feature addresses by Minister of Road Transport &amp; Highways Shri Nitin Gadkari and Ministers of State Shri Ajay Tamta and Shri Harsh Malhotra.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Road Transport and Public Works Ministers from States, along with senior officials of State PWDs, implementing agencies and other stakeholders, have been invited to participate in the Chintan Shivir. Their participation will facilitate Centre-State coordination and exchange of field-level experiences, best practices and practical solutions.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The two-day conclave will focus on identifying key implementation challenges and deliberating on innovative and replicable approaches, along with policy and institutional interventions to improve project delivery, quality, safety and efficiency in the highway sector.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Chintan Shivir will feature five key thematic sessions covering PM GatiShakti and integrated infrastructure planning; Land Acquisition and Bhoomi Rashi; Model Concession Agreements and Ratings; Designing Safe Highways; and Quality Assurance and Project Monitoring.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The session on PM GatiShakti and integrated infrastructure planning will focus on coordinated and integrated planning for infrastructure development. Discussions on Land Acquisition and Bhoomi Rashi will provide an opportunity to deliberate on issues affecting project implementation and ways to facilitate smoother project execution. The session on Model Concession Agreements and Ratings will focus on relevant contractual and implementation aspects, while Designing Safe Highways will address road safety considerations in highway planning and development. The Quality Assurance and Project Monitoring session will deliberate on measures to strengthen quality, monitoring and project outcomes.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Chintan Shivir is envisaged as a platform for focused, outcome-oriented deliberations and actionable solutions, strengthening cooperation between the Centre and States and contributing towards the development of safer, higher-quality and future-ready highway infrastructure.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">***</span></span></p>
+
+<p><strong><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">GDH/DS</span></span></strong></p>
+
+
+                        
+                        <div id="reel_pic">
+                        </div>
+
+
+
+                        
+                        <br />
+                        <span id="ReleaseId">(रिलीज़ आईडी: 2318843)</span>
+                        <span id="lblViews">	आगंतुक पटल  : 203</span>
+                        <div>
+                              
+                        </div>
+                        
+
+                        <span id="lblRefPhoto"></span>
+
+                        <div class="BackgroundRelease">
+                              
+                        </div>
+                        <div>
+                              
+                        </div>
+                        <div class="ReleaseLang">इस विज्ञप्ति को इन भाषाओं में पढ़ें: 
+                        
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318867' target="_blank">
+                                          Gujarati </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318859' target="_blank">
+                                          Urdu </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318869' target="_blank">
+                                          Marathi </a>
+                              
+                        </div>
+
+                        <div class="RelTag">
+                              <ul>
+                                    
+                              </ul>
+                        </div>
+                        <div class="clear">
+                        </div>
+                        <div id="RelLink" class="RelLink">
+                              <ul>
+                                    
+                                    
+                              </ul>
+                        </div>
+                        <center>
+                              
+                        </center>
+                  </div>
+
+                  <div id="update12">
+	
+                              
+                              <input type="hidden" name="Hidden" id="Hidden" />
+                              <div id="P_CategoryManagement" class="ModalWindow" style="display: none">
+		
+                                    <div>
+                                          <input type="image" name="btnClose" id="btnClose" src="images/close_flat_icon.png" />
+                                    </div>
+                                    <div id="description">
+                                    </div>
+                                    <div class="text-center">
+                                          <h2>
+                                                
+                                                <br>
+                                                
+                                          </h2>
+                                    </div>
+                                    <br />
+                                    <div class="clear">
+                                    </div>
+                                    
+                              
+	</div>
+                        
+</div>
+            </div>
+            
+            <div id="PdfDiv" style="display: none;">
+                  <table width="100%">
+                        <tr>
+                              <td style="font-weight: 200; text-align: center">
+                                    Ministry of Road Transport & Highways
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="text-align: center; font-size: 14px;">
+                                          प्रविष्टि तिथि:
+                        04 OCT 2026 12:14PM by PIB Delhi
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: left; font-size: 16px;">
+                                          <p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Ministry of Road Transport &amp; Highways will organise Chintan Shivir 2026 on 5&ndash;6 October 2026 at Ekta Nagar, Narmada District, Gujarat, bringing together senior representatives from the Centre, States and implementing agencies to deliberate on key issues concerning the development and delivery of highway infrastructure in the country.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The inaugural session on 5 October will feature addresses by Minister of Road Transport &amp; Highways Shri Nitin Gadkari and Ministers of State Shri Ajay Tamta and Shri Harsh Malhotra.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Road Transport and Public Works Ministers from States, along with senior officials of State PWDs, implementing agencies and other stakeholders, have been invited to participate in the Chintan Shivir. Their participation will facilitate Centre-State coordination and exchange of field-level experiences, best practices and practical solutions.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The two-day conclave will focus on identifying key implementation challenges and deliberating on innovative and replicable approaches, along with policy and institutional interventions to improve project delivery, quality, safety and efficiency in the highway sector.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Chintan Shivir will feature five key thematic sessions covering PM GatiShakti and integrated infrastructure planning; Land Acquisition and Bhoomi Rashi; Model Concession Agreements and Ratings; Designing Safe Highways; and Quality Assurance and Project Monitoring.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The session on PM GatiShakti and integrated infrastructure planning will focus on coordinated and integrated planning for infrastructure development. Discussions on Land Acquisition and Bhoomi Rashi will provide an opportunity to deliberate on issues affecting project implementation and ways to facilitate smoother project execution. The session on Model Concession Agreements and Ratings will focus on relevant contractual and implementation aspects, while Designing Safe Highways will address road safety considerations in highway planning and development. The Quality Assurance and Project Monitoring session will deliberate on measures to strengthen quality, monitoring and project outcomes.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Chintan Shivir is envisaged as a platform for focused, outcome-oriented deliberations and actionable solutions, strengthening cooperation between the Centre and States and contributing towards the development of safer, higher-quality and future-ready highway infrastructure.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">***</span></span></p>
+
+<p><strong><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">GDH/DS</span></span></strong></p>
+
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 100; text-align: left; font-size: 16px;">
+                                          (रिलीज़ आईडी: 2318843)
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                              </td>
+                        </tr>
+                        <tr>
+                              <td style="font-weight: 200; text-align: center; font-size: 24px;"></td>
+                        </tr>
+                  </table>
+            </div>
+            <div class="clearfix">
+            </div>
+
+            
+
+            <div class="section1">
+                  <div id="frst_t">
+                        <div id="arr_rm"><div class='sticky-social_mb'><ul class='social_mb'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='40' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&text=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='40' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='40' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='40' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&title=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='40' /></li></a></ul></div></div>
+                  </div>
+                  <div id="second_t">
+                        <div id="sndr_rm"><div class='sticky-social'><ul class='social'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='35' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&text=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='35' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='35' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='35' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318843&title=MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='35' /></li></a></ul></div></div>
+                  </div>
+            </div>
+            <input type="hidden" name="ltrTitlee" id="ltrTitlee" value="MoRTH to Organise “Chintan Shivir 2026” to Shape Future-Ready, Safe and High-Quality Highway Infrastructure" />
+            <input type="hidden" name="ltrSubtitlee" id="ltrSubtitlee" />
+            <input type="hidden" name="ltrDescriptionn" id="ltrDescriptionn" value="&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The Ministry of Road Transport &amp;amp; Highways will organise Chintan Shivir 2026 on 5&amp;ndash;6 October 2026 at Ekta Nagar, Narmada District, Gujarat, bringing together senior representatives from the Centre, States and implementing agencies to deliberate on key issues concerning the development and delivery of highway infrastructure in the country.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The inaugural session on 5 October will feature addresses by Minister of Road Transport &amp;amp; Highways Shri Nitin Gadkari and Ministers of State Shri Ajay Tamta and Shri Harsh Malhotra.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Road Transport and Public Works Ministers from States, along with senior officials of State PWDs, implementing agencies and other stakeholders, have been invited to participate in the Chintan Shivir. Their participation will facilitate Centre-State coordination and exchange of field-level experiences, best practices and practical solutions.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The two-day conclave will focus on identifying key implementation challenges and deliberating on innovative and replicable approaches, along with policy and institutional interventions to improve project delivery, quality, safety and efficiency in the highway sector.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The Chintan Shivir will feature five key thematic sessions covering PM GatiShakti and integrated infrastructure planning; Land Acquisition and Bhoomi Rashi; Model Concession Agreements and Ratings; Designing Safe Highways; and Quality Assurance and Project Monitoring.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The session on PM GatiShakti and integrated infrastructure planning will focus on coordinated and integrated planning for infrastructure development. Discussions on Land Acquisition and Bhoomi Rashi will provide an opportunity to deliberate on issues affecting project implementation and ways to facilitate smoother project execution. The session on Model Concession Agreements and Ratings will focus on relevant contractual and implementation aspects, while Designing Safe Highways will address road safety considerations in highway planning and development. The Quality Assurance and Project Monitoring session will deliberate on measures to strengthen quality, monitoring and project outcomes.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The Chintan Shivir is envisaged as a platform for focused, outcome-oriented deliberations and actionable solutions, strengthening cooperation between the Centre and States and contributing towards the development of safer, higher-quality and future-ready highway infrastructure.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:center&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>***&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p>&lt;strong>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>GDH/DS&lt;/span>&lt;/span>&lt;/strong>&lt;/p>
+" />
+            <script type="text/javascript">
+                  var mPlayer = document.getElementById("background_music");
+                  var mPlayAction = document.getElementById("playbutton");
+
+                  var isPlaying = false;
+
+                  function playAudio() {
+                        mPlayer.play();
+                        isPlaying = true;
+                        document.getElementById('stopA').style.display = "block";
+                        document.getElementById('playA').style.display = "none";
+                  }
+
+                  function pauseAudio() {
+                        mPlayer.pause();
+                        isPlaying = false;
+                        document.getElementById('playA').style.display = "block";
+                        document.getElementById('stopA').style.display = "none";
+                  }
+                  //function HandleAudio() {
+                  //    if (isPlaying == true) {
+                  //        //Playing already Pause it
+                  //        pauseAudio();
+                  //    } else {
+                  //        //Play the music
+                  //        playAudio();
+                  //    }
+                  //}
+            </script>
+            <script type="text/javascript">
+                  var synth = window.speechSynthesis;
+
+            
+                  function CleanHtml(html) {
+
+                        html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+                        return html;
+                  }
+                  function stripHtml(html) {
+                        let tmp = document.createElement("DIV");
+                        tmp.innerHTML = CleanHtml(html);
+                        return tmp.textContent || tmp.innerText || "";
+                  }
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        //for responsive tables
+                        $("table").each(function () {
+                              if (!$(this).closest(".table-responsive").length) {
+                                    $(this).wrap("<div class='table-responsive'></div>");
+                              }
+                        });
+
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            
+            <style type="text/css">
+                  @media print {
+                        .sticky-social, .sticky-social_mb, .pull-right, #printPDF {
+                              display: none !important;
+                        }
+                  }
+
+                  .f_vl {
+                        padding-right: 30px;
+                        font-size: 17px;
+                        cursor: pointer;
+                  }
+
+                  .log_oo {
+                        // width: 20%;
+                        display: flex;
+                        justify-content: space-between;
+                  }
+
+                        .log_oo img {
+                              width: 150px;
+                              /*width: 100%;
+                    height: auto;*/
+                        }
+
+                  .sticky-social_mb {
+                        position: fixed;
+                        bottom: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                        width: 100%;
+                  }
+
+                  .social_mb {
+                        list-style: none;
+                        display: flex;
+                        width: 100%;
+                        margin-bottom: -8px;
+                  }
+
+                        .social_mb a {
+                              padding: 8px 0px;
+                              font-size: 30px;
+                              transition: all 0.8s ease-in-out;
+                              width: 20% !important;
+                              text-align: center;
+                        }
+            </style>
+            <style type="text/css">
+                  .section1 {
+                        position: relative;
+                        padding: 10px 0px;
+                        width: 100%;
+                  }
+
+
+
+                  .sticky-social {
+                        position: fixed;
+                        top: 20px;
+                        left: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                  }
+
+                  .social {
+                        list-style: none;
+                  }
+
+                        .social a li {
+                              padding: 8px 12px;
+                              font-size: 25px;
+                              transition: all 0.8s ease-in-out;
+                        }
+
+                              .social a li:hover {
+                                    margin-right: -30px;
+                                    box-shadow: 2px 5px 10px grey;
+                              }
+
+                                    .social a li:hover .fa {
+                                          margin-left: 20px;
+                                    }
+
+                  .fb_b {
+                        /* background-color: rgb(59, 89, 152);*/
+                        background-color: rgba(65,103,178,255);
+                  }
+
+                  .twitter_r {
+                        /* background-color: rgb(29, 161, 242);*/
+                        background-color: #000000;
+                  }
+
+                  .whatsapp_r {
+                        /* background-color: rgb(77, 194, 71);*/
+                        background-color: rgba(13,191,67,255);
+                  }
+
+                  .fa-envelope_r {
+                        /* background-color: rgb(219, 68, 55);*/
+                        background-color: #e2123d;
+                  }
+
+                  .fa-linkedin_r {
+                        background-color: rgb(0, 119, 181);
+                  }
+            </style>
+            <style type="text/css">
+                  @media only screen and (max-device-width: 767px) {
+                        p span img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        p img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        h2 {
+                              font-size: var(--dbim-h2, 20px);   /* was 20px !important - the !important blocked A+/A- */
+                              font-weight: 600 !important;
+                        }
+
+                        h3 {
+                              font-size: var(--dbim-h3, 16px);   /* was 16px !important */
+                              font-weight: 600 !important;
+                        }
+                  }
+            </style>
+            <style type="text/css">
+                  /* === Film Roll Badge Styling(IFFI2025 countdown) === */
+                  .film-roll-badge {
+                        position: absolute;
+                        top:82%;
+                        right: 20px;
+                        width: 230px;
+                        height: 70px;
+                        background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 18px, #6e2b8b 18px, #6e2b8b 36px );
+                        border-top: 8px solid #9a2375;
+                        border-bottom: 8px solid #9a2375;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                        animation: moveFilm 8s linear infinite;
+                        z-index: 10;
+                  }
+
+                        /* film sprocket holes */
+                        .film-roll-badge::before,
+                        .film-roll-badge::after {
+                              content: "";
+                              position: absolute;
+                              width: 100%;
+                              height: 10px;
+                              background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 10px, #fff 10px, #fff 20px );
+                              left: 0;
+                              z-index: 2;
+                        }
+
+                        .film-roll-badge::before {
+                              top: -4px;
+                        }
+
+                        .film-roll-badge::after {
+                              bottom: -4px;
+                        }
+
+                  .film-roll-inner {
+                        position: relative;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        animation: flicker 2s infinite ease-in-out;
+                  }
+
+                  .countdown-text {
+                        font-size: 1.3rem;
+                        font-weight: 700;
+                        color: #fff;
+                        text-shadow: 0 0 6px rgba(255, 255, 255, 0.4), 0 0 10px #000;
+                        white-space: nowrap;
+                  }
+
+                  /* === Animations === */
+                  @keyframes moveFilm {
+                        0% {
+                              background-position: 0 0;
+                        }
+
+                        100% {
+                              background-position: 120px 0;
+                        }
+                  }
+
+                  @keyframes flicker {
+                        0%, 100% {
+                              opacity: 1;
+                        }
+
+                        50% {
+                              opacity: 0.9;
+                        }
+
+                        25% {
+                              opacity: 0.95;
+                        }
+
+                        75% {
+                              opacity: 0.85;
+                        }
+                  }
+
+                  /* === Responsive Adjustments === */
+                  @media (max-width: 1500px) {
+                        .film-roll-badge {
+                              top: 68%;
+                              right: 18px;
+                              /* width: 220px; */
+                              height: 65px;
+                              font-size: 0.85rem;
+                        }
+
+                        .press-section {
+                              margin-top: 35px;
+                        }
+                  }
+
+                  @media (max-width: 992px) {
+                        .film-roll-badge {
+                              top: 52%;
+                              right: 10px;
+                               width: 200px; 
+                              height: 60px;
+                        }
+                  }
+
+                  @media (max-width: 768px) {
+                        .film-roll-badge {
+                              top: 56%;
+                              right: 10px;
+                               width: 124px; 
+                              height: 55px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.9rem;
+                        }
+                  }
+
+                  @media (max-width: 576px) {
+                        .film-roll-badge {
+                              top: 59%;
+                              right: 5px;
+                              /* width: 160px; */
+                              height: 50px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.85rem;
+                        }
+                  }
+            </style>
+                        <script type="text/javascript">
+                  const festivalStart = new Date("2025-11-20T00:00:00").getTime();
+                  const festivalEnd = new Date("2025-11-28T23:59:59").getTime();
+
+                  const countdownElement = document.getElementById("countdown");
+
+                  const interval = setInterval(() => {
+                        const now = new Date().getTime();
+
+                        // BEFORE FESTIVAL — show days + hours left
+                        if (now < festivalStart) {
+                              const diff = festivalStart - now;
+                              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                              countdownElement.innerHTML = `
+                ${days} Day${days !== 1 ? 's' : ''} 
+                ${hours} Hour${hours !== 1 ? 's' : ''} to go
+            `;
+
+                        }
+
+                        // DURING FESTIVAL — show 56th IFFI - Day X
+                        else if (now >= festivalStart && now <= festivalEnd) {
+                              const dayNumber = Math.floor((now - festivalStart) / (1000 * 60 * 60 * 24)) + 1;
+                              countdownElement.innerHTML = `56th IFFI - Day ${dayNumber}`;
+                        }
+
+                        // AFTER FESTIVAL — new message
+                        else {
+                              countdownElement.innerHTML = `✨ IFFI closes but never ends…`;
+
+                              // Width change logic
+                              const elements = document.querySelectorAll('.film-roll-badge');
+                              elements.forEach(el => el.style.width = "350px");
+
+                              clearInterval(interval);
+                        }
+
+                  }, 1000);
+            </script>
+
+      
+
+<script type="text/javascript">
+//<![CDATA[
+(function() {var fn = function() {$get("sc_HiddenField").value = '';Sys.Application.remove_init(fn);};Sys.Application.add_init(fn);})();Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"BackgroundCssClass":"modalBackground","PopupControlID":"P_CategoryManagement","dynamicServicePath":"/PressReleaseIframePage.aspx","id":"mpe"}, null, null, $get("Hidden"));
+});
+//]]>
+</script>
+</form>
+      
+      
+
+<script type="application/json" id="pibConsentConfig">{"ga4Id":"G-Q414Y0X6EE,G-QJJ6LZ8LHV","policyUrl":"/CookiePolicy.aspx","text":{"bannerLabel":"कुकी सहमति","title":"इस वेबसाइट पर कुकीज़","body":"इस वेबसाइट को चलाने के लिए हम आवश्यक कुकीज़ का उपयोग करते हैं। आपके आने पर हम विश्लेषण कुकीज़ भी सेट करते हैं, ताकि हम देख सकें कि साइट का उपयोग कैसे हो रहा है और उसे बेहतर बना सकें - आप इन्हें नीचे या कभी भी कुकी नीति पृष्ठ से बंद कर सकते हैं। सोशल मीडिया सामग्री की कुकीज़ केवल आपकी अनुमति से ही सेट की जाती हैं।","policyLink":"हमारी कुकी नीति पढ़ें","accept":"सभी स्वीकार करें","reject":"वैकल्पिक अस्वीकार करें","customize":"अनुकूलित करें","prefsTitle":"कुकी प्राथमिकताएं","prefsIntro":"चुनें कि यह वेबसाइट कौन सी कुकीज़ सेट कर सकती है। आवश्यक कुकीज़ बंद नहीं की जा सकतीं क्योंकि उनके बिना साइट काम नहीं करती। विश्लेषण कुकीज़ तब तक चालू रहती हैं जब तक आप उन्हें बंद न करें। सोशल मीडिया कुकीज़ तब तक बंद रहती हैं जब तक आप अनुमति न दें। आप ये विकल्प कभी भी कुकी नीति पृष्ठ से बदल सकते हैं।","essentialName":"आवश्यक कुकीज़","essentialDesc":"साइट के कार्य करने के लिए आवश्यक। ये आपका सत्र, आपकी भाषा और क्षेत्र, आपके पाठ का आकार और रंग थीम याद रखती हैं, तथा फ़ॉर्म की सुरक्षा जांच सत्यापित करती हैं। ये हमेशा चालू रहती हैं।","analyticsName":"विश्लेषण कुकीज़","analyticsDesc":"ये हमें यह समझने में मदद करती हैं कि आगंतुक साइट का उपयोग कैसे करते हैं - कौन से पृष्ठ पढ़े जाते हैं और लोग कितनी देर रुकते हैं - ताकि इसे बेहतर बनाया जा सके। यह जानकारी ऐसे रूप में एकत्र की जाती है जो सीधे आपकी पहचान नहीं करती। आपके आने पर ये चालू रहती हैं; इन्हें यहां बंद करने पर ये रुक जाती हैं और पहले से सेट कुकीज़ हटा दी जाती हैं।","socialName":"सोशल मीडिया कुकीज़","socialDesc":"ये X, फेसबुक और यूट्यूब से एम्बेड की गई सामग्री, जैसे टाइमलाइन और वीडियो, द्वारा सेट की जाती हैं। ये प्लेटफ़ॉर्म इनका उपयोग विभिन्न वेबसाइटों पर आपको ट्रैक करने के लिए कर सकते हैं। ये तब तक बंद रहती हैं जब तक आप अनुमति न दें।","save":"प्राथमिकताएं सहेजें","cancel":"रद्द करें"}}</script>
+<script type="text/javascript" src='/js/consent.js?v=9'></script>
+
+<script type="text/javascript" src='/js/consent-embeds.js?v=9'></script>
+
+</body>
+</html>

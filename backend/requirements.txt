@@ -128,3 +128,6 @@ zipp==3.23.0
 slowapi==0.1.9
 argon2-cffi==23.1.0
 pyotp==2.9.0
+beautifulsoup4==4.15.0
+defusedxml==0.7.1
+pypdf==6.19.0

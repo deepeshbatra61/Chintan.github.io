@@ -1,0 +1,1005 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head id="Head1"><title>
+	Press Release:Press Information Bureau
+</title><link href="css/style.css" rel="stylesheet" type="text/css" /><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="alternate stylesheet" href="css/change.css" media="screen" title="change" /><link rel="alternate stylesheet" href="css/green.css" media="screen" title="green" /><link rel="alternate stylesheet" href="css/yellow.css" media="screen" title="yellow" /><link rel="stylesheet" type="text/css" href="css/prtint.css" media="print" /><link rel="stylesheet" href="css/style3.1.css" type="text/css" />
+
+
+      <script src="js/jquery.min.js" type="text/javascript"></script>
+
+      <script type="text/javascript">
+            $(document).ready(function () {
+                  function getParameterByName(name) {
+                        var url = window.location.href;
+                        name = name.replace(/[\[\]]/g, '\\$&');
+                        var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                              results = regex.exec(url);
+                        if (!results) return null;
+                        if (!results[2]) return '';
+                        return decodeURIComponent(results[2].replace(/\+/g, ' '));
+                  }
+                  // Get the IDs from the current page's URL
+                  let prid = parseInt(getParameterByName('PRID'), 10);
+
+                  if (!isNaN(prid) && prid > 0) {
+                        $.ajax({
+                              type: "POST",
+                              url: "AjaxMethod.aspx/UpdatePRHitCount",
+                              async: false,
+                              data: JSON.stringify({ 'PermId': prid }),
+                              contentType: "application/json; charset=utf-8",
+                              dataType: "json",
+                              success: function (response) {
+                                    console.log(response);
+                              },
+                              error: function (error) {
+                                    console.log("Error in AJAX request", error);
+                              }
+                        });
+                  } else {
+                        console.log("Invalid parameters:", prid);
+                  }
+
+            });
+      </script>
+      <style type="text/css">
+            .table-responsive {
+                  width: 100%;
+                  overflow-x: auto;
+            }
+
+            .banner {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  background-color: #000;
+                  color: #fff;
+                  padding: 20px;
+            }
+
+            full-width {
+                  width: 100%;
+            }
+
+            .logo-left, .logo-center, .countdown {
+                  display: flex;
+                  align-items: center;
+            }
+
+                  .logo-left img, .logo-center img {
+                        height: 70px;
+                  }
+
+            .countdown {
+                  text-align: center;
+                  background-color: #444;
+                  border-radius: 10px;
+                  padding: 10px;
+                  border: 2px solid grey;
+            }
+
+            .firstnumber {
+                  color: #000000;
+                  position: absolute;
+                  top: 50px;
+                  right: 90px;
+                  font-size: 30px;
+            }
+
+            .secondnumber {
+                  position: absolute;
+                  color: #000000;
+                  right: 45px;
+                  top: 50px;
+                  font-size: 30px;
+            }
+
+            .countdown .days {
+                  font-size: 35px;
+                  color: gold;
+            }
+
+            .countdown p {
+                  margin: 0;
+            }
+
+            .countdown .text {
+                  font-size: 16px;
+            }
+
+            a {
+                  word-break: break-all;
+            }
+
+            iframe, img {
+                  max-width: 100%;
+            }
+
+            @media(max-width:1199px) {
+                  .firstnumber {
+                        top: 40px;
+                        right: 72px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 35px;
+                        top: 40px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:990px) {
+                  .firstnumber {
+                        top: 25px;
+                        right: 54px;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 25px;
+                        top: 25px;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:768px) {
+                  .countdown, .days {
+                        font-size: 12px !important;
+                  }
+
+
+                  .firstnumber {
+                        top: 25%;
+                        right: 8%;
+                        font-size: 30px;
+                  }
+
+                  .secondnumber {
+                        right: 4.5%;
+                        top: 25%;
+                        font-size: 30px;
+                  }
+            }
+
+            @media(max-width:475px) {
+                  .countdown, .days {
+                        font-size: 10px !important;
+                        top: 20%;
+                  }
+
+                  .bannerimgdiv {
+                        padding: 0 !important;
+                  }
+
+                  .bannerimg {
+                        width: 108% !important;
+                  }
+            }
+      </style>
+      <script type="text/javascript">
+            $(function () {
+                  $("[id*=printPDF]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+            $(function () {
+                  $("[id*=printPDFEvent]").click(function () {
+                        $("[id*=hfGridHtml]").val($("#PdfDiv").html());
+                  });
+            });
+      </script>
+
+      
+
+      <link id="pibConsentCss" href="/css/consent.css?v=1" rel="stylesheet" type="text/css" /><meta property="og:title" content="Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws" /><meta property="og:url" content="www.pib.gov.in/Pressreleaseshare.aspx?PRID=2318698" /><meta property="og:description" content="In line with Prime Minister Shri Narendra Modi’s vision of ‘Sahkar se Samriddhi’ and under the leade" /><meta property="og:image" content="https:/pib.gov.in/images/indian-emblem.png" />
+                                <script>!function(e){var n="https://s.go-mpulse.net/boomerang/";if("False"=="True")e.BOOMR_config=e.BOOMR_config||{},e.BOOMR_config.PageParams=e.BOOMR_config.PageParams||{},e.BOOMR_config.PageParams.pci=!0,n="https://s2.go-mpulse.net/boomerang/";if(window.BOOMR_API_key="C4E7H-KSCMC-422L4-W3EM5-U36MF",function(){function e(){if(!i){var e=document.createElement("script");e.id="boomr-scr-as",e.src=window.BOOMR.url,e.async=!0,o.parentNode.appendChild(e),i=!0}}function t(e){i=!0;var n,t,a,r,d=document,O=window;if(window.BOOMR.snippetMethod=e?"if":"i",t=function(e,n){var t=d.createElement("script");t.id=n||"boomr-if-as",t.src=window.BOOMR.url,BOOMR_lstart=(new Date).getTime(),e=e||d.body,e.appendChild(t)},!window.addEventListener&&window.attachEvent&&navigator.userAgent.match(/MSIE [67]\./))return window.BOOMR.snippetMethod="s",void t(o.parentNode,"boomr-async");a=document.createElement("IFRAME"),a.src="about:blank",a.title="",a.role="presentation",a.loading="eager",r=(a.frameElement||a).style,r.width=0,r.height=0,r.border=0,r.display="none",o.parentNode.appendChild(a);try{O=a.contentWindow,d=O.document.open()}catch(_){n=document.domain,a.src="javascript:var d=document.open();d.domain='"+n+"';void(0);",O=a.contentWindow,d=O.document.open()}if(n)d._boomrl=function(){this.domain=n,t()},d.write("<bo"+"dy onload='document._boomrl();'>");else if(O._boomrl=function(){t()},O.addEventListener)O.addEventListener("load",O._boomrl,!1);else if(O.attachEvent)O.attachEvent("onload",O._boomrl);d.close()}function a(e){window.BOOMR_onload=e&&e.timeStamp||(new Date).getTime()}if(!window.BOOMR||!window.BOOMR.version&&!window.BOOMR.snippetExecuted){window.BOOMR=window.BOOMR||{},window.BOOMR.snippetStart=(new Date).getTime(),window.BOOMR.snippetExecuted=!0,window.BOOMR.snippetVersion=12,window.BOOMR.url=n+"C4E7H-KSCMC-422L4-W3EM5-U36MF";var o=document.currentScript||document.getElementsByTagName("script")[0],i=!1,r=document.createElement("link");if(r.relList&&"function"==typeof r.relList.supports&&r.relList.supports("preload")&&"as"in r)window.BOOMR.snippetMethod="p",r.href=window.BOOMR.url,r.rel="preload",r.as="script",r.addEventListener("load",e),r.addEventListener("error",function(){t(!0)}),setTimeout(function(){if(!i)t(!0)},3e3),BOOMR_lstart=(new Date).getTime(),o.parentNode.appendChild(r);else t(!1);if(window.addEventListener)window.addEventListener("load",a,!1);else if(window.attachEvent)window.attachEvent("onload",a)}}(),"".length>0)if(e&&"performance"in e&&e.performance&&"function"==typeof e.performance.setResourceTimingBufferSize)e.performance.setResourceTimingBufferSize();!function(){if(BOOMR=e.BOOMR||{},BOOMR.plugins=BOOMR.plugins||{},!BOOMR.plugins.AK){var n=""=="true"?1:0,t="",a="phmkvamvq5ijs2wceonq-f-1f6235fe6-clientnsv4-s.akamaihd.net",o="false"=="true"?2:1,i={"ak.v":"41","ak.cp":"1825201","ak.ai":parseInt("1215205",10),"ak.ol":"0","ak.cr":5,"ak.ipv":4,"ak.proto":"http/1.1","ak.rid":"1816ac3b","ak.r":34464,"ak.a2":n,"ak.m":"dscb","ak.n":"ff","ak.cport":51904,"ak.gh":"149.135.80.108","ak.quicv":"","ak.tlsv":"tls1.3","ak.0rtt":"","ak.0rtt.ed":"","ak.csrc":"-","ak.acc":"bbr","ak.t":"1791107995","ak.ak":"hOBiQwZUYzCg5VSAfCLimQ==2t7OK0S0YvYfnWT9AOhWrmhgeZS2EmX46wKhIGvGxHWofVP+UBpInn+aQ8z7yot/xJLu6cCWIZSRzZv1huNibH+FgBCUxZmZnxNRWbOnI2ewCj99/ditGJJwSQ64TgEnZ93XoXKKZDjV2fdI0Tm8hbcxjvVTZIoZBTE1sfsX23emA9z3WtaHZfzBA4XyIRYme/E/gJRCD522lbsvq/W04AkiT6y29rFJDfW93r4dT8GhCwywU6JY3VQfNqdplrcJLbRxxN2b6ZEIHDEqB0XSfPhTEoRBQAvMNykBXvR2246Oo1ffxq1xYKUho0bLGf+MaSm3S7q5woXHelPwYRXKPf+TFs5L+WW0rBv0gu13VsWMCT0ovvkY6/XrJb6UDeT9WxkN5cabRgjRWkljcqYX+iBHyJ5XG3zuGv1qhdCgHkk=","ak.pv":"9","ak.dpoabenc":"","ak.tf":o};if(""!==t)i["ak.ruds"]=t;var r={i:!1,av:function(n){var t="http.initiator";if(n&&(!n[t]||"spa_hard"===n[t]))i["ak.feo"]=void 0!==e.aFeoApplied?1:0,BOOMR.addVar(i)},rv:function(){var e=["ak.cport","ak.cr","ak.csrc","ak.gh","ak.ipv","ak.m","ak.n","ak.ol","ak.proto","ak.quicv","ak.tlsv","ak.0rtt","ak.0rtt.ed","ak.r","ak.acc","ak.t","ak.tf"];BOOMR.removeVar(e)}};BOOMR.plugins.AK={akVars:i,akDNSPreFetchDomain:a,init:function(){if(!r.i){var e=BOOMR.subscribe;e("before_beacon",r.av,null,null),e("onbeacon",r.rv,null,null),r.i=!0}return this},is_complete:function(){return!0}}}}()}(window);</script></head>
+<body>
+    
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden" id="dbim-icon-sprite">
+    <defs>
+        <symbol id="icon-angle-double-left" viewBox="0 0 24 24"><path d="M11.6 4.6 4.2 12l7.4 7.4 2.2-2.2L8.6 12l5.2-5.2z"/><path d="M19 4.6 11.6 12 19 19.4l2.2-2.2L16 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-angle-double-right" viewBox="0 0 24 24"><path d="M12.4 4.6 10.2 6.8 15.4 12l-5.2 5.2 2.2 2.2L19.8 12z"/><path d="M5 4.6 2.8 6.8 8 12l-5.2 5.2L5 19.4 12.4 12z"/></symbol>
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="M20.8 10.6H9.6v2.8h11.2z"/><path d="M10.8 5.6 3.2 12l7.6 6.4z"/></symbol>
+        <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M3.2 10.6h11.2v2.8H3.2z"/><path d="M13.2 5.6 20.8 12l-7.6 6.4z"/></symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M7.6 2.4H10v2.4H7.6z"/><path d="M14 2.4h2.4v2.4H14z"/><path fill-rule="evenodd" d="M4 4.8h16a1.6 1.6 0 0 1 1.6 1.6v13.2a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6V6.4A1.6 1.6 0 0 1 4 4.8zm.4 5.6v8.4h15.2v-8.4z"/><path d="M6.4 12.4h3.2v3.2H6.4z"/></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4 2.2-2.2L12.4 12l5.2-5.2z"/></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="M8.6 4.6 6.4 6.8 11.6 12l-5.2 5.2 2.2 2.2L16 12z"/></symbol>
+        <symbol id="icon-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24"><path d="M10.8 3h2.4v7.6h3.4L12 16.6l-4.6-6h3.4z"/><path d="M4 17.2h2.4v2.4h11.2v-2.4H20v3.2a1.4 1.4 0 0 1-1.4 1.4H5.4A1.4 1.4 0 0 1 4 20.4z"/></symbol>
+        <symbol id="icon-facebook" viewBox="0 0 24 24"><path d="M13.6 21.6v-8.4h2.8l.42-3.3h-3.22V7.8c0-.95.27-1.6 1.64-1.6h1.74V3.26a23 23 0 0 0-2.54-.13c-2.5 0-4.22 1.53-4.22 4.34v2.43H7.4v3.3h2.82v8.4z"/></symbol>
+        <symbol id="icon-hashtag" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M8.8 3h2.4l-1 6h3.2l1-6h2.4l-1 6h3.4v2.4h-3.8l-.6 3.2h3.6V17h-4l-1 5h-2.4l1-5h-3.2l-1 5H5.4l1-5H3V14.6h3.8l.6-3.2H3.8V9h4zm.6 8.4-.6 3.2h3.2l.6-3.2z"/></symbol>
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M12 3.4 2.8 11.6h2.4v8.4a1 1 0 0 0 1 1h3.3v-5.4h5v5.4h3.3a1 1 0 0 0 1-1v-8.4h2.4z"/></symbol>
+        <symbol id="icon-instagram" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.6 2.4h8.8a5.2 5.2 0 0 1 5.2 5.2v8.8a5.2 5.2 0 0 1-5.2 5.2H7.6a5.2 5.2 0 0 1-5.2-5.2V7.6a5.2 5.2 0 0 1 5.2-5.2zm0 2.4a2.8 2.8 0 0 0-2.8 2.8v8.8a2.8 2.8 0 0 0 2.8 2.8h8.8a2.8 2.8 0 0 0 2.8-2.8V7.6a2.8 2.8 0 0 0-2.8-2.8z"/><path fill-rule="evenodd" d="M12 6.8a5.2 5.2 0 1 0 0 10.4 5.2 5.2 0 0 0 0-10.4zm0 2.4a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6z"/><circle cx="17.3" cy="6.7" r="1.3"/></symbol>
+        <symbol id="icon-linkedin" viewBox="0 0 24 24"><path d="M4.8 8.8h3.6v12H4.8z"/><circle cx="6.6" cy="5.4" r="2.1"/><path d="M10.8 8.8h3.45v1.65h.05c.48-.9 1.65-1.85 3.4-1.85 3.63 0 4.3 2.35 4.3 5.4v6.6h-3.6v-5.85c0-1.4-.03-3.2-1.95-3.2-1.95 0-2.25 1.52-2.25 3.1v5.95h-3.6z"/></symbol>
+        <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M2.4 7.6v9.2a1.6 1.6 0 0 0 1.6 1.6h16a1.6 1.6 0 0 0 1.6-1.6V7.6L12 14z"/><path d="M21.2 5.4H2.8L12 11.8z"/></symbol>
+        <symbol id="icon-mail-open" viewBox="0 0 24 24"><path d="M2.4 9.8h19.2v9.6A1.6 1.6 0 0 1 20 21H4a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M12 2.6 21.6 9.2h-3.8L12 5.3 6.2 9.2H2.4z"/><path d="m3.9 11.2 8.1 5.4 8.1-5.4 1.5 1.3-9.6 6.4-9.6-6.4z"/></symbol>
+        <symbol id="icon-map-marker" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.4a7 7 0 0 0-7 7c0 5.2 7 12.2 7 12.2s7-7 7-12.2a7 7 0 0 0-7-7zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></symbol>
+        <symbol id="icon-newspaper" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.8 4.4h14.8v15.2H2.8zm2 2v11.2h10.8V6.4z"/><path d="M6 7.6h8.4v1.6H6z"/><path d="M6 10.8h8.4v1.6H6z"/><path d="M6 14h5.2v1.6H6z"/><path d="M18.4 8.4h2.8v9.6a1.4 1.4 0 0 1-2.8 0z"/></symbol>
+        <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7.4" y="4" width="3.6" height="16" rx="0.9"/><rect x="13" y="4" width="3.6" height="16" rx="0.9"/></symbol>
+        <symbol id="icon-picture" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.4 5.2h19.2v13.6H2.4zm2 2v9.6h15.2V7.2z"/><path d="M5.6 16.4 10 11l2.6 3 2-2.2 4 4.6z"/><circle cx="8" cy="10.4" r="1.5"/></symbol>
+        <symbol id="icon-press-conference" viewBox="0 0 24 24"><circle cx="12" cy="5.2" r="2.6"/><path d="M7.6 12.2a4.4 4.4 0 0 1 8.8 0z"/><circle cx="4.9" cy="9.6" r="2.2"/><path d="M1.8 15.2a3.1 3.1 0 0 1 6.2 0z"/><circle cx="19.1" cy="9.6" r="2.2"/><path d="M16 15.2a3.1 3.1 0 0 1 6.2 0z"/><path d="M6.6 13.6h10.8l2.2 7.8H4.4z"/></symbol>
+        <symbol id="icon-print" viewBox="0 0 24 24"><path d="M6.4 2.8h11.2v4.4H6.4z"/><path d="M4 8.4h16a1.6 1.6 0 0 1 1.6 1.6v5.6a1.6 1.6 0 0 1-1.6 1.6h-1.6v-2.8H6v2.8H4a1.6 1.6 0 0 1-1.6-1.6V10A1.6 1.6 0 0 1 4 8.4z"/><path d="M7.2 15.6h9.6v5.6H7.2z"/></symbol>
+        <symbol id="icon-rss" viewBox="0 0 24 24"><circle cx="4.8" cy="19.2" r="2.4"/><path d="M2.4 11.2v3.2a6.4 6.4 0 0 1 6.4 6.4H12A9.6 9.6 0 0 0 2.4 11.2z"/><path d="M2.4 4.8V8A13.6 13.6 0 0 1 16 21.6h3.2A16.8 16.8 0 0 0 2.4 4.8z"/></symbol>
+        <symbol id="icon-search-plus" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 2.8a7.2 7.2 0 1 0 0 14.4 7.2 7.2 0 0 0 0-14.4zm0 2.4a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6z"/><path d="M15.3 14.6 21.2 20.5l-1.5 1.5-5.9-5.9z"/><path d="M9.2 6.8h1.6v2.4h2.4v1.6h-2.4v2.4H9.2v-2.4H6.8V9.2h2.4z"/></symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5.6" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="18.4" r="3"/><path d="M8.3 10.9 15.7 7.2l.9 1.8-7.4 3.7z"/><path d="M9.2 13.1 16.6 16.8l-.9 1.8-7.4-3.7z"/></symbol>
+        <symbol id="icon-twitter" viewBox="0 0 24 24"><path d="M4.2 3h4.3l11.3 18h-4.3z"/><path d="M19.3 3h-2.6L4.2 21h2.6z"/></symbol>
+        <symbol id="icon-university" viewBox="0 0 24 24"><path d="M12 2.4 21.6 7.2v1.6H2.4V7.2z"/><path d="M4.8 10.4h2.4v8H4.8z"/><path d="M9.2 10.4h2.4v8H9.2z"/><path d="M13.4 10.4h2.4v8h-2.4z"/><path d="M17.6 10.4H20v8h-2.4z"/><path d="M3.2 19.8h17.6v1.8H3.2z"/></symbol>
+        <symbol id="icon-volume-up" viewBox="0 0 24 24"><path d="M3.2 9.2h3.3l5-4.2v14l-5-4.2H3.2z"/><path d="M14.6 8.4a5 5 0 0 1 0 7.2l1.6 1.6a7.2 7.2 0 0 0 0-10.4z"/><path d="M17.4 5.6a8.8 8.8 0 0 1 0 12.8l1.5 1.5a10.9 10.9 0 0 0 0-15.8z"/></symbol>
+    </defs>
+</svg>
+
+      <form method="post" action="./PressReleaseIframePage.aspx?PRID=2318698&amp;reg=48&amp;lang=2" id="form1">
+<input type="hidden" name="sc_HiddenField" id="sc_HiddenField" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+
+
+<script src="/ScriptResource.axd?d=x6wALODbMJK5e0eRC_p1LdIxBJXt0U_WW5GWfJqHAqo6frgCmGRfEywglicTersO2OKrFhK1gAIp0Wk2al2YrpdR3uWqH6f4nfjBsCyRUfTUUVmb0&amp;t=ffffffffecf8d3f2" type="text/javascript"></script>
+<script src="/PressReleaseIframePage.aspx?_TSM_HiddenField_=sc_HiddenField&amp;_TSM_CombinedScripts_=%3b%3bAjaxControlToolkit%2c+Version%3d3.5.7.123%2c+Culture%3dneutral%2c+PublicKeyToken%3d28f01b0e84b6d53e%3aen-US%3a5a4df314-b4a2-4da2-a207-9284f1b1e96c%3ade1feab2%3af2c8e708%3a8613aea7%3af9cec9bc%3a3202a5a2%3aab09e3fe%3a87104b7c%3a720a52bf%3a589eaa30%3aa67c2700%3abe6fb298" type="text/javascript"></script>
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="8166A38A" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="A1CuTjS11SinOu+cFDt2MZ+Uupk9WPH5q/OsWOsxrNN5VYxk3sj4t53kEy1Mdl6oCwHJd2fqKkUeCKcZqC7O41GdVozlFH9kWxQz/XbpGIYizzIBMu+RQYcVBHcjTB8vjM2GbWmUTcNvrY6VBg0dsrrpkklBKsUwfLI/ASNdZIVO4CmpkW04PgSbTTR3UB0Rl7h1j8WCe5ECOUm921oGFo2XHKjrLXQiggONuXbIbpRbIhcbi+dSGj2dS8pZMq4EqtF202WRMqbfBkummiBqiRRpXpY=" />
+                              
+            <div id="templateCss"></div>
+            
+            <input type="hidden" name="hfGridHtml" id="hfGridHtml" />
+            <div class="container" style='margin-bottom: 50px;'>
+                  <div id="accessories">
+
+                        
+                        <div class="pull-right" style="display: flex">
+                              <div id="voll"></div>
+                              <div id="vollDT"></div>
+                              
+                              
+<div class="print-icons">
+<input type="image" name="Print1$print" id="Print1_print" aria-label="Print" src="images/printer_icon.png" alt="print page button" style="padding: 5px 10px 5px 10px;" />
+</div>
+                        </div>
+                  </div>
+                  <input type="hidden" name="hydpermid" id="hydpermid" value="2318698" />
+                  
+
+
+
+                  <div class="innner-page-main-about-us-content-right-part">
+
+                        <div id="MinistryName" class="MinistryNameSubhead text-center">
+                              Ministry of Cooperation
+                        </div>
+                        
+                        <div id="lg_g"><div class='log_oo'>  <img src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2021/aug/ph202183101.png' alt='azadi ka amrit mahotsav' /> </div></div>
+
+
+
+
+
+                        <div class="text-center event-heading-background">
+                              
+                              <h1 id="Titleh2">
+                                    Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws
+                              </h1>
+                              <h3 id="Subtitleh3">
+                                    <span id="ltrSubtitle"><br/>In line with Prime Minister Shri Narendra Modi’s vision of ‘Sahkar se Samriddhi’, sustained efforts are being made &#160;for the prosperity of livestock rearers, farmers and women through cooperation and dairy sector<br/><br/>The massive gathering of livestock rearers is an auspicious sign for the White Revolution in Madhya Pradesh<br/><br/>Congress ignored the demand for an independent Ministry of Cooperation for 75 years, while Modi Ji established the Ministry, bringing the greatest benefit to livestock rearers<br/><br/>Mohan Yadav Government has set a target to increase daily milk procurement in Madhya Pradesh from 12 lakh kg to 52 lakh kg<br/><br/>India’s total milk production stood at 14.06 crore tonnes in 2014-15 which has been increased by Modi Ji to 25 crore tonnes in the last 10 years<br/><br/>Per capita milk production has increased by 58%, from 307 grams per day in 2014-15 to 485 grams per day today; India has emerged as the world’s largest milk-producing country<br/><br/>Uttar Pradesh, Rajasthan, Madhya Pradesh, Gujarat and Maharashtra—the top five milk-producing States—are all BJP-ruled; livestock rearers have never benefited in Congress-ruled States<br/><br/>Under White Revolution 2.0, 75,000 new cooperative dairies will be established and 46,000 existing dairies strengthened, with Madhya Pradesh set to derive the maximum benefit<br/><br/>Five technology-driven models for dung processing have been developed, which will help enhance farmers’ income in the coming years<br/><br/>Joining the cooperative system will enable livestock rearers to receive remunerative prices for milk along with benefits from processing and value addition: Shri Amit Shah<br/><br/>In-principle approval for providing 50 acres of land for breed improvement of cattle and buffaloes in Madhya Pradesh; initiative to promote conservation of indigenous breeds and modern breeding technologies<br/><br/>Dairy cooperatives are an important vehicle for women empowerment, rural development, economic prosperity of farmers and the fight against malnutrition:</span>
+                              </h3>
+                        </div>
+
+                        <div id="PrDateTime" class="ReleaseDateSubHeaddateTime text-center pt20">
+                              प्रविष्टि तिथि:
+                03 OCT 2026 6:24PM by PIB Delhi
+                        </div>
+                        
+                        <div class='pt20'>
+                        </div>
+                        <input type="hidden" name="hydphotoUrl" id="hydphotoUrl" />
+                        
+                        <p style="text-align:justify"><span style="font-family:&quot;Times New Roman&quot;,Times,serif; font-size:16px">In line with Prime Minister Shri Narendra Modi&rsquo;s vision of &lsquo;Sahkar se Samriddhi&rsquo; and under the leadership of Union Home Minister and Minister of Cooperation Shri Amit Shah, sustained efforts are being made to transform cooperation into an effective instrument for strengthening the rural economy, advancing agricultural development, enhancing the income of livestock rearers and empowering women. As part of these efforts, Union Home Minister and Minister of Cooperation Shri Amit Shah today addressed the Gaupalak Sammelan at Dussehra Maidan in Bhopal, Madhya Pradesh, and inaugurated a State-level exhibition on the New Criminal Laws. Madhya Pradesh Chief Minister Dr. Mohan Yadav, Deputy Chief Ministers Shri Jagdish Devda and Shri Rajendra Shukla, several Ministers of the State Government, Members of Parliament, MLAs, representatives of the cooperative sector and a large number of livestock rearers and milk producers were present on the occasion.</span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">At the outset of the programme, the Union Home Minister and Minister of Cooperation inaugurated the State-level exhibition on the New Criminal Laws and viewed various exhibition sections showcasing the achievements of Madhya Pradesh Police in their implementation.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Addressing the gathering, Union Home Minister and Minister of Cooperation Shri Amit Shah said that under the leadership of Prime Minister Shri Narendra Modi, the country has made a historic transition from the punishment-centric criminal justice system of the colonial era towards a new system focused on delivering justice to citizens. He said that the fundamental objective of the new laws is not to protect the government but to safeguard the dignity, property and physical security of the citizens of India, and their core principle is &lsquo;justice&rsquo;, not &lsquo;punishment&rsquo;. He said that after their full implementation, the new system aims to make the judicial process time-bound, from the registration of an FIR right up to the Supreme Court.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that modern science and technology have been extensively incorporated into the new criminal justice system. Several modern and scientific provisions, including electronic evidence, online summons, online hearings, video conferencing and forensic science, have been incorporated into the new framework. He said that the new laws also contain specific provisions to deal with crimes relating to the safety of women, missing children, terrorism and mob lynching. He expressed confidence that after their full implementation, India&rsquo;s criminal justice system will rank among the most modern systems in the world.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the cooperative sector, the Union Home Minister and Minister of Cooperation said that there had been a long-standing demand in the country for a separate Ministry of Cooperation, and Prime Minister Shri Narendra Modi infused new energy and momentum into the cooperative sector by establishing an independent Ministry of Cooperation. He said that farmers, livestock rearers and people associated with the rural economy are the biggest beneficiaries of the establishment of this Ministry.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that livestock rearers selling milk in the open market often do not receive a remunerative price for their produce because of intermediaries, whereas the cooperative system not only enables them to secure better prices but also connects them with the economic benefits generated through milk processing and value addition. He said that robust processing infrastructure is essential for producing value-added products such as ice cream, butter, ghee, cheese and mawa from milk, and the Government is working rapidly in this direction.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Describing breed improvement as an important means of enhancing productivity in the dairy sector, the Union Home Minister and Minister of Cooperation said that he had requested the Madhya Pradesh Government to provide 50 acres of land for programmes related to breed improvement of cattle and buffaloes, and Chief Minister Dr. Mohan Yadav has given in-principle approval for the same. He said that modern breed-improvement technologies will help improve animal health and milk productivity while also promoting the conservation and development of India&rsquo;s indigenous breeds. The use of modern technologies such as sex-sorted semen will also enhance the prospects of additional economic benefits for livestock rearers.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the State Government&rsquo;s target for increasing milk production in Madhya Pradesh, Shri Amit Shah said that it is an ambitious goal and the Central Government will work shoulder to shoulder with the State Government and the livestock rearers of Madhya Pradesh to achieve it.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Highlighting the progress made by India&rsquo;s dairy sector, the Union Home Minister and Minister of Cooperation said that the country&rsquo;s total milk production stood at approximately 14.60 crore tonnes in 2014-15 and has now increased to around 24.80 crore tonnes. He said that during the same period, per capita milk availability has increased by approximately 58%, from around 307 grams per day to 485 grams per day. He said that India today is the world&rsquo;s largest milk-producing country.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that, under the leadership of Prime Minister Shri Narendra Modi and in keeping with the resolve to make India a leading nation in every sphere by 2047, the agriculture, animal husbandry and cooperative sectors are also being modernised and made globally competitive. He said that exports of Indian dairy products have increased to approximately ₹4,666 crore, with Indian dairy products being exported to several countries, including the United Arab Emirates, Bangladesh, the United States, Saudi Arabia and Bhutan.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to White Revolution 2.0, the Union Home Minister and Minister of Cooperation said that a target has been set to establish 75,000 new cooperative dairies across the country and strengthen 46,000 existing dairies. He said that a large number of new cooperative dairies will be established in Madhya Pradesh under this initiative, enabling the State&rsquo;s livestock rearers to benefit from organised markets, better prices, modern processing facilities and a stronger cooperative network.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that several measures are also being taken to integrate the dairy sector with the Net Zero and circular economy model. Initiatives relating to breed improvement, vaccination, quality livestock, fodder management, artificial insemination and sex-sorted semen are being taken forward. He said that the Sardar Patel Cooperative Dairy Federation Limited has also been established for this purpose.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Highlighting the potential of a dung-based economy, the Union Home Minister and Minister of Cooperation said that various models have been developed to take forward, in an integrated manner, the scientific collection of dung, reduction of methane emissions, clean energy generation, nutrient recycling and creation of rural employment. He said that efforts will be made in the coming years to develop a system under which dung can also become an additional source of income for livestock rearers and farmers in Madhya Pradesh.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the role of women in dairy cooperatives, Shri Amit Shah said that there can hardly be a more powerful instrument of women empowerment than cooperative dairying. Dairy activities place income directly in the hands of women and thereby link women empowerment with rural development, the economic advancement of farmers and the prosperity of families. He said that the dairy sector is also playing an important role in the country&rsquo;s fight against malnutrition.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Union Home Minister referred to the efforts of the Central and State Governments to make Madhya Pradesh free from narcotics and drugs and said that a detailed meeting on the issue is being held with the Chief Minister and the departments concerned. He said that work will be undertaken to formulate and implement a detailed and meticulous action plan to make Madhya Pradesh free from narcotics and drugs, thereby ensuring a safe and bright future for the youth of the State and future generations.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah congratulated Chief Minister Dr. Mohan Yadav, the Deputy Chief Ministers and the entire State Government team for the various decisions taken in the interest of livestock rearers. He said that the target of substantially expanding milk production and the cooperative dairy network in Madhya Pradesh is undoubtedly challenging, but the Central Government will extend its full support to the State Government and livestock rearers in achieving this objective. The Union Home Minister and Minister of Cooperation said that the Central and State Governments are working with the resolve to take the cooperative and dairy sectors to new heights so that Madhya Pradesh prospers through dairy development and cattle rearing, its farmers prosper and, above all, women prosper.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">On the occasion, a Memorandum of Understanding was also exchanged between KRIBHCO and the Madhya Pradesh State Biodiversity Board for developing an urban forest in Bhopal under the &lsquo;Morvan Project&rsquo;.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">During the programme, Shri Amit Shah digitally laid the foundation stone for a 3 lakh litres per day milk processing plant in Ujjain, to be established at a cost of ₹255 crore. A 40,000 litres per day Product Dairy Plant, constructed in Bhopal at a cost of approximately ₹16.5 crore, and a state-of-the-art State-level Central Laboratory, built at a cost of ₹12.42 crore, were also inaugurated. The strengthening works of the Mini Dairy Plant in Shivpuri, undertaken at a cost of ₹6.5 crore, were also inaugurated digitally. These projects will further strengthen milk processing capacity, quality testing facilities and dairy-sector infrastructure in Madhya Pradesh.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">During the programme, bonuses were provided to livestock rearers associated with the Bhopal and Indore Milk Unions, while financial assistance was extended to Gaushalas through a single click. Dividends were distributed to members of dairy cooperative societies and livestock rearers were felicitated. Recognising the important role of women livestock rearers, &lsquo;Gaupalak Didis&rsquo; were also honoured. In addition, sanction letters were presented under the Dr. Bhimrao Ambedkar Kamdhenu Yojana.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">****</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px"><strong>AK</strong></span></span></p>
+
+
+                        
+                        <div id="reel_pic">
+                        </div>
+
+
+
+                        
+                        <br />
+                        <span id="ReleaseId">(रिलीज़ आईडी: 2318698)</span>
+                        <span id="lblViews">	आगंतुक पटल  : 509</span>
+                        <div>
+                              
+                        </div>
+                        
+
+                        <span id="lblRefPhoto"></span>
+
+                        <div class="BackgroundRelease">
+                              
+                        </div>
+                        <div>
+                              
+                        </div>
+                        <div class="ReleaseLang">इस विज्ञप्ति को इन भाषाओं में पढ़ें: 
+                        
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318765' target="_blank">
+                                          Urdu </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318688' target="_blank">
+                                          हिन्दी </a>
+                              
+                                    ,
+                              
+                                    
+                                    <a href='https://pib.gov.in/PressReleasePage.aspx?PRID=2318731' target="_blank">
+                                          Gujarati </a>
+                              
+                        </div>
+
+                        <div class="RelTag">
+                              <ul>
+                                    
+                              </ul>
+                        </div>
+                        <div class="clear">
+                        </div>
+                        <div id="RelLink" class="RelLink">
+                              <ul>
+                                    
+                                    
+                              </ul>
+                        </div>
+                        <center>
+                              
+                        </center>
+                  </div>
+
+                  <div id="update12">
+	
+                              
+                              <input type="hidden" name="Hidden" id="Hidden" />
+                              <div id="P_CategoryManagement" class="ModalWindow" style="display: none">
+		
+                                    <div>
+                                          <input type="image" name="btnClose" id="btnClose" src="images/close_flat_icon.png" />
+                                    </div>
+                                    <div id="description">
+                                    </div>
+                                    <div class="text-center">
+                                          <h2>
+                                                
+                                                <br>
+                                                
+                                          </h2>
+                                    </div>
+                                    <br />
+                                    <div class="clear">
+                                    </div>
+                                    
+                              
+	</div>
+                        
+</div>
+            </div>
+            
+            <div id="PdfDiv" style="display: none;">
+                  <table width="100%">
+                        <tr>
+                              <td style="font-weight: 200; text-align: center">
+                                    Ministry of Cooperation
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: center; font-size: 30px;">
+                                          <div style='height:30px;width:100%;'></div>In line with Prime Minister Shri Narendra Modi’s vision of ‘Sahkar se Samriddhi’, sustained efforts are being made &#160;for the prosperity of livestock rearers, farmers and women through cooperation and dairy sector<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>The massive gathering of livestock rearers is an auspicious sign for the White Revolution in Madhya Pradesh<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Congress ignored the demand for an independent Ministry of Cooperation for 75 years, while Modi Ji established the Ministry, bringing the greatest benefit to livestock rearers<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Mohan Yadav Government has set a target to increase daily milk procurement in Madhya Pradesh from 12 lakh kg to 52 lakh kg<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>India’s total milk production stood at 14.06 crore tonnes in 2014-15 which has been increased by Modi Ji to 25 crore tonnes in the last 10 years<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Per capita milk production has increased by 58%, from 307 grams per day in 2014-15 to 485 grams per day today; India has emerged as the world’s largest milk-producing country<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Uttar Pradesh, Rajasthan, Madhya Pradesh, Gujarat and Maharashtra—the top five milk-producing States—are all BJP-ruled; livestock rearers have never benefited in Congress-ruled States<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Under White Revolution 2.0, 75,000 new cooperative dairies will be established and 46,000 existing dairies strengthened, with Madhya Pradesh set to derive the maximum benefit<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Five technology-driven models for dung processing have been developed, which will help enhance farmers’ income in the coming years<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Joining the cooperative system will enable livestock rearers to receive remunerative prices for milk along with benefits from processing and value addition: Shri Amit Shah<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>In-principle approval for providing 50 acres of land for breed improvement of cattle and buffaloes in Madhya Pradesh; initiative to promote conservation of indigenous breeds and modern breeding technologies<div style='height:30px;width:100%;'></div><div style='height:30px;width:100%;'></div>Dairy cooperatives are an important vehicle for women empowerment, rural development, economic prosperity of farmers and the fight against malnutrition:
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="text-align: center; font-size: 14px;">
+                                          प्रविष्टि तिथि:
+                        03 OCT 2026 6:24PM by PIB Delhi
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 200; text-align: left; font-size: 16px;">
+                                          <p style="text-align:justify"><span style="font-family:&quot;Times New Roman&quot;,Times,serif; font-size:16px">In line with Prime Minister Shri Narendra Modi&rsquo;s vision of &lsquo;Sahkar se Samriddhi&rsquo; and under the leadership of Union Home Minister and Minister of Cooperation Shri Amit Shah, sustained efforts are being made to transform cooperation into an effective instrument for strengthening the rural economy, advancing agricultural development, enhancing the income of livestock rearers and empowering women. As part of these efforts, Union Home Minister and Minister of Cooperation Shri Amit Shah today addressed the Gaupalak Sammelan at Dussehra Maidan in Bhopal, Madhya Pradesh, and inaugurated a State-level exhibition on the New Criminal Laws. Madhya Pradesh Chief Minister Dr. Mohan Yadav, Deputy Chief Ministers Shri Jagdish Devda and Shri Rajendra Shukla, several Ministers of the State Government, Members of Parliament, MLAs, representatives of the cooperative sector and a large number of livestock rearers and milk producers were present on the occasion.</span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">At the outset of the programme, the Union Home Minister and Minister of Cooperation inaugurated the State-level exhibition on the New Criminal Laws and viewed various exhibition sections showcasing the achievements of Madhya Pradesh Police in their implementation.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Addressing the gathering, Union Home Minister and Minister of Cooperation Shri Amit Shah said that under the leadership of Prime Minister Shri Narendra Modi, the country has made a historic transition from the punishment-centric criminal justice system of the colonial era towards a new system focused on delivering justice to citizens. He said that the fundamental objective of the new laws is not to protect the government but to safeguard the dignity, property and physical security of the citizens of India, and their core principle is &lsquo;justice&rsquo;, not &lsquo;punishment&rsquo;. He said that after their full implementation, the new system aims to make the judicial process time-bound, from the registration of an FIR right up to the Supreme Court.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that modern science and technology have been extensively incorporated into the new criminal justice system. Several modern and scientific provisions, including electronic evidence, online summons, online hearings, video conferencing and forensic science, have been incorporated into the new framework. He said that the new laws also contain specific provisions to deal with crimes relating to the safety of women, missing children, terrorism and mob lynching. He expressed confidence that after their full implementation, India&rsquo;s criminal justice system will rank among the most modern systems in the world.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the cooperative sector, the Union Home Minister and Minister of Cooperation said that there had been a long-standing demand in the country for a separate Ministry of Cooperation, and Prime Minister Shri Narendra Modi infused new energy and momentum into the cooperative sector by establishing an independent Ministry of Cooperation. He said that farmers, livestock rearers and people associated with the rural economy are the biggest beneficiaries of the establishment of this Ministry.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that livestock rearers selling milk in the open market often do not receive a remunerative price for their produce because of intermediaries, whereas the cooperative system not only enables them to secure better prices but also connects them with the economic benefits generated through milk processing and value addition. He said that robust processing infrastructure is essential for producing value-added products such as ice cream, butter, ghee, cheese and mawa from milk, and the Government is working rapidly in this direction.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Describing breed improvement as an important means of enhancing productivity in the dairy sector, the Union Home Minister and Minister of Cooperation said that he had requested the Madhya Pradesh Government to provide 50 acres of land for programmes related to breed improvement of cattle and buffaloes, and Chief Minister Dr. Mohan Yadav has given in-principle approval for the same. He said that modern breed-improvement technologies will help improve animal health and milk productivity while also promoting the conservation and development of India&rsquo;s indigenous breeds. The use of modern technologies such as sex-sorted semen will also enhance the prospects of additional economic benefits for livestock rearers.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the State Government&rsquo;s target for increasing milk production in Madhya Pradesh, Shri Amit Shah said that it is an ambitious goal and the Central Government will work shoulder to shoulder with the State Government and the livestock rearers of Madhya Pradesh to achieve it.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Highlighting the progress made by India&rsquo;s dairy sector, the Union Home Minister and Minister of Cooperation said that the country&rsquo;s total milk production stood at approximately 14.60 crore tonnes in 2014-15 and has now increased to around 24.80 crore tonnes. He said that during the same period, per capita milk availability has increased by approximately 58%, from around 307 grams per day to 485 grams per day. He said that India today is the world&rsquo;s largest milk-producing country.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that, under the leadership of Prime Minister Shri Narendra Modi and in keeping with the resolve to make India a leading nation in every sphere by 2047, the agriculture, animal husbandry and cooperative sectors are also being modernised and made globally competitive. He said that exports of Indian dairy products have increased to approximately ₹4,666 crore, with Indian dairy products being exported to several countries, including the United Arab Emirates, Bangladesh, the United States, Saudi Arabia and Bhutan.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to White Revolution 2.0, the Union Home Minister and Minister of Cooperation said that a target has been set to establish 75,000 new cooperative dairies across the country and strengthen 46,000 existing dairies. He said that a large number of new cooperative dairies will be established in Madhya Pradesh under this initiative, enabling the State&rsquo;s livestock rearers to benefit from organised markets, better prices, modern processing facilities and a stronger cooperative network.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah said that several measures are also being taken to integrate the dairy sector with the Net Zero and circular economy model. Initiatives relating to breed improvement, vaccination, quality livestock, fodder management, artificial insemination and sex-sorted semen are being taken forward. He said that the Sardar Patel Cooperative Dairy Federation Limited has also been established for this purpose.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Highlighting the potential of a dung-based economy, the Union Home Minister and Minister of Cooperation said that various models have been developed to take forward, in an integrated manner, the scientific collection of dung, reduction of methane emissions, clean energy generation, nutrient recycling and creation of rural employment. He said that efforts will be made in the coming years to develop a system under which dung can also become an additional source of income for livestock rearers and farmers in Madhya Pradesh.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Referring to the role of women in dairy cooperatives, Shri Amit Shah said that there can hardly be a more powerful instrument of women empowerment than cooperative dairying. Dairy activities place income directly in the hands of women and thereby link women empowerment with rural development, the economic advancement of farmers and the prosperity of families. He said that the dairy sector is also playing an important role in the country&rsquo;s fight against malnutrition.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">The Union Home Minister referred to the efforts of the Central and State Governments to make Madhya Pradesh free from narcotics and drugs and said that a detailed meeting on the issue is being held with the Chief Minister and the departments concerned. He said that work will be undertaken to formulate and implement a detailed and meticulous action plan to make Madhya Pradesh free from narcotics and drugs, thereby ensuring a safe and bright future for the youth of the State and future generations.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">Shri Amit Shah congratulated Chief Minister Dr. Mohan Yadav, the Deputy Chief Ministers and the entire State Government team for the various decisions taken in the interest of livestock rearers. He said that the target of substantially expanding milk production and the cooperative dairy network in Madhya Pradesh is undoubtedly challenging, but the Central Government will extend its full support to the State Government and livestock rearers in achieving this objective. The Union Home Minister and Minister of Cooperation said that the Central and State Governments are working with the resolve to take the cooperative and dairy sectors to new heights so that Madhya Pradesh prospers through dairy development and cattle rearing, its farmers prosper and, above all, women prosper.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">On the occasion, a Memorandum of Understanding was also exchanged between KRIBHCO and the Madhya Pradesh State Biodiversity Board for developing an urban forest in Bhopal under the &lsquo;Morvan Project&rsquo;.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">During the programme, Shri Amit Shah digitally laid the foundation stone for a 3 lakh litres per day milk processing plant in Ujjain, to be established at a cost of ₹255 crore. A 40,000 litres per day Product Dairy Plant, constructed in Bhopal at a cost of approximately ₹16.5 crore, and a state-of-the-art State-level Central Laboratory, built at a cost of ₹12.42 crore, were also inaugurated. The strengthening works of the Mini Dairy Plant in Shivpuri, undertaken at a cost of ₹6.5 crore, were also inaugurated digitally. These projects will further strengthen milk processing capacity, quality testing facilities and dairy-sector infrastructure in Madhya Pradesh.</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">During the programme, bonuses were provided to livestock rearers associated with the Bhopal and Indore Milk Unions, while financial assistance was extended to Gaushalas through a single click. Dividends were distributed to members of dairy cooperative societies and livestock rearers were felicitated. Recognising the important role of women livestock rearers, &lsquo;Gaupalak Didis&rsquo; were also honoured. In addition, sanction letters were presented under the Dr. Bhimrao Ambedkar Kamdhenu Yojana.</span></span></p>
+
+<p style="text-align:center"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px">****</span></span></p>
+
+<p style="text-align:justify"><span style="font-family:Times New Roman,Times,serif"><span style="font-size:16px"><strong>AK</strong></span></span></p>
+
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                                    <div style="font-weight: 100; text-align: left; font-size: 16px;">
+                                          (रिलीज़ आईडी: 2318698)
+                                    </div>
+                                    <div style="height: 30px; width: 100%;">
+                                    </div>
+                              </td>
+                        </tr>
+                        <tr>
+                              <td style="font-weight: 200; text-align: center; font-size: 24px;"></td>
+                        </tr>
+                  </table>
+            </div>
+            <div class="clearfix">
+            </div>
+
+            
+
+            <div class="section1">
+                  <div id="frst_t">
+                        <div id="arr_rm"><div class='sticky-social_mb'><ul class='social_mb'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='40' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&text=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='40' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='40' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='40' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&title=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='40' /></li></a></ul></div></div>
+                  </div>
+                  <div id="second_t">
+                        <div id="sndr_rm"><div class='sticky-social'><ul class='social'><a href='http://www.facebook.com/share.php?u=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698' target='_blank'><li class='fb_b'   ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/facebook.jpg' alt='Share on facebook'  width='35' /></li></a><a href='https://twitter.com/intent/tweet?url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&text=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws' target='_blank'><li class='twitter_r'  ><img  src='https://static.pib.gov.in/WriteReadData/specificdocs/photo/2023/aug/ph2023818240601.jpg' alt='Share on twitter' width='35' /> </li></a><a href='https://api.whatsapp.com/send?text=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698' target='_blank'><li class='whatsapp_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/whatsapp1.png' alt='Share on whatsapp' width='35' /></li></a><a href='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=&su=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws&body=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&ui=2&tf=1&pli=1' title='Share by Email' target='_blank'><li class='fa-envelope_r' ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/email1.png' alt='Share on email'  width='35' /></li></a><a href='https://www.linkedin.com/shareArticle?mini=true&url=https://pib.gov.in/PressReleasePage.aspx?PRID=2318698&title=Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws&summary=My%20favorite%20developer%20program&source=LinkedIn' target='_blank'><li class='fa-linkedin_r'  ><img  src='https://static.pib.gov.in/WriteReadData/userfiles/socialmedianew/linkedin.png' alt='Share on linkedin' width='35' /></li></a></ul></div></div>
+                  </div>
+            </div>
+            <input type="hidden" name="ltrTitlee" id="ltrTitlee" value="Union Home Minister and Minister of Cooperation Shri Amit Shah addresses Gaupalak Sammelan in Bhopal, Madhya Pradesh and inaugurates State-level Exhibition on New Criminal Laws" />
+            <input type="hidden" name="ltrSubtitlee" id="ltrSubtitlee" value="&lt;br/>In line with Prime Minister Shri Narendra Modi’s vision of ‘Sahkar se Samriddhi’, sustained efforts are being made &amp;#160;for the prosperity of livestock rearers, farmers and women through cooperation and dairy sector&lt;br/>&lt;br/>The massive gathering of livestock rearers is an auspicious sign for the White Revolution in Madhya Pradesh&lt;br/>&lt;br/>Congress ignored the demand for an independent Ministry of Cooperation for 75 years, while Modi Ji established the Ministry, bringing the greatest benefit to livestock rearers&lt;br/>&lt;br/>Mohan Yadav Government has set a target to increase daily milk procurement in Madhya Pradesh from 12 lakh kg to 52 lakh kg&lt;br/>&lt;br/>India’s total milk production stood at 14.06 crore tonnes in 2014-15 which has been increased by Modi Ji to 25 crore tonnes in the last 10 years&lt;br/>&lt;br/>Per capita milk production has increased by 58%, from 307 grams per day in 2014-15 to 485 grams per day today; India has emerged as the world’s largest milk-producing country&lt;br/>&lt;br/>Uttar Pradesh, Rajasthan, Madhya Pradesh, Gujarat and Maharashtra—the top five milk-producing States—are all BJP-ruled; livestock rearers have never benefited in Congress-ruled States&lt;br/>&lt;br/>Under White Revolution 2.0, 75,000 new cooperative dairies will be established and 46,000 existing dairies strengthened, with Madhya Pradesh set to derive the maximum benefit&lt;br/>&lt;br/>Five technology-driven models for dung processing have been developed, which will help enhance farmers’ income in the coming years&lt;br/>&lt;br/>Joining the cooperative system will enable livestock rearers to receive remunerative prices for milk along with benefits from processing and value addition: Shri Amit Shah&lt;br/>&lt;br/>In-principle approval for providing 50 acres of land for breed improvement of cattle and buffaloes in Madhya Pradesh; initiative to promote conservation of indigenous breeds and modern breeding technologies&lt;br/>&lt;br/>Dairy cooperatives are an important vehicle for women empowerment, rural development, economic prosperity of farmers and the fight against malnutrition:" />
+            <input type="hidden" name="ltrDescriptionn" id="ltrDescriptionn" value="&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:&amp;quot;Times New Roman&amp;quot;,Times,serif; font-size:16px&quot;>In line with Prime Minister Shri Narendra Modi&amp;rsquo;s vision of &amp;lsquo;Sahkar se Samriddhi&amp;rsquo; and under the leadership of Union Home Minister and Minister of Cooperation Shri Amit Shah, sustained efforts are being made to transform cooperation into an effective instrument for strengthening the rural economy, advancing agricultural development, enhancing the income of livestock rearers and empowering women. As part of these efforts, Union Home Minister and Minister of Cooperation Shri Amit Shah today addressed the Gaupalak Sammelan at Dussehra Maidan in Bhopal, Madhya Pradesh, and inaugurated a State-level exhibition on the New Criminal Laws. Madhya Pradesh Chief Minister Dr. Mohan Yadav, Deputy Chief Ministers Shri Jagdish Devda and Shri Rajendra Shukla, several Ministers of the State Government, Members of Parliament, MLAs, representatives of the cooperative sector and a large number of livestock rearers and milk producers were present on the occasion.&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>At the outset of the programme, the Union Home Minister and Minister of Cooperation inaugurated the State-level exhibition on the New Criminal Laws and viewed various exhibition sections showcasing the achievements of Madhya Pradesh Police in their implementation.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Addressing the gathering, Union Home Minister and Minister of Cooperation Shri Amit Shah said that under the leadership of Prime Minister Shri Narendra Modi, the country has made a historic transition from the punishment-centric criminal justice system of the colonial era towards a new system focused on delivering justice to citizens. He said that the fundamental objective of the new laws is not to protect the government but to safeguard the dignity, property and physical security of the citizens of India, and their core principle is &amp;lsquo;justice&amp;rsquo;, not &amp;lsquo;punishment&amp;rsquo;. He said that after their full implementation, the new system aims to make the judicial process time-bound, from the registration of an FIR right up to the Supreme Court.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Shri Amit Shah said that modern science and technology have been extensively incorporated into the new criminal justice system. Several modern and scientific provisions, including electronic evidence, online summons, online hearings, video conferencing and forensic science, have been incorporated into the new framework. He said that the new laws also contain specific provisions to deal with crimes relating to the safety of women, missing children, terrorism and mob lynching. He expressed confidence that after their full implementation, India&amp;rsquo;s criminal justice system will rank among the most modern systems in the world.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Referring to the cooperative sector, the Union Home Minister and Minister of Cooperation said that there had been a long-standing demand in the country for a separate Ministry of Cooperation, and Prime Minister Shri Narendra Modi infused new energy and momentum into the cooperative sector by establishing an independent Ministry of Cooperation. He said that farmers, livestock rearers and people associated with the rural economy are the biggest beneficiaries of the establishment of this Ministry.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Shri Amit Shah said that livestock rearers selling milk in the open market often do not receive a remunerative price for their produce because of intermediaries, whereas the cooperative system not only enables them to secure better prices but also connects them with the economic benefits generated through milk processing and value addition. He said that robust processing infrastructure is essential for producing value-added products such as ice cream, butter, ghee, cheese and mawa from milk, and the Government is working rapidly in this direction.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Describing breed improvement as an important means of enhancing productivity in the dairy sector, the Union Home Minister and Minister of Cooperation said that he had requested the Madhya Pradesh Government to provide 50 acres of land for programmes related to breed improvement of cattle and buffaloes, and Chief Minister Dr. Mohan Yadav has given in-principle approval for the same. He said that modern breed-improvement technologies will help improve animal health and milk productivity while also promoting the conservation and development of India&amp;rsquo;s indigenous breeds. The use of modern technologies such as sex-sorted semen will also enhance the prospects of additional economic benefits for livestock rearers.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Referring to the State Government&amp;rsquo;s target for increasing milk production in Madhya Pradesh, Shri Amit Shah said that it is an ambitious goal and the Central Government will work shoulder to shoulder with the State Government and the livestock rearers of Madhya Pradesh to achieve it.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Highlighting the progress made by India&amp;rsquo;s dairy sector, the Union Home Minister and Minister of Cooperation said that the country&amp;rsquo;s total milk production stood at approximately 14.60 crore tonnes in 2014-15 and has now increased to around 24.80 crore tonnes. He said that during the same period, per capita milk availability has increased by approximately 58%, from around 307 grams per day to 485 grams per day. He said that India today is the world&amp;rsquo;s largest milk-producing country.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Shri Amit Shah said that, under the leadership of Prime Minister Shri Narendra Modi and in keeping with the resolve to make India a leading nation in every sphere by 2047, the agriculture, animal husbandry and cooperative sectors are also being modernised and made globally competitive. He said that exports of Indian dairy products have increased to approximately ₹4,666 crore, with Indian dairy products being exported to several countries, including the United Arab Emirates, Bangladesh, the United States, Saudi Arabia and Bhutan.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Referring to White Revolution 2.0, the Union Home Minister and Minister of Cooperation said that a target has been set to establish 75,000 new cooperative dairies across the country and strengthen 46,000 existing dairies. He said that a large number of new cooperative dairies will be established in Madhya Pradesh under this initiative, enabling the State&amp;rsquo;s livestock rearers to benefit from organised markets, better prices, modern processing facilities and a stronger cooperative network.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Shri Amit Shah said that several measures are also being taken to integrate the dairy sector with the Net Zero and circular economy model. Initiatives relating to breed improvement, vaccination, quality livestock, fodder management, artificial insemination and sex-sorted semen are being taken forward. He said that the Sardar Patel Cooperative Dairy Federation Limited has also been established for this purpose.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Highlighting the potential of a dung-based economy, the Union Home Minister and Minister of Cooperation said that various models have been developed to take forward, in an integrated manner, the scientific collection of dung, reduction of methane emissions, clean energy generation, nutrient recycling and creation of rural employment. He said that efforts will be made in the coming years to develop a system under which dung can also become an additional source of income for livestock rearers and farmers in Madhya Pradesh.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Referring to the role of women in dairy cooperatives, Shri Amit Shah said that there can hardly be a more powerful instrument of women empowerment than cooperative dairying. Dairy activities place income directly in the hands of women and thereby link women empowerment with rural development, the economic advancement of farmers and the prosperity of families. He said that the dairy sector is also playing an important role in the country&amp;rsquo;s fight against malnutrition.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>The Union Home Minister referred to the efforts of the Central and State Governments to make Madhya Pradesh free from narcotics and drugs and said that a detailed meeting on the issue is being held with the Chief Minister and the departments concerned. He said that work will be undertaken to formulate and implement a detailed and meticulous action plan to make Madhya Pradesh free from narcotics and drugs, thereby ensuring a safe and bright future for the youth of the State and future generations.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>Shri Amit Shah congratulated Chief Minister Dr. Mohan Yadav, the Deputy Chief Ministers and the entire State Government team for the various decisions taken in the interest of livestock rearers. He said that the target of substantially expanding milk production and the cooperative dairy network in Madhya Pradesh is undoubtedly challenging, but the Central Government will extend its full support to the State Government and livestock rearers in achieving this objective. The Union Home Minister and Minister of Cooperation said that the Central and State Governments are working with the resolve to take the cooperative and dairy sectors to new heights so that Madhya Pradesh prospers through dairy development and cattle rearing, its farmers prosper and, above all, women prosper.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>On the occasion, a Memorandum of Understanding was also exchanged between KRIBHCO and the Madhya Pradesh State Biodiversity Board for developing an urban forest in Bhopal under the &amp;lsquo;Morvan Project&amp;rsquo;.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>During the programme, Shri Amit Shah digitally laid the foundation stone for a 3 lakh litres per day milk processing plant in Ujjain, to be established at a cost of ₹255 crore. A 40,000 litres per day Product Dairy Plant, constructed in Bhopal at a cost of approximately ₹16.5 crore, and a state-of-the-art State-level Central Laboratory, built at a cost of ₹12.42 crore, were also inaugurated. The strengthening works of the Mini Dairy Plant in Shivpuri, undertaken at a cost of ₹6.5 crore, were also inaugurated digitally. These projects will further strengthen milk processing capacity, quality testing facilities and dairy-sector infrastructure in Madhya Pradesh.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>During the programme, bonuses were provided to livestock rearers associated with the Bhopal and Indore Milk Unions, while financial assistance was extended to Gaushalas through a single click. Dividends were distributed to members of dairy cooperative societies and livestock rearers were felicitated. Recognising the important role of women livestock rearers, &amp;lsquo;Gaupalak Didis&amp;rsquo; were also honoured. In addition, sanction letters were presented under the Dr. Bhimrao Ambedkar Kamdhenu Yojana.&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:center&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>****&lt;/span>&lt;/span>&lt;/p>
+
+&lt;p style=&quot;text-align:justify&quot;>&lt;span style=&quot;font-family:Times New Roman,Times,serif&quot;>&lt;span style=&quot;font-size:16px&quot;>&lt;strong>AK&lt;/strong>&lt;/span>&lt;/span>&lt;/p>
+" />
+            <script type="text/javascript">
+                  var mPlayer = document.getElementById("background_music");
+                  var mPlayAction = document.getElementById("playbutton");
+
+                  var isPlaying = false;
+
+                  function playAudio() {
+                        mPlayer.play();
+                        isPlaying = true;
+                        document.getElementById('stopA').style.display = "block";
+                        document.getElementById('playA').style.display = "none";
+                  }
+
+                  function pauseAudio() {
+                        mPlayer.pause();
+                        isPlaying = false;
+                        document.getElementById('playA').style.display = "block";
+                        document.getElementById('stopA').style.display = "none";
+                  }
+                  //function HandleAudio() {
+                  //    if (isPlaying == true) {
+                  //        //Playing already Pause it
+                  //        pauseAudio();
+                  //    } else {
+                  //        //Play the music
+                  //        playAudio();
+                  //    }
+                  //}
+            </script>
+            <script type="text/javascript">
+                  var synth = window.speechSynthesis;
+
+            
+                  function CleanHtml(html) {
+
+                        html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+                        return html;
+                  }
+                  function stripHtml(html) {
+                        let tmp = document.createElement("DIV");
+                        tmp.innerHTML = CleanHtml(html);
+                        return tmp.textContent || tmp.innerText || "";
+                  }
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        //for responsive tables
+                        $("table").each(function () {
+                              if (!$(this).closest(".table-responsive").length) {
+                                    $(this).wrap("<div class='table-responsive'></div>");
+                              }
+                        });
+
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            <script type="text/javascript">
+                  $(document).ready(function () {
+                        var width = $(window).width();
+                        if (width < 768) {
+
+                              // Extra Small Device
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+
+                        } else if (width < 991) {
+                              document.getElementById('frst_t').style.display = "block";
+                              document.getElementById('second_t').style.display = "none";
+                              // Small Device
+
+                        } else if (width < 1199) {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Medium Device
+
+                        } else {
+                              document.getElementById('frst_t').style.display = "none";
+                              document.getElementById('second_t').style.display = "block";
+                              // Large Device
+
+                        }
+                  });
+            </script>
+            
+            <style type="text/css">
+                  @media print {
+                        .sticky-social, .sticky-social_mb, .pull-right, #printPDF {
+                              display: none !important;
+                        }
+                  }
+
+                  .f_vl {
+                        padding-right: 30px;
+                        font-size: 17px;
+                        cursor: pointer;
+                  }
+
+                  .log_oo {
+                        // width: 20%;
+                        display: flex;
+                        justify-content: space-between;
+                  }
+
+                        .log_oo img {
+                              width: 150px;
+                              /*width: 100%;
+                    height: auto;*/
+                        }
+
+                  .sticky-social_mb {
+                        position: fixed;
+                        bottom: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                        width: 100%;
+                  }
+
+                  .social_mb {
+                        list-style: none;
+                        display: flex;
+                        width: 100%;
+                        margin-bottom: -8px;
+                  }
+
+                        .social_mb a {
+                              padding: 8px 0px;
+                              font-size: 30px;
+                              transition: all 0.8s ease-in-out;
+                              width: 20% !important;
+                              text-align: center;
+                        }
+            </style>
+            <style type="text/css">
+                  .section1 {
+                        position: relative;
+                        padding: 10px 0px;
+                        width: 100%;
+                  }
+
+
+
+                  .sticky-social {
+                        position: fixed;
+                        top: 20px;
+                        left: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                  }
+
+                  .social {
+                        list-style: none;
+                  }
+
+                        .social a li {
+                              padding: 8px 12px;
+                              font-size: 25px;
+                              transition: all 0.8s ease-in-out;
+                        }
+
+                              .social a li:hover {
+                                    margin-right: -30px;
+                                    box-shadow: 2px 5px 10px grey;
+                              }
+
+                                    .social a li:hover .fa {
+                                          margin-left: 20px;
+                                    }
+
+                  .fb_b {
+                        /* background-color: rgb(59, 89, 152);*/
+                        background-color: rgba(65,103,178,255);
+                  }
+
+                  .twitter_r {
+                        /* background-color: rgb(29, 161, 242);*/
+                        background-color: #000000;
+                  }
+
+                  .whatsapp_r {
+                        /* background-color: rgb(77, 194, 71);*/
+                        background-color: rgba(13,191,67,255);
+                  }
+
+                  .fa-envelope_r {
+                        /* background-color: rgb(219, 68, 55);*/
+                        background-color: #e2123d;
+                  }
+
+                  .fa-linkedin_r {
+                        background-color: rgb(0, 119, 181);
+                  }
+            </style>
+            <style type="text/css">
+                  @media only screen and (max-device-width: 767px) {
+                        p span img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        p img {
+                              max-width: 90% !important;
+                              height: auto !important;
+                        }
+
+                        h2 {
+                              font-size: var(--dbim-h2, 20px);   /* was 20px !important - the !important blocked A+/A- */
+                              font-weight: 600 !important;
+                        }
+
+                        h3 {
+                              font-size: var(--dbim-h3, 16px);   /* was 16px !important */
+                              font-weight: 600 !important;
+                        }
+                  }
+            </style>
+            <style type="text/css">
+                  /* === Film Roll Badge Styling(IFFI2025 countdown) === */
+                  .film-roll-badge {
+                        position: absolute;
+                        top:82%;
+                        right: 20px;
+                        width: 230px;
+                        height: 70px;
+                        background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 18px, #6e2b8b 18px, #6e2b8b 36px );
+                        border-top: 8px solid #9a2375;
+                        border-bottom: 8px solid #9a2375;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                        animation: moveFilm 8s linear infinite;
+                        z-index: 10;
+                  }
+
+                        /* film sprocket holes */
+                        .film-roll-badge::before,
+                        .film-roll-badge::after {
+                              content: "";
+                              position: absolute;
+                              width: 100%;
+                              height: 10px;
+                              background: repeating-linear-gradient( to right, #9a2375 0px, #9a2375 10px, #fff 10px, #fff 20px );
+                              left: 0;
+                              z-index: 2;
+                        }
+
+                        .film-roll-badge::before {
+                              top: -4px;
+                        }
+
+                        .film-roll-badge::after {
+                              bottom: -4px;
+                        }
+
+                  .film-roll-inner {
+                        position: relative;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        animation: flicker 2s infinite ease-in-out;
+                  }
+
+                  .countdown-text {
+                        font-size: 1.3rem;
+                        font-weight: 700;
+                        color: #fff;
+                        text-shadow: 0 0 6px rgba(255, 255, 255, 0.4), 0 0 10px #000;
+                        white-space: nowrap;
+                  }
+
+                  /* === Animations === */
+                  @keyframes moveFilm {
+                        0% {
+                              background-position: 0 0;
+                        }
+
+                        100% {
+                              background-position: 120px 0;
+                        }
+                  }
+
+                  @keyframes flicker {
+                        0%, 100% {
+                              opacity: 1;
+                        }
+
+                        50% {
+                              opacity: 0.9;
+                        }
+
+                        25% {
+                              opacity: 0.95;
+                        }
+
+                        75% {
+                              opacity: 0.85;
+                        }
+                  }
+
+                  /* === Responsive Adjustments === */
+                  @media (max-width: 1500px) {
+                        .film-roll-badge {
+                              top: 68%;
+                              right: 18px;
+                              /* width: 220px; */
+                              height: 65px;
+                              font-size: 0.85rem;
+                        }
+
+                        .press-section {
+                              margin-top: 35px;
+                        }
+                  }
+
+                  @media (max-width: 992px) {
+                        .film-roll-badge {
+                              top: 52%;
+                              right: 10px;
+                               width: 200px; 
+                              height: 60px;
+                        }
+                  }
+
+                  @media (max-width: 768px) {
+                        .film-roll-badge {
+                              top: 56%;
+                              right: 10px;
+                               width: 124px; 
+                              height: 55px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.9rem;
+                        }
+                  }
+
+                  @media (max-width: 576px) {
+                        .film-roll-badge {
+                              top: 59%;
+                              right: 5px;
+                              /* width: 160px; */
+                              height: 50px;
+                        }
+
+                        .countdown-text {
+                              font-size: 0.85rem;
+                        }
+                  }
+            </style>
+                        <script type="text/javascript">
+                  const festivalStart = new Date("2025-11-20T00:00:00").getTime();
+                  const festivalEnd = new Date("2025-11-28T23:59:59").getTime();
+
+                  const countdownElement = document.getElementById("countdown");
+
+                  const interval = setInterval(() => {
+                        const now = new Date().getTime();
+
+                        // BEFORE FESTIVAL — show days + hours left
+                        if (now < festivalStart) {
+                              const diff = festivalStart - now;
+                              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                              countdownElement.innerHTML = `
+                ${days} Day${days !== 1 ? 's' : ''} 
+                ${hours} Hour${hours !== 1 ? 's' : ''} to go
+            `;
+
+                        }
+
+                        // DURING FESTIVAL — show 56th IFFI - Day X
+                        else if (now >= festivalStart && now <= festivalEnd) {
+                              const dayNumber = Math.floor((now - festivalStart) / (1000 * 60 * 60 * 24)) + 1;
+                              countdownElement.innerHTML = `56th IFFI - Day ${dayNumber}`;
+                        }
+
+                        // AFTER FESTIVAL — new message
+                        else {
+                              countdownElement.innerHTML = `✨ IFFI closes but never ends…`;
+
+                              // Width change logic
+                              const elements = document.querySelectorAll('.film-roll-badge');
+                              elements.forEach(el => el.style.width = "350px");
+
+                              clearInterval(interval);
+                        }
+
+                  }, 1000);
+            </script>
+
+      
+
+<script type="text/javascript">
+//<![CDATA[
+(function() {var fn = function() {$get("sc_HiddenField").value = '';Sys.Application.remove_init(fn);};Sys.Application.add_init(fn);})();Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"BackgroundCssClass":"modalBackground","PopupControlID":"P_CategoryManagement","dynamicServicePath":"/PressReleaseIframePage.aspx","id":"mpe"}, null, null, $get("Hidden"));
+});
+//]]>
+</script>
+</form>
+      
+      
+
+<script type="application/json" id="pibConsentConfig">{"ga4Id":"G-Q414Y0X6EE,G-QJJ6LZ8LHV","policyUrl":"/CookiePolicy.aspx","text":{"bannerLabel":"कुकी सहमति","title":"इस वेबसाइट पर कुकीज़","body":"इस वेबसाइट को चलाने के लिए हम आवश्यक कुकीज़ का उपयोग करते हैं। आपके आने पर हम विश्लेषण कुकीज़ भी सेट करते हैं, ताकि हम देख सकें कि साइट का उपयोग कैसे हो रहा है और उसे बेहतर बना सकें - आप इन्हें नीचे या कभी भी कुकी नीति पृष्ठ से बंद कर सकते हैं। सोशल मीडिया सामग्री की कुकीज़ केवल आपकी अनुमति से ही सेट की जाती हैं।","policyLink":"हमारी कुकी नीति पढ़ें","accept":"सभी स्वीकार करें","reject":"वैकल्पिक अस्वीकार करें","customize":"अनुकूलित करें","prefsTitle":"कुकी प्राथमिकताएं","prefsIntro":"चुनें कि यह वेबसाइट कौन सी कुकीज़ सेट कर सकती है। आवश्यक कुकीज़ बंद नहीं की जा सकतीं क्योंकि उनके बिना साइट काम नहीं करती। विश्लेषण कुकीज़ तब तक चालू रहती हैं जब तक आप उन्हें बंद न करें। सोशल मीडिया कुकीज़ तब तक बंद रहती हैं जब तक आप अनुमति न दें। आप ये विकल्प कभी भी कुकी नीति पृष्ठ से बदल सकते हैं।","essentialName":"आवश्यक कुकीज़","essentialDesc":"साइट के कार्य करने के लिए आवश्यक। ये आपका सत्र, आपकी भाषा और क्षेत्र, आपके पाठ का आकार और रंग थीम याद रखती हैं, तथा फ़ॉर्म की सुरक्षा जांच सत्यापित करती हैं। ये हमेशा चालू रहती हैं।","analyticsName":"विश्लेषण कुकीज़","analyticsDesc":"ये हमें यह समझने में मदद करती हैं कि आगंतुक साइट का उपयोग कैसे करते हैं - कौन से पृष्ठ पढ़े जाते हैं और लोग कितनी देर रुकते हैं - ताकि इसे बेहतर बनाया जा सके। यह जानकारी ऐसे रूप में एकत्र की जाती है जो सीधे आपकी पहचान नहीं करती। आपके आने पर ये चालू रहती हैं; इन्हें यहां बंद करने पर ये रुक जाती हैं और पहले से सेट कुकीज़ हटा दी जाती हैं।","socialName":"सोशल मीडिया कुकीज़","socialDesc":"ये X, फेसबुक और यूट्यूब से एम्बेड की गई सामग्री, जैसे टाइमलाइन और वीडियो, द्वारा सेट की जाती हैं। ये प्लेटफ़ॉर्म इनका उपयोग विभिन्न वेबसाइटों पर आपको ट्रैक करने के लिए कर सकते हैं। ये तब तक बंद रहती हैं जब तक आप अनुमति न दें।","save":"प्राथमिकताएं सहेजें","cancel":"रद्द करें"}}</script>
+<script type="text/javascript" src='/js/consent.js?v=9'></script>
+
+<script type="text/javascript" src='/js/consent-embeds.js?v=9'></script>
+
+</body>
+</html>

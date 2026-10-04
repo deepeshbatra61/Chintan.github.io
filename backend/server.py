@@ -72,6 +72,8 @@ import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
 import desk_routes   # Desk HTTP API (router factory) — see backend/desk_routes.py
 import push_routes   # app-facing push endpoints — see backend/push_routes.py
+import official_service   # The Bureau (Government Tracker) — see backend/official_service.py
+import official_routes
 import push_service  # FCM sender + slot scheduler — see backend/push_service.py
 import pagemeta     # SSRF-safe page metadata fetch for Desk links — see backend/pagemeta.py
 
@@ -1617,6 +1619,13 @@ async def lifespan(app: FastAPI):
 
     await push_svc.ensure_indexes()
     push_task = asyncio.create_task(push_service.run_scheduler(push_svc, logger))
+
+    # The Bureau runs on its own loop (eng review 1B): a slow government site
+    # or PDF never delays the news cycle. OFFICIAL_MODE=off stops it; shadow
+    # (default) collects without showing readers anything.
+    await official_svc.ensure_indexes()
+    official_task = asyncio.create_task(official_service.run_scheduler(official_svc, logger))
+    logger.info(f"Bureau scheduler started (mode: {official_service.mode_from_env()})")
     logger.info(f"Push scheduler started (env enabled: {PUSH_ENABLED}, firebase: {_FIREBASE_SA is not None})")
 
     yield  # ── App is running ────────────────────────────────────────────────
@@ -1624,7 +1633,8 @@ async def lifespan(app: FastAPI):
     # ── Shutdown ─────────────────────────────────────────────────────────────
     ingestor_task.cancel()
     push_task.cancel()
-    for task in (ingestor_task, push_task):
+    official_task.cancel()
+    for task in (ingestor_task, push_task, official_task):
         try:
             await task
         except asyncio.CancelledError:
@@ -6934,6 +6944,11 @@ api_router.include_router(desk_routes.build_desk_router(
 
 api_router.include_router(events_routes.build_events_router(
     db_getter=lambda: db, get_user=get_current_user))
+
+official_svc = official_service.OfficialService(
+    db, _llm, classify_topic=lambda title, body: categories.classify(title, body))
+api_router.include_router(official_routes.build_official_router(
+    service=official_svc, require_admin=require_admin))
 
 app.include_router(api_router)
 
