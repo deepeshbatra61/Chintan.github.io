@@ -73,6 +73,36 @@ def group_updates(articles: list) -> list:
     return groups
 
 
+FOLD_OVERLAP = 0.3          # share of the smaller story's reports that makes two stories one
+
+
+def fold_duplicates(items: list) -> list:
+    """One entry per event in the Developing list. Detection opens a story per
+    trending word and the scout per wording, so one match showed up as four
+    stories ("India vs West Indies 3rd ODI", "West Indies Chase 352",
+    "Shai Hope's Record 162", ...). Among auto/scout stories, one that shares
+    FOLD_OVERLAP of its reports with a stronger one is left out. Desk,
+    scheduled and wave stories are never hidden. Items carry their ids in
+    "_ids" (removed here)."""
+    order = {"desk": 0, "scheduled": 1, "wave": 2}
+    ranked = sorted(items, key=lambda it: (order.get(it.get("kind"), 3), -(it.get("article_count") or 0)))
+    kept, kept_sets = [], []
+    for it in ranked:
+        ids = set(it.get("_ids") or [])
+        foldable = it.get("kind") in ("auto", "scout")
+        if foldable and ids and any(
+                k_kind in ("auto", "scout", "desk") and len(ids & k) >= FOLD_OVERLAP * min(len(ids), len(k))
+                for k_kind, k in kept_sets):
+            continue
+        kept.append(it)
+        kept_sets.append((it.get("kind"), ids))
+    keep_ids = {id(it) for it in kept}
+    out = [it for it in items if id(it) in keep_ids]          # original order
+    for it in out:
+        it.pop("_ids", None)
+    return out
+
+
 def _parse_same(text: str, n: int) -> Optional[set]:
     m = re.search(r"\{.*\}", text or "", re.S)
     if not m:

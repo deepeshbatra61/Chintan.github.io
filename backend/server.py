@@ -6608,7 +6608,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
                 "story_id": story["story_id"], "title": story["title"], "theme": story["theme"],
                 "kind": kind, "article_count": len(article_ids),
                 "last_updated": effective_updated, "latest_article": latest_article,
-                "intensity": intensity,
+                "intensity": intensity, "_ids": article_ids,
             })
             continue
 
@@ -6649,6 +6649,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
             "last_updated": (latest_article or {}).get("published_at") or story.get("last_updated"),
             "latest_article": latest_article,
             "heat": story.get("heat") if kind == "desk" or boosted else None,
+            "_ids": article_ids,
         })
 
     # Explicit final sort by effective recency — the initial Mongo query
@@ -6656,6 +6657,8 @@ async def get_developing_stories_list(feed_bar: bool = False):
     # reflect real content activity. Re-sorting here guarantees a genuinely
     # fresh story always outranks a dormant one regardless of kind.
     # Desk stories marked Big/Breaking lead the strip; everything else by recency.
+    # One entry per event: duplicate auto/scout stories fold away (2026-10-05).
+    result = story_members.fold_duplicates(result)
     if events_live:
         result += await events_service.developing_list_items(db, now)
     result.sort(key=lambda r: ((r.get("heat") or 0) >= desk.HEAT_BIG, r.get("last_updated") or ""), reverse=True)
