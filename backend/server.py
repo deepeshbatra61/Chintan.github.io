@@ -67,6 +67,7 @@ import categories    # taxonomy v2 + interest mapping — see backend/categories
 import textutil      # shared tokenising / stopwords — see backend/textutil.py
 import events_routes   # follow / since-you-looked endpoints — see backend/events_routes.py
 import events_flip     # EVENTS_MODE switch (go_live / go_back) — see backend/events_flip.py
+import story_members  # who belongs in a Developing story
 import events_service  # News v2 event clustering (Mongo side) — see backend/events_service.py
 import desk          # Chintan Desk pure rules — see backend/desk.py
 import desk_auth     # Desk authentication — see backend/desk_auth.py
@@ -618,7 +619,13 @@ async def _detect_developing_stories() -> None:
                             "two different court cases, or two different press conferences "
                             "are NOT the same story even if they share a team, sport, or "
                             "country. Be strict: if the headlines describe distinct events, "
-                            "return developing:false. Respond ONLY with JSON."
+                            "return developing:false. A developing story is ONE real-world event "
+                            "where NEW FACTS keep arriving (an incident, a rescue, a protest and the "
+                            "response to it, a court case awaiting a ruling, negotiations, a disaster, "
+                            "a vote count). It is NOT developing when reports only repeat or tally: "
+                            "box-office collections, reviews, product launches, daily market moves, "
+                            "sports statistics, celebrity gossip, horoscopes, or a list of unrelated "
+                            "items sharing a word. Respond ONLY with JSON."
                         ),
                         user_content=(
                             "Headlines:\n- " + "\n- ".join(a.get("title", "") for a in c["arts"][:8]) +
@@ -654,7 +661,8 @@ async def _detect_developing_stories() -> None:
                         "last_updated": c["newest"] or now.isoformat(),
                         "detected_at": now.isoformat(),
                     },
-                    "$addToSet": {"article_ids": {"$each": [a["article_id"] for a in c["arts"]]}},
+                    # Candidates, not members: story_members checks each one.
+                    "$addToSet": {"pending_ids": {"$each": [a["article_id"] for a in c["arts"]]}},
                 },
                 upsert=True,
             )
@@ -742,7 +750,7 @@ async def _scout_developing_candidates(api_articles: list) -> None:
                     {"story_id": same["story_id"]},
                     {"$set": {"last_updated": now.isoformat(),
                               "expires_at": (now + timedelta(hours=6)).isoformat()},
-                     "$addToSet": {"article_ids": art["article_id"]}},
+                     "$addToSet": {"pending_ids": art["article_id"]}},
                 )
                 flagged += 1
                 continue
@@ -1037,11 +1045,11 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
                 if hits >= min_matches:
                     matched_ids.append(article["article_id"])
             if matched_ids:
-                # "Developing" means part of a live developing story (not merely recent).
-                await db.articles.update_many({"article_id": {"$in": matched_ids}, "origin": {"$ne": "desk"}},
-                                              {"$set": {"is_developing": True}})
+                # Keyword hits are only CANDIDATES (2026-10-05: "delhi" + "police"
+                # put a hit-and-run inside a protest story). story_members checks
+                # each one before it joins; the Developing label follows membership.
                 update = {
-                    "$addToSet": {"article_ids": {"$each": matched_ids}},
+                    "$addToSet": {"pending_ids": {"$each": matched_ids}},
                     "$set": {"last_updated": now_iso},
                 }
                 # A genuine follow-up article is exactly the corroboration a
@@ -1105,6 +1113,11 @@ async def _run_ingest_cycle_body(run_newsapi: bool = True, summarize_limit: Opti
     await _expire_scout_stories()
 
     # ── 10. The Developing label follows live-story membership ──────────────
+    try:
+        await story_members.verify_members(db, _llm, datetime.now(timezone.utc))
+        await _label_verified_members()
+    except Exception as e:  # noqa: BLE001 -- never cost the cycle
+        logger.exception(f"Developing member check failed: {e}")
     await _reconcile_developing_labels()
 
     # ── 11. News v2 events (EVENTS_MODE: off | shadow | live) ────────────────
@@ -1168,6 +1181,15 @@ async def _cleanup_scout_stories_v2() -> None:
                                  {"$set": {"at": now.isoformat(), "retired": retired, "merged": merged,
                                            "kept": len(kept)}}, upsert=True)
     logger.info(f"Scout cleanup v2: retired {retired}, merged {merged}, kept {len(kept)}")
+
+
+async def _label_verified_members() -> None:
+    """The Developing label for confirmed members (tagging no longer sets it)."""
+    active = await db.developing_stories.find({"is_active": True}, {"_id": 0, "article_ids": 1}).to_list(2000)
+    ids = list({aid for s in active for aid in (s.get("article_ids") or [])})
+    if ids:
+        await db.articles.update_many({"article_id": {"$in": ids}, "origin": {"$ne": "desk"},
+                                       "is_developing": {"$ne": True}}, {"$set": {"is_developing": True}})
 
 
 async def _reconcile_developing_labels() -> None:
@@ -6594,6 +6616,13 @@ async def get_developing_stories_list(feed_bar: bool = False):
         min_articles = 1 if kind in ("scheduled", "scout", "desk") or boosted else 3
         if len(article_ids) < min_articles:
             continue                         # too thin to be a "story" yet
+        # Updates, not copies (2026-10-05): reports with the same facts count once,
+        # and an auto story needs two distinct updates to be "developing" at all.
+        titles = await db.articles.find({"article_id": {"$in": article_ids}},
+                                        {"_id": 0, "title": 1, "published_at": 1}).to_list(400)
+        n_updates = len(story_members.group_updates(titles)) or len(article_ids)
+        if kind == "auto" and not boosted and n_updates < 2:
+            continue
         latest_article = await db.articles.find_one(
             {"article_id": {"$in": article_ids}},
             {"_id": 0, "article_id": 1, "title": 1, "image_url": 1, "published_at": 1, "source": 1},
@@ -6612,7 +6641,7 @@ async def get_developing_stories_list(feed_bar: bool = False):
             "title": story["title"],
             "theme": story["theme"],
             "kind": kind,
-            "article_count": len(article_ids),
+            "article_count": n_updates,
             # The newest matched article's time, not the doc's last_updated:
             # the sync job touches that field every cycle, so it read "1m ago"
             # on stories with nothing new in a day. Same fix the wave branch
@@ -6631,6 +6660,49 @@ async def get_developing_stories_list(feed_bar: bool = False):
         result += await events_service.developing_list_items(db, now)
     result.sort(key=lambda r: ((r.get("heat") or 0) >= desk.HEAT_BIG, r.get("last_updated") or ""), reverse=True)
     return result
+
+
+STATE_SUMMARY_V = 2
+
+_STATE_SUMMARY_SYSTEM = (
+    "You summarize the CURRENT state of a developing Indian news story in ONE plain, factual sentence "
+    "(present tense, <=26 words). Rules: use ONLY facts stated in the reports given. "
+    "NEVER expand an abbreviation or acronym; write it exactly as the reports do (keep \"CJP\" as \"CJP\"). "
+    "NEVER add a country, place, person, party, court or organisation that the reports do not name. "
+    "If the reports disagree or are unclear, say less. No preamble, no quotes."
+)
+
+
+def _proper_names(text: str) -> set:
+    """Capitalised words and acronyms (3+ letters) in a sentence, lowercased,
+    skipping the first word."""
+    words = re.findall(r"[A-Za-z][A-Za-z'-]+", text or "")
+    return {w.lower().strip("'-") for i, w in enumerate(words) if i and len(w) >= 3 and w[0].isupper()}
+
+
+def _summary_grounded(summary: str, source_text: str) -> bool:
+    """Every name in the summary must appear in what the model was shown."""
+    hay = (source_text or "").lower()
+    return all(re.search(r"\b" + re.escape(n), hay) for n in _proper_names(summary))
+
+
+async def _grounded_state_summary(title: str, articles: list) -> Optional[str]:
+    lines = []
+    for a in articles:
+        d = (a.get("description") or "").strip()
+        lines.append(f"- {a.get('title', '')}" + (f" | {d[:220]}" if d else ""))
+    source_text = title + "\n" + "\n".join(lines)
+    prompt = f"Story: {title}\nLatest reports (newest first, headline | description):\n" + "\n".join(lines)
+    for attempt in (1, 2):
+        extra = "" if attempt == 1 else ("\n\nYour last try named something the reports do not. "
+                                         "Use only names that appear above, written exactly as above.")
+        text = (await _llm(system=_STATE_SUMMARY_SYSTEM,
+                           user_content=prompt + extra + "\n\nWrite the one-sentence current status:",
+                           max_tokens=90)).strip().strip('"')
+        if text and _summary_grounded(text, source_text):
+            return text
+        logger.warning(f"State summary rejected (ungrounded name): {text[:140]}")
+    return None
 
 
 @api_router.get("/developing-stories/{story_id}")
@@ -6669,12 +6741,22 @@ async def get_developing_story_detail(story_id: str):
 
     article_ids = story.get("article_ids", [])
     articles = []
+    updates_count = 0
     if article_ids:
-        articles = await db.articles.find(
+        reports = await db.articles.find(
             {"article_id": {"$in": article_ids}},
             {"_id": 0, "article_id": 1, "title": 1, "description": 1, "source": 1,
              "published_at": 1, "image_url": 1, "url": 1, "is_breaking": 1},
-        ).sort("published_at", -1).to_list(50)
+        ).sort("published_at", -1).to_list(400)
+        # 2026-10-05: one entry per set of facts, not one per outlet's copy.
+        # Each entry is the first report, with the outlets that repeated it.
+        updates = story_members.group_updates(reports)
+        updates_count = len(updates)
+        for g in updates[:40]:
+            lead = dict(g["lead"])
+            lead["also_count"] = len(g["also"])
+            lead["also_sources"] = list(dict.fromkeys(a.get("source") for a in g["also"] if a.get("source")))[:6]
+            articles.append(lead)
 
     # ── Momentum: bucket updates + a trend label. Wave stories get a much
     #    wider daily-bucket window (weeks) instead of 48h/6×8h — the whole
@@ -6715,28 +6797,26 @@ async def get_developing_story_detail(story_id: str):
         momentum = {"today": today, "trend": trend, "buckets": buckets}
 
     # ── "Where it stands" one-liner, cached until new updates arrive ──────────
+    # Grounded (2026-10-05): a summary read "Chief Justice of Pakistan" for an
+    # Indian story whose headlines only said "CJP". The model may not expand
+    # abbreviations or bring in any name the reports don't carry, and a
+    # summary that does is rejected (one retry, then none at all).
     count = len(article_ids)
     summary = story.get("state_summary")
-    if ANTHROPIC_API_KEY and articles and story.get("kind") != "desk" and (not summary or story.get("state_summary_count") != count):
+    stale = story.get("state_summary_v") != STATE_SUMMARY_V or story.get("state_summary_count") != count
+    if ANTHROPIC_API_KEY and articles and story.get("kind") != "desk" and (not summary or stale):
         try:
-            titles = "\n- ".join(a.get("title", "") for a in articles[:8])
-            summary = (await _llm(
-                system="You summarize the CURRENT state of a developing news story in ONE plain, factual sentence (present tense, <=26 words). No preamble, no quotes.",
-                user_content=f"Story: {story.get('title', '')}\nLatest headlines (newest first):\n- {titles}\n\nWrite the one-sentence current status:",
-                max_tokens=90,
-            )).strip().strip('"')
+            summary = await _grounded_state_summary(story.get("title", ""), articles[:8])
+            fields = {"state_summary": summary, "state_summary_count": count, "state_summary_v": STATE_SUMMARY_V}
             if story.get("kind") == "event":
-                await db.events.update_one(
-                    {"event_id": story_id},
-                    {"$set": {"state_summary": summary, "state_summary_count": count}},
-                )
+                await db.events.update_one({"event_id": story_id}, {"$set": fields})
             else:
-                await db.developing_stories.update_one(
-                    {"story_id": story_id},
-                    {"$set": {"state_summary": summary, "state_summary_count": count}},
-                )
+                await db.developing_stories.update_one({"story_id": story_id}, {"$set": fields})
         except Exception as e:
             logger.warning(f"State summary failed for {story_id}: {e}")
+            summary = None
+    elif story.get("state_summary_v") != STATE_SUMMARY_V:
+        summary = None          # never serve a summary written before the grounding rule
 
     return {
         "story_id": story["story_id"],
@@ -6746,7 +6826,7 @@ async def get_developing_story_detail(story_id: str):
         **({"outlets_count": story.get("outlets_count"), "coverage_mix": story.get("coverage_mix")}
            if story.get("kind") == "event" else {}),
         "articles": articles,
-        "article_count": count,
+        "article_count": updates_count or count,
         # Newest article, not the sync-touched doc field. The detail header
         # showed "● LIVE · updated 1m ago" directly above "0 updates today",
         # over a timeline whose newest entry was 24h old.

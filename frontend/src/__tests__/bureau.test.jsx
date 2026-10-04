@@ -157,19 +157,26 @@ describe("BureauFeed", () => {
     expect(axios.get.mock.calls[0][0]).toContain("lens=rbi");
   });
 
-  test("quiet day, preview and delayed lines", async () => {
+  test("quiet day shows no filler line (owner); preview and delayed lines", async () => {
     axios.get.mockResolvedValueOnce(feed({ today_count: 0, preview: true, delayed: ["RBI"],
       items: [{ ...rbi, published_at: "2026-09-30T05:00:00Z" }] }));
     renderFeed();
-    expect(await screen.findByTestId("bureau-quiet")).toBeInTheDocument();
+    expect(await screen.findByTestId("bureau-card-rbi1")).toBeInTheDocument();
+    expect(screen.queryByText(/off for the weekend|No announcements yet today/)).toBeNull();
     expect(screen.getByTestId("bureau-preview")).toHaveTextContent("only Desk admins");
     expect(screen.getByTestId("bureau-delayed")).toHaveTextContent("RBI updates delayed");
   });
 
-  test("empty lens and error with retry", async () => {
+  test("empty lens; Parliament says it is not in session; error with retry", async () => {
     axios.get.mockResolvedValueOnce(feed({ items: [], today_count: 0 }));
-    const { unmount } = renderFeed("Bureau/parliament");
-    expect(await screen.findByTestId("bureau-empty")).toHaveTextContent("Nothing from Parliament");
+    let view = renderFeed("Bureau/parliament");
+    expect(await screen.findByTestId("bureau-empty")).toHaveTextContent("Parliament isn’t in session");
+    view.unmount();
+    clearBureauMemo();
+    axios.get.mockResolvedValueOnce(feed({ items: [], today_count: 0 }));
+    view = renderFeed("Bureau/sebi");
+    expect(await screen.findByTestId("bureau-empty")).toHaveTextContent("Nothing from SEBI");
+    const unmount = view.unmount;
     unmount();
     clearBureauMemo();
     axios.get.mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(feed());

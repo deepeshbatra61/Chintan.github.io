@@ -88,7 +88,10 @@ async def test_detail_resolves_event_ids_in_the_same_shape(db, monkeypatch):
     monkeypatch.setenv("EVENTS_MODE", "shadow")
     await add_event(db, "ev-1")
     d = await server.get_developing_story_detail("ev-1")
-    assert d["kind"] == "event" and d["article_count"] == 3 and len(d["articles"]) == 3
+    # The fixture's three headlines carry the same facts, so they read as ONE
+    # update with two more outlets (story_members.group_updates).
+    assert d["kind"] == "event" and d["article_count"] == 1 and len(d["articles"]) == 1
+    assert d["articles"][0]["also_count"] == 2
     assert d["outlets_count"] == 3 and "momentum" in d and d["title"] == "ev-1 headline 0"
     await add_event(db, "ev-hidden", hidden=True)
     with pytest.raises(HTTPException):

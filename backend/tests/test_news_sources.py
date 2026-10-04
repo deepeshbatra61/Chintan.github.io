@@ -203,6 +203,11 @@ async def test_cycle_upsert_keeps_labels_and_tagger_marks_developing(db, monkeyp
     monkeypatch.setattr(server, "fetch_from_gnews", fetch)
     monkeypatch.setattr(server, "ANTHROPIC_API_KEY", "")
 
+    async def yes_judge(system="", user_content="", **k):       # story_members confirms the candidate
+        n = sum(1 for line in user_content.splitlines() if line[:1].isdigit() and ": " in line)
+        return '{"same": %s}' % list(range(n))
+    monkeypatch.setattr(server, "_llm", yes_judge)
+
     async def nothing(*a, **k):
         return None
     for fn in ("_sync_scheduled_events", "_sync_wave_topics", "_sync_calendar_events",

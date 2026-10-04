@@ -97,6 +97,9 @@ async def test_delayed_sources_named(db):
                           "sebi": {"broken": False}, "gone": {"broken": True}}}
     feed = await OS.reader_feed(db, access="public", lens=None, before=None, limit=5, now=NOW, health=health)
     assert feed["delayed"] == ["RBI"]
+    health["sources"]["parliament_ls"] = {"broken": True}            # out of session: never "delayed"
+    feed = await OS.reader_feed(db, access="public", lens=None, before=None, limit=5, now=NOW, health=health)
+    assert feed["delayed"] == ["RBI"]
 
 
 async def test_item_override_and_thread(db):

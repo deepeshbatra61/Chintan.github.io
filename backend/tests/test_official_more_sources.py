@@ -174,3 +174,16 @@ async def test_parliament_items_carry_the_bill_reference():
     it = await db.official_items.find_one({"refs": "BILL 153/2026"})
     assert it is not None and it["issuer"] == "Parliament" and it["kind"] == "bill"
     assert it["source_text"].startswith("STATEMENT OF OBJECTS AND REASONS")
+
+
+async def test_old_items_skipped_is_not_a_broken_source():
+    """Parliament between sessions: the page parses fine, every bill step is
+    older than 21 days. That is quiet, not broken (owner saw "delayed")."""
+    db = mongomock_motor.AsyncMongoMockClient()["t"]
+    pages = {ADAPTERS["parliament_ls"].list_url: fb("sansad_ls_bills.json")}
+    later = datetime(2027, 3, 1, 6, 0, tzinfo=timezone.utc)
+    s = svc(db, Fetch(pages), ["parliament_ls"], later)
+    for _ in range(4):
+        await s.run_once()
+    h = await s.health()
+    assert h["sources"]["parliament_ls"]["broken"] is False and await db.official_items.count_documents({}) == 0

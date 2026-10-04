@@ -19,6 +19,7 @@ os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "t")
 os.environ.setdefault("JWT_SECRET", "t")
 server = pytest.importorskip("server")
+import story_members  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 
@@ -58,6 +59,12 @@ def test_same_event_needs_two_shared_words():
 
 # ── tagging ─────────────────────────────────────────────────────────────────
 
+async def yes_judge(system="", user_content="", **k):
+    """story_members' check, answering "same story" for every report shown."""
+    n = sum(1 for line in user_content.splitlines() if line[:1].isdigit() and ": " in line)
+    return '{"same": %s}' % list(range(n))
+
+
 async def _tag(db, monkeypatch, articles):
     """Run only the tagging + label steps of an ingest cycle over `articles`."""
     async def nothing(*a, **k):
@@ -72,6 +79,7 @@ async def _tag(db, monkeypatch, articles):
     monkeypatch.setattr(server, "fetch_from_gnews", fetch)
     monkeypatch.setattr(server, "GNEWS_KEY", "test-key")
     monkeypatch.setattr(server, "ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr(server, "_llm", yes_judge)        # the member check confirms every candidate
     await db.app_meta.insert_one({"_id": "scout_cleanup_v2", "at": NOW.isoformat()})
     await server._run_ingest_cycle_body(run_newsapi=False, summarize_limit=0)
 
@@ -117,7 +125,12 @@ async def test_scout_reflag_joins_the_open_story(db, monkeypatch):
     monkeypatch.setattr(server, "_llm", fake_llm)
     await server._scout_developing_candidates([art("a9", "Pradhan quits")])
     stories = await db.developing_stories.find({"kind": "scout"}).to_list(10)
-    assert len(stories) == 1 and set(stories[0]["article_ids"]) == {"a0", "a9"}
+    # It joins the open story as a candidate; the member check then confirms it.
+    assert len(stories) == 1 and stories[0]["pending_ids"] == ["a9"] and stories[0]["article_ids"] == ["a0"]
+    await db.articles.insert_many([art("a0", "Education Minister Pradhan Resigns"), art("a9", "Pradhan quits")])
+    await story_members.verify_members(db, yes_judge, NOW)
+    s = await db.developing_stories.find_one({"kind": "scout"})
+    assert set(s["article_ids"]) == {"a0", "a9"} and s["pending_ids"] == []
 
 
 # ── one-time cleanup ────────────────────────────────────────────────────────

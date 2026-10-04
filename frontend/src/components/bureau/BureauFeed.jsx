@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Pill } from "../SubFilters";
 import { Seal, KindVisual } from "./BureauArt";
 import {
-  LENSES, BUREAU_TAGLINE, lensOf, bureauKey, getBureauFeed, groupByDay, istTime, isWeekendIST,
+  LENSES, BUREAU_TAGLINE, lensOf, bureauKey, getBureauFeed, groupByDay, istTime,
   KIND_LABEL, formatNumber, formatDelta, spokenNumber, visualFor, facesOf,
 } from "../../lib/bureau";
 
@@ -243,7 +243,6 @@ export default function BureauFeed({ filterKey, onFilterChange, refreshTick = 0 
   const open = (item) => navigate(`/bureau/${encodeURIComponent(item.official_id)}`);
   const items = state?.items || [];
   const groups = groupByDay(items);
-  const nothingToday = state && state.today_count === 0;
   const lensName = (LENSES.find(([k]) => k === lens) || [null, "All"])[1];
 
   return (
@@ -289,15 +288,9 @@ export default function BureauFeed({ filterKey, onFilterChange, refreshTick = 0 
 
       {!loading && !error && state && !items.length && (
         <p data-testid="bureau-empty" style={{ fontFamily: SERIF, fontSize: 18, color: "var(--c-ink2)", textAlign: "center", padding: "48px 12px" }}>
-          {lens ? `Nothing from ${lensName} in the last three weeks.` : "No announcements in the last three weeks."}
-        </p>
-      )}
-
-      {items.length > 0 && nothingToday && (
-        <p data-testid="bureau-quiet" style={{ fontSize: 14, color: "var(--c-sub)", margin: "2px 0 14px", lineHeight: 1.5 }}>
-          {isWeekendIST()
-            ? "Government’s off for the weekend. Here’s what came before."
-            : "No announcements yet today. Most land between 10 and 6."}
+          {lens === "parliament"
+            ? "Parliament isn’t in session. Bills and votes will appear here when the next session begins."
+            : lens ? `Nothing from ${lensName} in the last three weeks.` : "No announcements in the last three weeks."}
         </p>
       )}
 

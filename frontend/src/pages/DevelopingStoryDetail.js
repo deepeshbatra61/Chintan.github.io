@@ -331,7 +331,11 @@ const DevelopingStoryDetail = () => {
                   )}
                   <h3 style={{ fontSize: "14px", lineHeight: 1.36, color: "var(--c-ink2)", margin: 0, fontWeight: 500 }}>{article.title}</h3>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "var(--c-faint)" }}>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%" }}>{article.source}</span>
+                    {/* One entry per set of facts; the outlets that repeated it are counted, not listed again. */}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}
+                      title={(article.also_sources || []).join(", ")} data-testid="update-outlets">
+                      {article.source}{article.also_count > 0 ? ` +${article.also_count} outlet${article.also_count === 1 ? "" : "s"}` : ""}
+                    </span>
                     <span>{formatRelativeTime(article.published_at)}</span>
                   </div>
                 </div>

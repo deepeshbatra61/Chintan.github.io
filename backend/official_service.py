@@ -299,6 +299,7 @@ class OfficialService:
             out["error"] = "parse"
             return out
 
+        parsed = len(refs)       # what the page held; old items being skipped is not a parse failure
         oldest = (now - timedelta(days=MAX_AGE_DAYS)).isoformat()
         refs = [r for r in refs if not r.published_at or r.published_at >= oldest]
         ids = [official.official_id(r.url) for r in refs]
@@ -314,8 +315,8 @@ class OfficialService:
             out["new"] += 1
             out["kept" if kept else "filtered"] += 1
 
-        fields = {"last_ok": now.isoformat(), "list_size": len(refs), "error_streak": 0,
-                  "parse_error_streak": 0 if refs else st.get("parse_error_streak", 0) + 1,
+        fields = {"last_ok": now.isoformat(), "list_size": parsed, "error_streak": 0,
+                  "parse_error_streak": 0 if parsed else st.get("parse_error_streak", 0) + 1,
                   "blocked_until": None}
         if out["new"]:
             fields["last_new_at"] = now.isoformat()
@@ -580,8 +581,10 @@ async def reader_feed(db, *, access: str, lens: Optional[str], before: Optional[
     # "Today" is the reader's day in India, counted for the whole lens, not one page.
     start = datetime.fromisoformat(_ist_day(now)).replace(tzinfo=timezone.utc) - timedelta(minutes=official.IST_OFFSET_MIN)
     today = await db.official_items.count_documents({**q, "published_at": {"$gte": start.isoformat()}})
+    # Parliament is quiet between sessions by design: its lens says "not in
+    # session" instead of a delay notice (owner, 2026-10-05).
     delayed = sorted({ADAPTERS[n].source_name for n, s in ((health or {}).get("sources") or {}).items()
-                      if s.get("broken") and n in ADAPTERS})
+                      if s.get("broken") and n in ADAPTERS and not n.startswith("parliament")})
     return {"items": [_reader_item(r, access) for r in rows], "today_count": today,
             "has_more": len(rows) == limit, "delayed": delayed, "preview": access == "preview"}
 
