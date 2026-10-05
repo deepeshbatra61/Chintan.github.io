@@ -553,3 +553,33 @@ list in `BureauItemPage.jsx`.
 **Effort:** S -> with CC: S. **Priority:** P2.
 
 **Depends on / blocked by:** Nothing.
+
+---
+
+## 22. Make iPhone releases push-button (no Terminal on the Mac)
+
+**What:** Build and upload the iOS app from the cloud whenever a release is tagged, so the
+owner never has to run Terminal commands on the Mac. Options, best first:
+1. **GitHub Actions on a macOS runner + fastlane**: on a tag like `ios-v1.14.2`, check out,
+   `npm ci`, build, `cap sync ios`, set version/build, sign with an App Store Connect API
+   key and upload to TestFlight. The owner then only clicks "Submit for Review".
+2. **Xcode Cloud**: Apple's own CI, set up once in Xcode; needs the `ios/` folder in git.
+3. Interim (done 2026-10-05): `frontend/scripts/ios-release.sh` does pull / install / build /
+   sync / version bump / open Xcode in one command.
+
+**Why:** Every iOS release has stalled on the Mac (wrong folder, missing @capacitor/ios,
+ERESOLVE on `npm install`). Android builds come straight from the Windows machine.
+
+**Pros:** Releases in minutes; same steps every time; no machine-specific state.
+
+**Cons:** One-time setup: the `ios/` folder must be committed (today it exists only on the
+Mac), plus an App Store Connect API key and signing certificate stored as GitHub secrets (the
+owner adds them; never pasted in chat). macOS runner minutes cost money on private repos
+(~10 min per build).
+
+**Context:** 2026-10-05, iOS 1.14.2 release; `npm install` failed with ERESOLVE (react-day-picker
+8 vs date-fns 4), fixed by `frontend/.npmrc` (legacy-peer-deps). iOS share links also still need
+Associated Domains (see [[share links]] notes), which committing `ios/` would make reviewable.
+**Effort:** M -> with CC: S. **Priority:** P2.
+
+**Depends on / blocked by:** The owner copying the Mac's `frontend/ios` folder into git once.
