@@ -6619,8 +6619,9 @@ async def get_developing_stories_list(feed_bar: bool = False):
         # Updates, not copies (2026-10-05): reports with the same facts count once,
         # and an auto story needs two distinct updates to be "developing" at all.
         titles = await db.articles.find({"article_id": {"$in": article_ids}},
-                                        {"_id": 0, "title": 1, "published_at": 1}).to_list(400)
-        n_updates = len(story_members.group_updates(titles)) or len(article_ids)
+                                        {"_id": 0, "article_id": 1, "title": 1, "published_at": 1}).to_list(600)
+        _, _, n_updates = story_members.build_timeline(titles, story.get("member_kinds") or {})
+        n_updates = n_updates or len(article_ids)
         if kind == "auto" and not boosted and n_updates < 2:
             continue
         latest_article = await db.articles.find_one(
@@ -6744,22 +6745,18 @@ async def get_developing_story_detail(story_id: str):
 
     article_ids = story.get("article_ids", [])
     articles = []
+    bundles = []
     updates_count = 0
     if article_ids:
         reports = await db.articles.find(
             {"article_id": {"$in": article_ids}},
             {"_id": 0, "article_id": 1, "title": 1, "description": 1, "source": 1,
              "published_at": 1, "image_url": 1, "url": 1, "is_breaking": 1},
-        ).sort("published_at", -1).to_list(400)
-        # 2026-10-05: one entry per set of facts, not one per outlet's copy.
-        # Each entry is the first report, with the outlets that repeated it.
-        updates = story_members.group_updates(reports)
-        updates_count = len(updates)
-        for g in updates[:40]:
-            lead = dict(g["lead"])
-            lead["also_count"] = len(g["also"])
-            lead["also_sources"] = list(dict.fromkeys(a.get("source") for a in g["also"] if a.get("source")))[:6]
-            articles.append(lead)
+        ).sort("published_at", -1).to_list(600)
+        # The timeline is DEVELOPMENTS only (2026-10-09: Nana Patekar's death
+        # read as 242 updates, mostly tributes). Each development names at most
+        # 8 outlets; reactions and explainers come back as bundles.
+        articles, bundles, updates_count = story_members.build_timeline(reports, story.get("member_kinds") or {})
 
     # ── Momentum: bucket updates + a trend label. Wave stories get a much
     #    wider daily-bucket window (weeks) instead of 48h/6×8h — the whole
@@ -6829,6 +6826,7 @@ async def get_developing_story_detail(story_id: str):
         **({"outlets_count": story.get("outlets_count"), "coverage_mix": story.get("coverage_mix")}
            if story.get("kind") == "event" else {}),
         "articles": articles,
+        "bundles": bundles,
         "article_count": updates_count or count,
         # Newest article, not the sync-touched doc field. The detail header
         # showed "● LIVE · updated 1m ago" directly above "0 updates today",

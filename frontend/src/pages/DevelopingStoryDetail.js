@@ -6,6 +6,7 @@ import { ArrowLeft, Flame, Clock, ExternalLink } from "lucide-react";
 import { Browser } from "@capacitor/browser";
 import { SuryaLogo, useAuth } from "../App";
 import FollowBar from "../components/FollowBar";
+import StoryBundles from "../components/StoryBundles";
 import SignInPrompt from "../components/SignInPrompt";
 import { CoverageSheet, mixSentence } from "../components/Coverage";
 import { calendarIcon, formatCalendarDate } from "../lib/calendar";
@@ -350,6 +351,9 @@ const DevelopingStoryDetail = () => {
             <p style={{ color: "var(--c-faint2)", fontSize: "13px", marginTop: "4px" }}>Check back as this story develops.</p>
           </div>
         )}
+
+        {/* Developments above; reactions and explainers folded here (2026-10-09). */}
+        <StoryBundles bundles={story.bundles} onOpen={(a) => navigate(`/article/${a.article_id}`)} />
 
         <div style={{ textAlign: "center", marginTop: "24px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "var(--c-dim)", fontSize: "11px" }}>
           <Clock className="w-3 h-3" /> Refreshes every 60 seconds

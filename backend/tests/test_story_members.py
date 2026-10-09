@@ -128,3 +128,86 @@ def test_one_entry_per_event_in_the_list():
     out = SM.fold_duplicates(items)
     assert [i["story_id"] for i in out] == ["scout-ind-wi-3rd-odi", "scout-flydubai", "asian-games", "world-animal-day"]
     assert all("_ids" not in i for i in out)
+
+
+# ── 2026-10-09: developments vs reactions/explainers (Nana Patekar: 242 "updates") ──
+
+NANA = [
+    ("n1", "Nana Patekar dies at 75 in Goa after cardiac arrest", "development"),
+    ("n2", "Amitabh Bachchan pays emotional tribute to Nana Patekar", "reaction"),
+    ("n3", "When Nana Patekar helped Shah Rukh Khan get out of jail", "reaction"),
+    ("n4", "Goa Police register unnatural death case in Nana Patekar's death", "development"),
+    ("n5", "Nana Patekar's death puts sudden cardiac arrest in focus: why CPR matters", "explainer"),
+    ("n6", "Panaji police file case after Nana Patekar's death, enquiry on", "repeat"),
+]
+
+
+def labeller(table):
+    """Stand-in model: labels each shown headline from `table` (title -> label)."""
+    async def llm(system="", user_content="", **k):
+        labels = {}
+        for line in user_content.splitlines():
+            if line[:1].isdigit() and ": " in line:
+                i, title = line.split(": ", 1)
+                labels[i] = table.get(title.split(" | ")[0], "no")
+        return json.dumps({"labels": labels})
+    return llm
+
+
+async def test_check_labels_what_each_report_adds():
+    d = mongomock_motor.AsyncMongoMockClient()["t"]
+    await d.articles.insert_many([{"article_id": i, "title": t, "description": ""} for i, t, _ in NANA]
+                                 + [{"article_id": "x", "title": "Sensex falls 500 points", "description": ""}])
+    await d.developing_stories.insert_one({"story_id": "scout-nana", "kind": "scout", "is_active": True,
+                                           "title": "Nana Patekar death report",
+                                           "article_ids": ["n1", "n2", "n3"],               # live before labels
+                                           "pending_ids": ["n4", "n5", "n6", "x"]})
+    table = {t: k for _, t, k in NANA}
+    await SM.verify_members(d, labeller(table), NOW)
+    s = await d.developing_stories.find_one({"story_id": "scout-nana"})
+    assert s["member_kinds"] == {i: k for i, _, k in NANA}
+    assert "x" in s["rejected_ids"] and "x" not in s["article_ids"]
+
+
+def test_timeline_is_developments_with_bundles_and_at_most_8_sources():
+    reps = [{"article_id": i, "title": t, "source": f"Outlet {i}", "published_at": f"2026-10-08T0{n}:00:00Z"}
+            for n, (i, t, _) in enumerate(NANA)]
+    # the police case was also reported by 15 more outlets
+    reps += [{"article_id": f"p{j}", "title": "Goa Police register unnatural death case in Nana Patekar's death",
+              "source": f"Paper {j}", "published_at": "2026-10-08T09:00:00Z"} for j in range(15)]
+    kinds = {i: k for i, _, k in NANA} | {f"p{j}": "repeat" for j in range(15)}
+    updates, bundles, n = SM.build_timeline(reps, kinds)
+    assert n == 2 and [u["article_id"] for u in updates] == ["n4", "n1"]
+    police = updates[0]
+    assert police["also_count"] == len(police["also_sources"]) == SM.MAX_SOURCES - 1     # never "+16 outlets"
+    assert {b["kind"]: b["count"] for b in bundles} == {"reaction": 2, "explainer": 1}
+    assert bundles[0]["label"] == "Reactions & tributes"
+
+
+def test_unlabelled_members_still_show_as_before():
+    reps = [{"article_id": "a", "title": "Old member", "source": "X", "published_at": "2026-10-08T01:00:00Z"}]
+    updates, bundles, n = SM.build_timeline(reps, {})
+    assert n == 1 and updates[0]["article_id"] == "a" and bundles == []
+
+
+def test_old_style_answer_still_parses():
+    assert SM._parse_labels('{"same": [0, 2]}', 3) == {0: "development", 1: "no", 2: "development"}
+    assert SM._parse_labels('{"labels": {"0": "reaction", "1": "banana", "7": "development"}}', 2) == {0: "reaction"}
+
+
+async def test_tributes_never_ping_followers():
+    import events_service
+    d = mongomock_motor.AsyncMongoMockClient()["t"]
+    await d.developing_stories.insert_one({"story_id": "scout-nana", "title": "Nana Patekar death report",
+                                           "is_active": True, "article_ids": ["n1"]})
+    await d.follows.insert_one({"user_id": "u1", "story_id": "scout-nana"})
+    sent = []
+
+    async def notify(**kw):
+        sent.append(kw)
+    await events_service.notify_container_follows(d, notify, NOW)            # first look records
+    await d.articles.insert_one({"article_id": "n2", "title": "Amitabh Bachchan pays emotional tribute to Nana",
+                                 "source": "NDTV", "published_at": NOW.isoformat()})
+    await d.developing_stories.update_one({"story_id": "scout-nana"}, {"$set": {
+        "article_ids": ["n1", "n2"], "member_kinds": {"n1": "development", "n2": "reaction"}}})
+    assert await events_service.notify_container_follows(d, notify, NOW) == 0 and sent == []

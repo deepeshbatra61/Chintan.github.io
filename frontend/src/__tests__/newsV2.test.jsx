@@ -254,3 +254,31 @@ describe("CopyButton", () => {
     expect(writeText).toHaveBeenCalledWith("An answer");
   });
 });
+
+// ── Developing story bundles (2026-10-09) ─────────────────────────────────────
+describe("StoryBundles", () => {
+  const StoryBundles = require("../components/StoryBundles").default;
+  const bundles = [
+    { kind: "reaction", label: "Reactions & tributes", count: 180,
+      items: [{ article_id: "r1", title: "Amitabh pays tribute", source: "NDTV", published_at: new Date().toISOString() }] },
+    { kind: "explainer", label: "Explainers & analysis", count: 1,
+      items: [{ article_id: "e1", title: "Why CPR matters", source: "Mint", published_at: new Date().toISOString() }] },
+  ];
+
+  test("folded by default; one tap opens a bundle; tapping a report opens it", () => {
+    const onOpen = jest.fn();
+    render(<StoryBundles bundles={bundles} onOpen={onOpen} />);
+    expect(screen.getByText("Reactions & tributes")).toBeInTheDocument();
+    expect(screen.getByText("180 stories")).toBeInTheDocument();
+    expect(screen.queryByText("Amitabh pays tribute")).toBeNull();
+    fireEvent.click(screen.getByTestId("bundle-reaction"));
+    expect(screen.getByText("Showing the latest 1.")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("bundle-item-r1"));
+    expect(onOpen).toHaveBeenCalledWith(bundles[0].items[0]);
+  });
+
+  test("old server sends no bundles: nothing renders", () => {
+    const { container } = render(<StoryBundles bundles={undefined} onOpen={jest.fn()} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});

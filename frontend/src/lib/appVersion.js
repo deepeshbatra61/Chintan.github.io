@@ -3,5 +3,5 @@
 // 1.12 keeps the 7 legacy categories and interest names; 1.13 gets taxonomy
 // v2, States, Follow). Bump with versionName in android/app/build.gradle and
 // the iOS marketing version.
-export const APP_VERSION = "1.14.2";
+export const APP_VERSION = "1.14.3";
 export const CLIENT_HEADER = "X-Chintan-Client";

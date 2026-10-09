@@ -246,7 +246,7 @@ async def notify_container_follows(db, notify, now: Optional[datetime] = None) -
     story_ids = {f["story_id"] for f in await db.follows.find({}, {"_id": 0, "story_id": 1}).to_list(5000)}
     for sid in sorted(s for s in story_ids if s and not s.startswith("ev-")):
         st = await db.developing_stories.find_one({"story_id": sid}, {"_id": 0, "title": 1, "article_ids": 1,
-                                                                      "is_active": 1})
+                                                                      "is_active": 1, "member_kinds": 1})
         if not st or not st.get("is_active"):
             continue
         ids = list(dict.fromkeys(st.get("article_ids") or []))
@@ -265,7 +265,9 @@ async def notify_container_follows(db, notify, now: Optional[datetime] = None) -
         older = await db.articles.find({"article_id": {"$in": [i for i in ids if i in seen][-20:]}},
                                        {"_id": 0, "title": 1}).to_list(20)
         titles = [o.get("title") or "" for o in older]
+        kinds = st.get("member_kinds") or {}
         fresh = [a for a in fresh if a.get("title")
+                 and kinds.get(a["article_id"], "development") == "development"     # never ping a tribute
                  and not any(_overlap(a["title"], t) >= FOLLOW_NEW_HEADLINE for t in titles)]
         if not fresh:
             continue
