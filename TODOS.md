@@ -583,3 +583,82 @@ Associated Domains (see [[share links]] notes), which committing `ios/` would ma
 **Effort:** M -> with CC: S. **Priority:** P2.
 
 **Depends on / blocked by:** The owner copying the Mac's `frontend/ios` folder into git once.
+
+---
+
+## 23. Feed freshness and uniqueness (and a refresh that visibly changes the feed)
+
+**What:** Rework `/articles` ranking so that (a) everyone still gets the day's top news, but
+(b) each reader's feed has a real share of fresh and less-seen stories, and (c) pull-to-refresh
+visibly changes what is on top. Ideas to evaluate:
+- **Per-article signals**, not only per-category: importance or "top story of the day" (multi-outlet
+  coverage from the events engine, Desk heat), how much of the story the reader has already seen,
+  and a penalty for stories already shown to this reader in earlier sessions.
+- **A wider candidate pool**: today only the newest 200 by `rank_at` are scored (60 for guests),
+  out of ~800 a day, so anything older than about 6 hours never reaches anyone's top 30. Score
+  the whole day, or sample deliberately from the long tail.
+- **Slots, not one sorted list**: e.g. the first 20 cards = ~12 top stories everyone should see,
+  ~5 from your interests that few others were shown, ~3 discovery picks outside your interests.
+- **Refresh that means something**: a new seed already reorders the feed, but the jitter (0-8
+  points) is small next to the 20-48 point category tiers, so the top cards often look the
+  same. Refresh should bring up unseen stories first and move ones already seen down.
+- **Measure it**: overlap between two readers' top 20, share of the day's articles shown to
+  anyone, and repeat impressions per reader.
+
+**Why:** Owner, 2026-10-10: "the news I see in my feed is very similar to news others see";
+"pull to refresh does not always work" (it works, but rarely changes the top of the feed);
+"everyone should get to read the top news for the day but there needs to be a little quotient
+of freshness as well".
+
+**Pros:** Feeds that feel personal and alive; more of what we fetch actually gets read.
+
+**Cons:** Needs per-reader "seen" tracking (impressions); ranking changes are easy to get wrong.
+OWNER RULES still apply (pull-to-refresh reshuffles; back from an article keeps your place;
+`backend/tests/test_feed_rules.py`, `frontend/src/__tests__/feedRules.test.jsx`).
+
+**Context:** `server.py` `get_articles` and `_score_article`: category affinity 20-48, engagement,
+comments, polls, likes are all per CATEGORY; per-article only freshness (+10 under 6h, +5 under
+24h), a 20% wildcard (+10), the refresh jitter (`_feed_jitter`, 0-8) and Desk heat.
+`feed.diversify` stops category runs. Events engine (shadow) already knows multi-outlet
+"top stories" (~266 a day).
+**Effort:** M -> with CC: M. **Priority:** P1 (the owner notices it daily).
+
+**Depends on / blocked by:** Nothing to start the measuring; impressions logging first.
+
+---
+
+## 24. Courtroom: a section for cases that matter, explained for everyone
+
+**What:** A new section, like The Bureau, for court cases of significance: cases in the news,
+cases with controversy, and cases with a lesson for ordinary people. It is NOT every case.
+Courts: Supreme Court, High Courts, district and sessions courts, consumer courts (district,
+state, NCDRC), NGT (green tribunal), and special courts (NDPS, NIA, CBI, POCSO). Each case reads
+so a normal person gets it: background, what was argued, the outcome or what is next, and the
+takeaway. The shape changes by court:
+- **Consumer court**: what went wrong, the compensation, and "what you can do if it happens to you".
+- **Criminal / NDPS / NIA**: charges, bail or verdict, what happens next; careful, neutral
+  language (accused, not guilty, until convicted); no naming of victims or minors.
+- **Civil / constitutional (SC/HC)**: the question before the court, the ruling, who it affects.
+- **NGT**: the environmental harm, the order, penalties or deadlines.
+
+**Why:** Owner, 2026-10-10. Court news is high interest and widely misunderstood; plain-language
+explainers with lessons are a USP, in the same family as The Bureau.
+
+**Pros:** Reuses The Bureau's pipeline: source readers, AI extraction with verify-or-drop
+numbers, Desk quality gate, flashcard feed and item page.
+
+**Cons:** Legal accuracy and fairness risk is high: contempt, defamation, sub judice, and
+naming rules (rape survivors, minors under POCSO/JJ Act). The legal-language voice must be
+checked by the Desk before launch, with a stricter gate than The Bureau. Sources vary:
+eCourts/NJDG, SC and HC sites and cause lists, NCDRC/CONFONET, NGT orders, plus GNews for
+"in the news". Many orders are scanned PDFs (OCR, TODOS #16).
+
+**Context:** Pattern to copy: The Bureau (`backend/official.py`, `official_service.py`,
+`official_sources/`, `frontend/src/components/bureau/`, `pages/BureauItemPage.jsx`), its CEO
+plan at `~/.gstack/projects/deepeshbatra61-Chintan.github.io/ceo-plans/2026-10-04-government-tracker.md`,
+and the Desk review gate. Start with an /office-hours or /plan-ceo-review pass: which courts
+first (likely SC + consumer courts + NGT), how "significance" is picked, and the legal-safety rules.
+**Effort:** L -> with CC: M. **Priority:** P2.
+
+**Depends on / blocked by:** A legal-safety style guide reviewed by the owner (ideally a lawyer)
+before anything is public.
